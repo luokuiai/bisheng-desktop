@@ -382,6 +382,9 @@ export class EnterpriseChatView {
     const contentBounds = { x, y, width: Math.max(0, Math.min(width - x, Math.round(bounds.width * zoom))), height: Math.max(0, Math.min(height - y, Math.round(bounds.height * zoom))) }
     const windowDialog = this.modalOpen && !this.presentation.settings
     this.view.setBounds(windowDialog ? { x: 0, y: 0, width, height } : contentBounds)
+    // The host card is drawn by the desktop skin; the native view must not
+    // paint square corners over it. Dialogs fill the window and stay square.
+    this.view.setBorderRadius(windowDialog ? 0 : this.presentation.radius ?? 0)
     const viewZoom = this.view.webContents.getZoomFactor()
     const viewportScript = chatDialogViewportScript(windowDialog ? {
       x: x / viewZoom, y: y / viewZoom, width: contentBounds.width / viewZoom, height: contentBounds.height / viewZoom

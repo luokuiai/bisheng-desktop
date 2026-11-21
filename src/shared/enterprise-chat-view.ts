@@ -4,6 +4,8 @@ export interface EnterpriseChatPresentation {
   theme: 'light' | 'dark'
   locale?: 'zh' | 'en'
   settings?: EnterpriseSettingsSection
+  /** Corner radius of the host card the native view fills; 0 keeps square corners. */
+  radius?: number
   /** Host surfaces and ink resolved from the active Harness theme; absent when they cannot be sampled. */
   palette?: EnterprisePalette
 }
@@ -87,11 +89,16 @@ export function parseChatPresentation(value: unknown): EnterpriseChatPresentatio
   if (!bounds || ['x', 'y', 'width', 'height'].some((key) =>
     typeof bounds[key] !== 'number' || !Number.isFinite(bounds[key]) || Number(bounds[key]) < 0 || Number(bounds[key]) > 20000
   )) throw new Error('Invalid Chat bounds.')
+  const radius = input.radius
+  if (radius !== undefined && (typeof radius !== 'number' || !Number.isInteger(radius) || radius < 0 || radius > 64)) {
+    throw new Error('Invalid Chat radius.')
+  }
   return {
     visible: input.visible,
     theme: input.theme as 'light' | 'dark',
     locale: input.locale,
     settings,
+    ...(radius === undefined ? {} : { radius }),
     ...(palette ? { palette } : {}),
     bounds: { x: Number(bounds.x), y: Number(bounds.y), width: Number(bounds.width), height: Number(bounds.height) }
   }

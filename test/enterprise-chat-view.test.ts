@@ -20,6 +20,7 @@ vi.mock('electron', async () => {
       setBounds = vi.fn()
       setVisible = vi.fn()
       setBackgroundColor = vi.fn()
+      setBorderRadius = vi.fn()
       constructor(public options: any) {
         let url = ''
         this.webContents = Object.assign(new EventEmitter(), { id: fake.views.length + 100, session: options.webPreferences.session, isDestroyed: () => false, setWindowOpenHandler: vi.fn(), focus: vi.fn(), send: vi.fn(), mainFrame: {}, getURL: () => url, getZoomFactor: () => 1, close: vi.fn(() => { if (fake.emitCloseAsGone) { const contents = this.webContents; setTimeout(() => contents.emit('render-process-gone'), 0) } }), executeJavaScript: vi.fn(async () => {}), insertCSS: vi.fn(async () => 'key'), loadURL: vi.fn(async (next: string) => {
@@ -134,6 +135,23 @@ describe('enterprise Chat host boundary', () => {
     for (const locale of ['ja', 'zh-Hans', '', 0, null, { value: 'zh' }]) {
       expect(() => parseChatPresentation({ ...presentation, locale })).toThrow('locale')
     }
+    for (const radius of [-1, 1.5, 65, '24', null]) {
+      expect(() => parseChatPresentation({ ...presentation, radius })).toThrow('radius')
+    }
+    expect(parseChatPresentation({ ...presentation, radius: 23 }).radius).toBe(23)
+    expect(parseChatPresentation(presentation).radius).toBeUndefined()
+  })
+
+  it('rounds the native view to the host card radius and leaves plain layouts square', async () => {
+    const f = fixture()
+    try {
+      f.host.present(f.owner, { ...presentation, radius: 23 })
+      await flush()
+      expect(fake.views[0]?.setBorderRadius).toHaveBeenLastCalledWith(23)
+      f.host.present(f.owner, presentation)
+      await flush()
+      expect(fake.views[0]?.setBorderRadius).toHaveBeenLastCalledWith(0)
+    } finally { f.host.dispose() }
   })
 
   it('validates the ingress cookie name and supports the existing server default', () => {
