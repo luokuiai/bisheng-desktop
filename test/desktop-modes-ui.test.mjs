@@ -54,7 +54,14 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     openPage: vi.fn(async () => {}),
     open: vi.fn(async () => {})
   }
-  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  const resizeObservers = new Set()
+  vi.stubGlobal('ResizeObserver', class {
+    targets = new Set()
+    constructor(callback) { this.callback = callback; resizeObservers.add(this) }
+    observe(target) { this.targets.add(target) }
+    unobserve(target) { this.targets.delete(target) }
+    disconnect() { resizeObservers.delete(this) }
+  })
   let plugin, navigate
   let sessionList = { phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }
   let liveState = { blank: true, pendingSubmissions: [], running: false, awaitingFirstTurn: false }
@@ -105,6 +112,9 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     React.createElement(content.component, { ...content.props, columns: '1fr 0px', work: React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }) })
   )))
   return {
+    async resize(element) { await act(async () => {
+      for (const observer of resizeObservers) if (observer.targets.has(element)) observer.callback()
+    }) },
     async workbench(active, enabled = true) {
       await act(async () => {
         workbenchSnapshot = { state: { active }, enabled }
@@ -318,6 +328,69 @@ it('switches modes without a transient light zero-sized presentation', async () 
   expect(window.dshEnterpriseChat.present).toHaveBeenCalledTimes(1)
   expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }))
   expect(window.dshEnterpriseChat.open).not.toHaveBeenCalled()
+})
+
+it('keeps Chat and Work clear of the dynamically mounted DS Bot column', async () => {
+  let tick = 0
+  const frames = new Map()
+  vi.stubGlobal('requestAnimationFrame', callback => { frames.set(++tick, callback); return tick })
+  vi.stubGlobal('cancelAnimationFrame', id => frames.delete(id))
+  const advanceFrame = async () => act(async () => {
+    for (const [id, callback] of [...frames]) { frames.delete(id); callback() }
+  })
+  const ui = await mount(true)
+  const modes = container.querySelector('.dshModes')
+  const chat = container.querySelector('#dsh-panel-chat')
+  const inset = () => Number.parseFloat(modes.style.getPropertyValue('--dsh-plugin-rail-inset')) || 0
+  modes.getBoundingClientRect = () => ({ left: 24 + inset() })
+  chat.getBoundingClientRect = () => ({ x: 25 + inset(), y: 100, right: 1000, height: 500 })
+  const rail = document.createElement('div')
+  rail.className = 'bt-leftcol'
+  let width = 280
+  let translate = 0
+  const motion = { playState: 'finished' }
+  rail.getAnimations = () => [motion]
+  rail.getBoundingClientRect = () => ({ width, height: 600, right: 12 + width + translate })
+  const check = (expectedInset, x) => {
+    expect(inset()).toBe(expectedInset)
+    expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({
+      visible: true, bounds: { x, y: 100, width: 1000 - x, height: 500 }
+    }))
+  }
+  await act(async () => document.body.append(rail))
+  try {
+    check(280, 305)
+    width = 72
+    await ui.resize(rail)
+    check(72, 97)
+    await ui.click('work')
+    expect(inset()).toBe(72)
+    expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+    width = 280
+    await ui.resize(rail)
+    expect(inset()).toBe(280)
+    expect(modes.hasAttribute('data-dsh-plugin-rail-inset')).toBe(true)
+    motion.playState = 'running'
+    rail.dispatchEvent(new Event('transitionrun'))
+    translate = -100
+    await advanceFrame()
+    expect(inset()).toBe(180)
+    await ui.click('chat')
+    check(180, 205)
+    translate = -200
+    await advanceFrame()
+    check(80, 105)
+    translate = -280
+    motion.playState = 'finished'
+    await advanceFrame()
+    check(0, 25)
+    expect(modes.hasAttribute('data-dsh-plugin-rail-inset')).toBe(true)
+    expect(frames.size).toBe(0)
+  } finally {
+    await act(async () => rail.remove())
+  }
+  check(0, 25)
+  expect(modes.hasAttribute('data-dsh-plugin-rail-inset')).toBe(false)
 })
 
 

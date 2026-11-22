@@ -703,9 +703,30 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         const bridge = window.dshEnterpriseChat
         if (!bridge) return
         const appRoot = document.getElementById('root')
+        const modes = panel.current?.closest('.dshModes')
+        const railSelector = '.bt-leftcol'
         let observedLeading
+        let railInset = 0
+        let railFrame = null
+        const rails = new Set()
         let dialogOpen = false
         const present = () => {
+          if (modes) {
+            // Both tabs follow the outer rail's visual edge, including its
+            // slide animation (which does not trigger ResizeObserver).
+            const baseLeft = modes.getBoundingClientRect().left - railInset
+            let nextInset = 0
+            for (const rail of rails) {
+              const bounds = rail.getBoundingClientRect()
+              if (!bounds.width || !bounds.height) continue
+              nextInset = Math.max(nextInset, bounds.right + 12 - baseLeft)
+            }
+            if (nextInset !== railInset) {
+              railInset = nextInset
+              if (railInset) modes.style.setProperty('--dsh-plugin-rail-inset', `${railInset}px`)
+              else modes.style.removeProperty('--dsh-plugin-rail-inset')
+            }
+          }
           const rect = panel.current?.getBoundingClientRect()
           if (!rect) return
           const sidebarRight = document.querySelector('[data-dsh-sidebar-root]')?.getBoundingClientRect().right || 0
@@ -728,7 +749,6 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
 const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mode-page')
 const hostModalOpen = dialogOpen || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
 const palette = hostPalette()
-const modes = panel.current?.closest('.dshModes')
 const modesStyle = modes && typeof getComputedStyle === 'function' ? getComputedStyle(modes) : undefined
 // The skin draws the card; round the native view to the card's inner radius
 // so its square corners never paint over them. Without the skin the radius is
@@ -745,6 +765,54 @@ void bridge.present({ visible: hostModalOpen ? false : (remote ? state.connected
 // About covers Chat and remote settings. The recovery page covers Chat only.
 interaction.observe(document.documentElement, { attributes: true, attributeFilter: ['data-dsh-about-open', 'data-dsh-safe-mode-page'] })
         const resize = new ResizeObserver(present)
+        const followRailMotion = () => {
+          if (railFrame !== null) return
+          railFrame = requestAnimationFrame(() => {
+            railFrame = null
+            present()
+            if ([...rails].some(rail => rail.getAnimations?.().some(animation =>
+              animation.pending || animation.playState === 'running'))) followRailMotion()
+          })
+        }
+        const railMotionEvents = ['animationstart', 'transitionrun']
+        const onRailMotion = event => {
+          if (event.target === event.currentTarget) followRailMotion()
+        }
+        const observeRailMotion = (rail, observe) => {
+          for (const event of railMotionEvents) {
+            if (observe) rail.addEventListener(event, onRailMotion)
+            else rail.removeEventListener(event, onRailMotion)
+          }
+        }
+        const syncRails = () => {
+          const current = new Set(document.querySelectorAll(railSelector))
+          for (const rail of rails) {
+            if (!current.has(rail)) {
+              observeRailMotion(rail, false)
+              resize.unobserve(rail)
+              rails.delete(rail)
+            }
+          }
+          for (const rail of current) {
+            if (!rails.has(rail)) {
+              resize.observe(rail)
+              observeRailMotion(rail, true)
+              rails.add(rail)
+              followRailMotion()
+            }
+          }
+          modes?.toggleAttribute('data-dsh-plugin-rail-inset', rails.size > 0)
+        }
+        const railMount = new MutationObserver(records => {
+          const affectsRail = node => node.nodeType === 1 && (node.matches(railSelector) || node.querySelector(railSelector))
+          if (records.some(record => [...record.addedNodes, ...record.removedNodes].some(affectsRail))) {
+            syncRails()
+            present()
+          }
+        })
+        railMount.observe(document.body, { childList: true, subtree: true })
+        syncRails()
+        if (modes) resize.observe(modes)
         if (panel.current) resize.observe(panel.current)
         const sidebar = document.querySelector('[data-dsh-sidebar-root]')
         if (sidebar) resize.observe(sidebar)
@@ -761,6 +829,11 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         window.addEventListener('resize', present)
         present()
         return () => {
+          railMount.disconnect()
+          for (const rail of rails) observeRailMotion(rail, false)
+          if (railFrame !== null) cancelAnimationFrame(railFrame)
+          modes?.removeAttribute('data-dsh-plugin-rail-inset')
+          if (railInset) modes?.style.removeProperty('--dsh-plugin-rail-inset')
           dialogs.dispose(); interaction.disconnect(); resize.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
         }
       }, [mode, settingsOpen, state.approvalsOpen, state.accountDialogOpen, settingsSurface, state.connected, state.settingsProtocolVersion, locale])
@@ -1377,16 +1450,8 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       html, body {
         overflow: hidden;
       }
-      /*
-       * macOS keeps the traffic lights over the content (hiddenInset). The stock
-       * frame starts at 10px, which puts the card under the buttons; reserve the
-       * same clearance the compact toolbars use.
-       */
-      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
-        padding-top: calc(var(--dsh-frame-top-clearance, 48px) + 10px);
-      }
-
       body[data-dsh-desktop-ui="dsh"] {
+        --dsk-shell-top: calc(var(--dsh-windows-titlebar-height, 0px) + 10px);
         --dsk-card-radius: 24px;
         --dsk-card-border: 1px solid var(--dsw-alias-border-l2);
         --dsk-card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -24px rgb(0 0 0 / 0.30);
@@ -1394,12 +1459,50 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         --dsk-page-surface: var(--dsw-alias-bg-module-platform);
         background: var(--dsk-page-surface);
       }
+      /* macOS traffic lights sit over the content; clear them on both cards. */
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] {
+        --dsk-shell-top: calc(var(--dsh-frame-top-clearance, 48px) + 10px);
+      }
 
       /* Shell: page ground, inset cards, hairline separators. */
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
         background: var(--dsk-page-surface);
-        padding: calc(var(--dsh-windows-titlebar-height, 0px) + 10px) 12px 12px;
+        padding: var(--dsk-shell-top) 12px 12px;
         column-gap: 12px;
+      }
+      /* Harness budgets the titlebar padding on Windows only. On macOS,
+         keep the new top and bottom insets inside the viewport too. */
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
+        box-sizing: border-box;
+      }
+      /* Reserve the traffic lights on the left and leave higher native
+         controls (e.g. the collapsed sidebar opener) clickable. */
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 88px;
+        height: var(--dsk-shell-top);
+        -webkit-app-region: drag;
+      }
+      /* Reuse the sidebar's toggle while expanded. When collapsed, Harness
+         already mounts its opener at the same position in shell.leading. */
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-sidebar-collapsed]) .hHd-Xa_topStrip {
+        position: fixed;
+        z-index: 16;
+        top: 11px;
+        left: 88px;
+        width: 28px;
+        height: 28px;
+        margin: 0;
+        padding: 0;
+        justify-content: center;
+        -webkit-app-region: no-drag;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-sidebar-collapsed]) .hHd-Xa_topStrip {
+        left: 12px;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] .hHd-Xa_topStrip {
+        display: none;
       }
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol {
         background: var(--dsk-card-surface);
@@ -1410,6 +1513,16 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       }
       body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] {
         background: transparent;
+      }
+      /* The session list is the flexible part; the account/settings slot
+         stays at the bottom of the bounded sidebar card. */
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol,
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol [data-dsh-sidebar-root] {
+        min-height: 0;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_regionArea {
+        flex: 1 1 0;
+        min-height: 0;
       }
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_centerCol {
         background: var(--dsk-card-surface);
@@ -1425,6 +1538,8 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
        */
       body[data-dsh-desktop-ui="dsh"] .dshModes {
         box-sizing: border-box;
+        margin-left: var(--dsh-plugin-rail-inset, 0px);
+        width: calc(100% - var(--dsh-plugin-rail-inset, 0px));
         background: var(--dsk-card-surface);
         border: var(--dsk-card-border);
         border-radius: var(--dsk-card-radius);
@@ -1437,6 +1552,62 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         border: 0;
         border-radius: 0;
         box-shadow: none;
+      }
+      /* The outer card already reserves DS Bot's left column. Preserve its
+         right-side adjustments, but don't indent the nested Work column twice. */
+      /* DS Bot also animates the inner left margin. The shared card drives
+         that edge; keep only the plugin's right-side transition. */
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] .dshWorkContent > .pI_x6G_centerCol {
+        margin-left: 0 !important;
+        transition-property: margin-right;
+      }
+
+      /* DS Bot supplies its own sidebar and chat controls. Keep their behavior,
+         but use the same card and theme roles as the ordinary Agent shell. */
+      body[data-dsh-desktop-ui="dsh"] :is(.bt-leftcol, .dshModes[data-dsh-plugin-rail-inset] .dshWorkContent) {
+        --bt-font: var(--dsw-font-family, system-ui, sans-serif);
+        --bt-main: var(--dsk-card-surface);
+        --bt-card: var(--dsk-card-surface);
+        --bt-sidebar: var(--dsk-card-surface);
+        --bt-ink: var(--dsw-alias-label-primary);
+        --bt-ink-2: var(--dsw-alias-label-secondary);
+        --bt-ink-3: var(--dsw-alias-label-tertiary);
+        --bt-line: var(--dsw-alias-border-l1);
+        --bt-line-2: var(--dsw-alias-border-l2);
+        --bt-hover: var(--dsw-alias-interactive-bg-hover);
+        --bt-active: var(--dsw-alias-interactive-bg-hover-solid);
+        --bt-bubble: var(--dsw-alias-bg-layer-2);
+        --bt-user: var(--dsw-specific-bubble);
+        --bt-user-ink: var(--dsw-alias-label-primary);
+        --bt-accent: var(--dsw-alias-button-primary-fill);
+        --bt-accent-ink: var(--dsw-alias-label-primary-foreground);
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-leftcol {
+        left: 12px;
+        top: var(--dsk-shell-top);
+        bottom: 12px;
+        --bt-lc-clear: 0px;
+        background: var(--dsk-card-surface);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: var(--dsk-card-shadow);
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-leftcol .bt-leftcol-foot {
+        border-top: 1px solid var(--dsw-alias-border-l1);
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-leftcol :is(.bt-round, .bt-tile),
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] .bt-pill {
+        border-radius: var(--dsw-radius-sm);
+      }
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] .bt-pill {
+        background: var(--dsk-card-surface);
+        border: var(--dsk-card-border);
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] :is(.bt-bubble, .bt-ububble) {
+        border: 1px solid var(--dsw-alias-border-l1);
+        border-radius: var(--dsw-radius-xl);
       }
 
       /* Sidebar navigation: quiet rows, blue pill for the active page. */
