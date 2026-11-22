@@ -4,6 +4,7 @@ import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root, container
@@ -25,13 +26,16 @@ afterEach(async () => {
   container?.remove()
   document.documentElement.removeAttribute('data-dsh-safe-mode-page')
   document.documentElement.removeAttribute('data-dsh-about-open')
+  document.documentElement.removeAttribute('data-windows-titlebar')
   document.body.removeAttribute('data-ds-dark-theme')
   disposers.splice(0).reverse().forEach(dispose => dispose())
   delete window.dshEnterpriseChat
+  delete window.dshDesktop
   delete window.__ModuleLoader__
   vi.unstubAllGlobals()
 })
-async function mount(connected = false, collection = {}, inert = false, workbench) {
+async function mount(connected = false, collection = {}, inert = false, workbench, desktop = false) {
+  if (desktop) window.dshDesktop = { restartHarness: vi.fn() }
   let workbenchSnapshot = workbench
   let bindWorkbench, disposeWorkbench
   const workbenchListeners = new Set()
@@ -91,10 +95,19 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   const setSessions = value => { sessionList = value; sessionListeners.forEach(fn => fn()) }
   const setPanel = id => { panelState = { activePanelId: id }; panelListeners.forEach(fn => fn()) }
   const registrations = new Map()
+  const footerSlot = 'sidebar.footer.action'
+  const slotCore = new SlotCore()
+  slotCore.register({ name: 'root', children: { [footerSlot]: { kind: 'list', scope: 'root' } } }, () => null)
+  function SidebarFooter() {
+    React.useSyncExternalStore(listener => slotCore.subscribe(footerSlot, listener), () => slotCore.getVersion(footerSlot))
+    return React.createElement('footer', null, slotCore.entriesOfSlot(footerSlot).map(entry =>
+      React.createElement(entry.component, { key: entry.options.id })))
+  }
   window.__ModuleLoader__ = { load({ factory }) {
     plugin = factory(name => {
       if (name === 'react') return React
-      if (name === '@deepseek-ai/dsh-client-ui-primitives') return { Button: ({ variant, size, ...props }) => React.createElement('button', props), Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body), Menu: ({ anchor, open, items, onSelect }) => React.createElement('div', null, anchor, open && items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.label))) }
+      if (name === 'react-dom') return { createPortal }
+      if (name === '@deepseek-ai/dsh-client-ui-primitives') return { IconUsersOutlineRegular: () => null, IconChevronLeftOutlineRegular: () => null, Button: ({ variant, size, ...props }) => React.createElement('button', props), Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body), Menu: ({ anchor, open, items, onSelect }) => React.createElement('div', null, anchor, open && items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.label))) }
       throw new Error(name)
     })
   } }
@@ -109,11 +122,17 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     uiWorkspace: { registerNavigationHandler: (fn) => { navigate = fn; return () => {} }, startSession: () => { navigate('new'); setSessions({ phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }); setPanel(null) } },
     sessions: { binding: id => id === 'draft' ? { session: liveSession } : undefined, list: { getSnapshot: () => sessionList, subscribe: fn => { sessionListeners.add(fn); return () => sessionListeners.delete(fn) } } },
     layout: { selectPanel: setPanel, panelInfo: { getSnapshot: () => panelState, subscribe: fn => { panelListeners.add(fn); return () => panelListeners.delete(fn) } } },
-    remote: {}, locale: { register: (ns, copy) => dictionaries.set(ns, copy), bind: ns => key => key.startsWith('hostedApp') ? dictionaries.get(ns)?.[activeLocale]?.[key] : key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) } },
+    remote: {}, locale: { register: (ns, copy) => dictionaries.set(ns, copy), bind: ns => key => key.startsWith('hostedApp') || key === 'multiAgentCollaboration' ? dictionaries.get(ns)?.[activeLocale]?.[key] : key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) } },
     effect(fn) { const dispose = fn(); if (typeof dispose === 'function') disposers.push(dispose) },
     slots: {
-      inject(name, fn) { if (['desktop.mode.content', 'sidebar.workspaces.collection', 'sidebar.primaryNavigation'].includes(name)) fn() },
-      register(options, component) { registrations.set(options.name, { component, props: options.inject() }) }
+      inject(name, fn) { if ([footerSlot, 'shell.overlay', 'desktop.mode.content', 'sidebar.workspaces.collection', 'sidebar.primaryNavigation'].includes(name)) return fn() },
+      register(options, component) {
+        if (options.name === footerSlot) return slotCore.register(options, component)
+        if (options.name === 'shell.overlay' && options.id !== 'desktop-bot-sidebar-back') return
+        registrations.set(options.name === 'shell.overlay' ? options.id : options.name, { component, props: options.inject() })
+      },
+      entries: name => slotCore.entries(name),
+      subscribe: (name, listener) => slotCore.subscribe(name, listener)
     }
   })
   container = document.createElement('div')
@@ -124,11 +143,18 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   document.body.append(container)
   root = createRoot(container)
   const content = registrations.get('desktop.mode.content'), history = registrations.get('sidebar.workspaces.collection'), primary = registrations.get('sidebar.primaryNavigation')
+  const botBack = registrations.get('desktop-bot-sidebar-back')
   await act(async () => root.render(React.createElement(React.Fragment, null,
-    React.createElement('aside', null, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: true, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection })),
+    botBack && React.createElement(botBack.component, { ...botBack.props, t: key => dictionaries.get('desktop.chatWork')[activeLocale][key] }),
+    React.createElement('aside', null, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: true, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection }), React.createElement(SidebarFooter)),
     React.createElement(content.component, { ...content.props, columns: '1fr 0px', work: React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }) })
   )))
   return {
+    async footerAction(options, component) {
+      let dispose
+      await act(async () => { dispose = slotCore.register({ name: footerSlot, ...options }, component) })
+      return () => act(async () => dispose())
+    },
     async resize(element) {
       await act(async () => {
         for (const observer of [...resizeObservers]) {
@@ -435,6 +461,114 @@ it('shares account navigation across Chat and Work and keeps Plugins directly ac
   await ui.account(false)
   expect(sidebar.querySelector('[data-navigation-id=plugins]')).not.toBeNull()
   expect(sidebar.querySelector('[data-navigation-id=more]')).toBeNull()
+})
+
+it('moves a compatible DS Bot return action into primary navigation and releases it with the plugin', async () => {
+  const ui = await mount()
+  const rows = () => [...container.querySelectorAll('[data-navigation-id]')].map(node => node.dataset.navigationId)
+  const entry = () => container.querySelector('nav [data-navigation-id=bot-return]')
+  const footer = container.querySelector('footer')
+  expect(rows()).toEqual(['new', 'plugins'])
+  await ui.locale('zh')
+  await ui.footerAction({ id: 'bot-account' }, () => React.createElement('button', null, 'Bot account'))
+  const removeOldReturn = await ui.footerAction({ id: 'bot-return', inject: () => ({}) }, () => React.createElement('button', null, 'Back to DS Bot'))
+  expect(entry()).toBeNull()
+  expect(footer.textContent).toBe('Bot accountBack to DS Bot')
+  await removeOldReturn()
+
+  let mode = 'agent'
+  const listeners = new Set()
+  const surface = {
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
+    getSnapshot: () => ({ mode })
+  }
+  const setSurface = vi.fn(next => {
+    mode = next
+    listeners.forEach(listener => listener())
+  })
+  function NativeBotReturn() {
+    const current = React.useSyncExternalStore(surface.subscribe, () => surface.getSnapshot().mode)
+    return current === 'agent' ? React.createElement('button', null, 'Back to DS Bot') : null
+  }
+  const uninstall = await ui.footerAction({ id: 'bot-return', order: -300, inject: () => ({ hooks: { surface }, actions: { setSurface } }) }, NativeBotReturn)
+  expect(rows()).toEqual(['new', 'bot-return', 'plugins'])
+  expect(entry().textContent).toBe('多代理协作')
+  expect(entry().getAttribute('aria-label')).toBe('多代理协作')
+  expect(footer.textContent).toBe('Bot account')
+  await act(async () => entry().click())
+  expect(setSurface).toHaveBeenCalledTimes(1)
+  expect(setSurface).toHaveBeenCalledWith('bot')
+  expect(entry()).toBeNull()
+  expect(footer.textContent).toBe('Bot account')
+  await act(async () => setSurface('agent'))
+  expect(entry()).not.toBeNull()
+  expect(footer.textContent).toBe('Bot account')
+  await uninstall()
+  expect(entry()).toBeNull()
+  expect(listeners.size).toBe(0)
+  const removeReplacement = await ui.footerAction({ id: 'bot-return', order: -300 }, () => React.createElement('button', null, 'Updated plugin'))
+  expect(footer.textContent).toBe('Updated pluginBot account')
+  await removeReplacement()
+})
+
+it('returns from the Bot header and removes only the recognized switch from keyboard navigation', async () => {
+  document.documentElement.setAttribute('data-windows-titlebar', '')
+  const ui = await mount(false, {}, false, undefined, true)
+  const watchers = new Set()
+  const surface = { subscribe(fn) { watchers.add(fn); return () => watchers.delete(fn) }, getSnapshot: () => ({ mode }) }
+  let mode = 'bot'
+  const setSurface = vi.fn(next => { mode = next; watchers.forEach(fn => fn()) })
+  const uninstall = await ui.footerAction({ id: 'bot-return', inject: () => ({ hooks: { surface }, actions: { setSurface } }) }, () => null)
+  const sidebar = document.createElement('div')
+  sidebar.dataset.hostDialogFixture = ''
+  sidebar.className = 'bt-leftcol'
+  sidebar.dataset.left = 'open'
+  sidebar.innerHTML = '<div class="bt-side"><div class="bt-side-top"><span class="bt-brand"><span>DS Bot</span></span></div></div>'
+  const menu = document.createElement('div')
+  menu.dataset.hostDialogFixture = ''
+  menu.className = 'bt-account-menu'
+  menu.setAttribute('role', 'menu')
+  menu.innerHTML = '<button role="menuitem">Settings</button><div class="bt-menu-sep" role="separator"></div>' +
+    '<button role="menuitem"><svg><path d="M4 7h9.5M10.5 3.5L14 7l-3.5 3.5"></path><path d="M16 13H6.5M9.5 9.5L6 13l3.5 3.5"></path></svg><span class="bt-menu-label">Classic Agent mode</span></button>' +
+    '<div class="bt-menu-sep" role="separator"></div><button role="menuitem">Sign out</button>'
+  const old = menu.querySelector('button:nth-of-type(2)')
+  const beforeOld = old.previousElementSibling
+  await act(async () => { document.body.append(menu) })
+  expect(old.disabled).toBe(false)
+  await act(async () => { document.body.append(sidebar) })
+  const back = () => sidebar.querySelector('.dshBotSidebarBack')
+  expect(back().closest('.bt-brand')).not.toBeNull()
+  expect(back().textContent).toBe('Back')
+  expect(back().getAttribute('aria-label')).toBe('Back to classic Agent')
+  expect(back().nextElementSibling?.textContent).toBe('Multi-Agent Collaboration')
+  expect(old.disabled).toBe(true)
+  expect(old.hasAttribute('data-dsh-bot-menu-hidden')).toBe(true)
+  expect(beforeOld.hasAttribute('data-dsh-bot-menu-hidden')).toBe(true)
+  expect([...menu.querySelectorAll('button[role="menuitem"]:not(:disabled)')].map(button => button.textContent)).toEqual(['Settings', 'Sign out'])
+  const path = old.querySelector('path')
+  const glyph = path.getAttribute('d')
+  await act(async () => path.setAttribute('d', 'M0 0'))
+  expect(old.disabled).toBe(false)
+  expect(beforeOld.hasAttribute('data-dsh-bot-menu-hidden')).toBe(false)
+  await act(async () => path.setAttribute('d', glyph))
+  expect(old.disabled).toBe(true)
+  await act(async () => { sidebar.hidden = true })
+  expect(back()).toBeNull()
+  expect(old.disabled).toBe(false)
+  await act(async () => {
+    sidebar.hidden = false
+    sidebar.dataset.left = 'rail'
+    sidebar.querySelector('.bt-side').innerHTML = '<div class="bt-rail-top"></div>'
+  })
+  expect(back().closest('.bt-rail-top')).not.toBeNull()
+  expect(back().textContent).toBe('')
+  expect(sidebar.querySelector('.dshBotSidebarTitle')).toBeNull()
+  await act(async () => back().click())
+  expect(setSurface).toHaveBeenCalledExactlyOnceWith('agent')
+  expect(back()).toBeNull()
+  expect(container.querySelector('nav [data-navigation-id=bot-return]')).not.toBeNull()
+  await uninstall()
+  expect(watchers.size).toBe(0)
 })
 
 it('starts a new conversation without forwarding the click event as a workspace identity', async () => {

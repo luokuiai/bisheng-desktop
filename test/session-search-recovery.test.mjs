@@ -148,3 +148,50 @@ it('keeps archived-only search empty when only cloud titles match', async () => 
   expect(f.host.querySelectorAll('[data-history-kind=chat]')).toHaveLength(0)
   expect(f.host.textContent.match(/recentSearchEmpty|search.noMatches/g)).toHaveLength(1)
 })
+
+it('hides a verified Bot workspace only in grouped history and preserves nested projects', async () => {
+  const dedicated = 'local-team-workspace'
+  const ordinary = 'user-workspace'
+  let workspaceId = dedicated
+  const listeners = new Set()
+  const entry = { inject: () => ({
+    hooks: {
+      surface: { getSnapshot: () => ({ mode: 'agent' }), subscribe: () => () => {} },
+      roster: { getSnapshot: () => ({ workspaceId }), subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) } }
+    },
+    actions: { setSurface: () => {} }
+  }) }
+  const fetchWorkspace = vi.fn(async () => Response.json({ workspaceId: dedicated }))
+  vi.stubGlobal('fetch', fetchWorkspace)
+  vi.stubGlobal('dshDesktop', { restartHarness: () => {} })
+  const f = await mount({
+    groupBy: 'workspace-tree', groupExpansion: { [dedicated]: true, [ordinary]: true },
+    botNavigation: { snapshot: () => entry, subscribe: () => () => {} },
+    workspaceItems: [
+      { workspaceId: dedicated, title: 'Renamed team', path: '/fixture/bot/workspace', sessionIds: ['one'] },
+      { workspaceId: ordinary, title: 'Nested user project', path: '/fixture/bot/workspace/child', sessionIds: ['two'] }
+    ]
+  })
+  const catalogBefore = JSON.stringify(f.workspaces)
+  expect(fetchWorkspace).toHaveBeenCalledWith('/api/desktop-ds-bot-workspace', expect.objectContaining({ cache: 'no-store' }))
+  expect(f.host.textContent).not.toMatch(/Renamed team|会话 one/)
+  expect(f.host.textContent).toMatch(/Nested user project/)
+  expect(f.host.textContent).toContain('会话 two')
+  await act(async () => f.openSearch())
+  await act(async () => f.type('one'))
+  await settle()
+  expect(f.host.textContent).toContain('会话 one')
+  await act(async () => f.escape())
+  await act(async () => f.setGrouping('flat'))
+  expectCatalog()
+  await act(async () => f.setGrouping('workspace-tree'))
+  expect(f.host.textContent).not.toContain('Renamed team')
+
+  await act(async () => { workspaceId = ordinary; listeners.forEach(fn => fn()) })
+  expect(f.host.textContent).toContain('Renamed team')
+  expect(f.host.textContent).toContain('Nested user project')
+  fetchWorkspace.mockResolvedValueOnce(Response.json({ workspaceId: null }, { status: 500 }))
+  await act(async () => { workspaceId = dedicated; listeners.forEach(fn => fn()) })
+  expect(f.host.textContent).toContain('Renamed team')
+  expect(JSON.stringify(f.workspaces)).toBe(catalogBefore)
+})

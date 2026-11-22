@@ -14,6 +14,8 @@ export default defineConfig({
       'test/windows-*.test.{ts,js,mjs}',
       'test/about-presentation.test.ts',
       'test/desktop-modes-ui.test.mjs',
+      'test/desktop-ds-bot-workspace.test.mjs',
+      'test/session-search-recovery.test.mjs',
       'test/work-completion-notifications.test.mjs',
       'test/desktop-notification.test.ts',
       'test/session-delete-locale.test.mjs',
