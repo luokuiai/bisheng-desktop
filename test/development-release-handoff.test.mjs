@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -32,13 +32,39 @@ it.each([
   await expect(developmentAssets(directory, platform)).rejects.toThrow('empty development installer')
 })
 
-it('forbids Actions artifact transfers in every workflow', async () => {
-  const directory = path.resolve(import.meta.dirname, '../.github/workflows')
-  for (const name of await readdir(directory)) {
-    if (!/\.ya?ml$/.test(name)) continue
-    const source = await readFile(path.join(directory, name), 'utf8')
-    expect(source).not.toMatch(/actions\/(?:upload|download)-artifact@|gh\s+run\s+download|\/actions\/artifacts/)
-  }
+it('keeps release handoff on draft Releases', async () => {
+  const source = await readFile(path.resolve(import.meta.dirname, '../.github/workflows/release.yml'), 'utf8')
+  expect(source).not.toMatch(/actions\/(?:upload|download)-artifact@|gh\s+run\s+download|\/actions\/artifacts/)
+})
+
+it('packages PRs and develop pushes, and retains only pushed installers for one day', async () => {
+  const source = await readFile(path.resolve(import.meta.dirname, '../.github/workflows/desktop-build.yml'), 'utf8')
+  const workflow = YAML.parse(source)
+  expect(workflow.on).toEqual({
+    pull_request: { branches: ['develop'] },
+    push: { branches: ['develop'] }
+  })
+  const build = workflow.jobs.build
+  expect(build.strategy.matrix.include.map(({ script, installer }) => [script, installer])).toEqual([
+    ['package:dev:mac:arm64', 'dist-dev/bisheng-dev-mac-arm64.dmg'],
+    ['package:dev:mac:x64', 'dist-dev/bisheng-dev-mac-x64.dmg'],
+    ['package:dev:win', 'dist-dev/bisheng-dev-windows-x64-setup.exe']
+  ])
+  const packageStep = build.steps.findIndex(step => step.run === 'npm run ${{ matrix.script }}')
+  const artifactStep = build.steps.findIndex(step => step.uses?.startsWith('actions/upload-artifact@'))
+  expect(packageStep).toBeGreaterThanOrEqual(0)
+  expect(build.steps[packageStep].if).toBeUndefined()
+  expect(artifactStep).toBeGreaterThan(packageStep)
+  const upload = build.steps[artifactStep]
+  expect(upload.with).toMatchObject({
+    path: '${{ matrix.installer }}',
+    'retention-days': 1,
+    'if-no-files-found': 'error'
+  })
+  const shouldUpload = new Function('github', `return (${upload.if})`)
+  expect(shouldUpload({ event_name: 'pull_request', ref: 'refs/pull/1/merge' })).toBe(false)
+  expect(shouldUpload({ event_name: 'push', ref: 'refs/heads/develop' })).toBe(true)
+  expect(shouldUpload({ event_name: 'push', ref: 'refs/heads/main' })).toBe(false)
 })
 
 it.skipIf(process.platform === 'win32').each([

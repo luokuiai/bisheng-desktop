@@ -21,6 +21,7 @@ export function createManagedMarketSource(market) {
       const state = market.state()
       return state.installed.map(record => ({
         name: `${PREFIX}${state.accountKey}:${record.plugin_id}`,
+        meta: { title: record.display_name || record.name },
         description: `${record.display_name || record.name} (${record.name})`,
         version: record.version, official: false, availability: 'profile',
         installed: true, enabled: record.status === 'enabled', optional: false,
