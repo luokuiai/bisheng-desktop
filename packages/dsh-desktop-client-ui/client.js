@@ -653,14 +653,17 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
      * conversation streaming touches the DOM continuously.
      */
     function observeHostDialogs(report) {
-      const selector = '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], dialog[open]'
+      // Both steps of the Bot creation flow must remain above the native
+      // enterprise view, even though the plugin doesn't set aria-modal.
+      const botDialog = '.bt-pane > :is(.bt-newchat, .bt-create)[role="dialog"]'
+      const selector = `[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], dialog[open], ${botDialog}`
       let previous = false
       let initialized = false
       let disposed = false
       let scheduled = false
       const read = () => [...document.querySelectorAll(selector)].some(dialog =>
         dialog.checkVisibility({ checkVisibilityCSS: true }) &&
-        (dialog.getAttribute('aria-modal') === 'true' || dialog.matches(':modal')))
+        (dialog.getAttribute('aria-modal') === 'true' || dialog.matches(':modal') || dialog.matches(botDialog)))
       const refresh = () => {
         if (disposed) return
         const open = read()
@@ -695,6 +698,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
     function DesktopModes({ work, columns, resizeHandle, navigation, t, locale }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const { mode, settingsOpen, settingsSurface } = state
+      const workspaceDockOpen = mode === 'chat' && state.phase === 'ready' && state.workspaceDockOpen === true
       React.useEffect(() => navigation.start(), [navigation])
       const panel = React.useRef(null)
       const [animateWork, setAnimateWork] = React.useState(false)
@@ -753,7 +757,7 @@ const modesStyle = modes && typeof getComputedStyle === 'function' ? getComputed
 // The skin draws the card; round the native view to the card's inner radius
 // so its square corners never paint over them. Without the skin the radius is
 // 0 and the view stays a plain rectangle.
-const radius = modesStyle
+const radius = !workspaceDockOpen && modesStyle
   ? Math.max(0, Math.round((Number.parseFloat(modesStyle.borderTopLeftRadius) || 0) - (Number.parseFloat(modesStyle.borderTopWidth) || 0)))
   : 0
 void bridge.present({ visible: hostModalOpen ? false : (remote ? state.connected && remote.bounds.width > 0 && remote.bounds.height > 0 : mode === 'chat' && !surfaceOpen && !safeModePageOpen), ...(remote ? { settings: remote.section } : {}), ...(palette ? { palette } : {}), radius, bounds: remote ? remote.bounds : { x, y, width: Math.max(0, rect.right - x), height: Math.max(0, rect.y + rect.height - y) }, theme: document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light', locale: locale.getSnapshot().active === 'zh' ? 'zh' : 'en' }).catch(() => {})
@@ -836,7 +840,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
           if (railInset) modes?.style.removeProperty('--dsh-plugin-rail-inset')
           dialogs.dispose(); interaction.disconnect(); resize.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
         }
-      }, [mode, settingsOpen, state.approvalsOpen, state.accountDialogOpen, settingsSurface, state.connected, state.settingsProtocolVersion, locale])
+      }, [mode, settingsOpen, state.approvalsOpen, state.accountDialogOpen, settingsSurface, state.connected, state.settingsProtocolVersion, workspaceDockOpen, locale])
       React.useEffect(() => () => {
         void window.dshEnterpriseChat?.present({ visible: false, bounds: { x: 0, y: 48, width: 0, height: 0 }, theme: 'light' }).catch(() => {})
       }, [])
@@ -851,7 +855,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         const next = event.key === 'Home' ? 'chat' : event.key === 'End' ? 'work' : mode === 'chat' ? 'work' : 'chat'
         if (select(next)) tabs.current[next]?.focus()
       }
-      return React.createElement('div', { className: 'dshModes' },
+      return React.createElement('div', { className: 'dshModes', 'data-dsh-workspace-dock': workspaceDockOpen ? '' : undefined },
         state.signInPromptOpen && React.createElement(Modal, {
           open: true, title: t('signInTitle'), closeLabel: t('close'), onClose: navigation.dismissSignIn,
           footer: React.createElement('div', { className: 'dshChatSignInActions' },
@@ -1457,6 +1461,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         --dsk-card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -24px rgb(0 0 0 / 0.30);
         --dsk-card-surface: var(--dsw-alias-bg-layer-1);
         --dsk-page-surface: var(--dsw-alias-bg-module-platform);
+        --dsk-content-surface: color-mix(in srgb, var(--dsk-card-surface) 25%, var(--dsk-page-surface));
         background: var(--dsk-page-surface);
       }
       /* macOS traffic lights sit over the content; clear them on both cards. */
@@ -1505,7 +1510,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         display: none;
       }
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol {
-        background: var(--dsk-card-surface);
+        background: var(--dsk-content-surface);
         border: var(--dsk-card-border);
         border-radius: var(--dsk-card-radius);
         box-shadow: var(--dsk-card-shadow);
@@ -1525,7 +1530,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         min-height: 0;
       }
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_centerCol {
-        background: var(--dsk-card-surface);
+        background: var(--dsk-content-surface);
         border: var(--dsk-card-border);
         border-radius: var(--dsk-card-radius);
         box-shadow: var(--dsk-card-shadow);
@@ -1540,13 +1545,19 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         box-sizing: border-box;
         margin-left: var(--dsh-plugin-rail-inset, 0px);
         width: calc(100% - var(--dsh-plugin-rail-inset, 0px));
-        background: var(--dsk-card-surface);
+        background: var(--dsk-content-surface);
         border: var(--dsk-card-border);
         border-radius: var(--dsk-card-radius);
         box-shadow: var(--dsk-card-shadow);
         overflow: hidden;
       }
       /* Work mode nests the stock center column; the mode panel already carries the card. */
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-workspace-dock] {
+        background: var(--dsk-page-surface);
+        border-color: transparent;
+        border-radius: 0;
+        box-shadow: none;
+      }
       body[data-dsh-desktop-ui="dsh"] .dshModes .pI_x6G_centerCol {
         background: transparent;
         border: 0;
@@ -1566,9 +1577,9 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
          but use the same card and theme roles as the ordinary Agent shell. */
       body[data-dsh-desktop-ui="dsh"] :is(.bt-leftcol, .dshModes[data-dsh-plugin-rail-inset] .dshWorkContent) {
         --bt-font: var(--dsw-font-family, system-ui, sans-serif);
-        --bt-main: var(--dsk-card-surface);
+        --bt-main: var(--dsk-content-surface);
         --bt-card: var(--dsk-card-surface);
-        --bt-sidebar: var(--dsk-card-surface);
+        --bt-sidebar: var(--dsk-content-surface);
         --bt-ink: var(--dsw-alias-label-primary);
         --bt-ink-2: var(--dsw-alias-label-secondary);
         --bt-ink-3: var(--dsw-alias-label-tertiary);
@@ -1587,13 +1598,71 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         top: var(--dsk-shell-top);
         bottom: 12px;
         --bt-lc-clear: 0px;
-        background: var(--dsk-card-surface);
+        background: var(--dsk-content-surface);
         border: var(--dsk-card-border);
         border-radius: var(--dsk-card-radius);
         box-shadow: var(--dsk-card-shadow);
       }
       body[data-dsh-desktop-ui="dsh"] .bt-leftcol .bt-leftcol-foot {
         border-top: 1px solid var(--dsw-alias-border-l1);
+      }
+      /* Center both steps in the available pane, retaining the plugin's
+         sidebar offset. Only the card, not the entire row, intercepts input. */
+      body[data-dsh-desktop-ui="dsh"] .bt-pane:has(> :is(.bt-newchat, .bt-create)[role="dialog"]) {
+        top: calc(var(--dsk-shell-top) + 24px);
+        right: 0;
+        bottom: auto;
+        justify-content: center;
+        box-sizing: border-box;
+        padding: 0 12px;
+        background: transparent;
+        pointer-events: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > :is(.bt-newchat, .bt-create)[role="dialog"] {
+        flex: 0 1 560px;
+        max-width: 100%;
+        max-height: calc(100dvh - var(--dsk-shell-top) - 36px);
+        overflow: auto;
+        box-sizing: border-box;
+        background: var(--dsk-card-surface);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsw-radius-lg);
+        box-shadow: 0 2px 5px rgb(0 0 0 / 0.08), 0 16px 40px rgb(0 0 0 / 0.16);
+        pointer-events: auto;
+        -webkit-app-region: no-drag;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > .bt-create[role="dialog"] {
+        max-height: min(76dvh, calc(100dvh - var(--dsk-shell-top) - 60px));
+        overflow: hidden;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > .bt-create[role="dialog"] > .bt-create-head {
+        flex: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > .bt-create[role="dialog"] > .bt-create-body {
+        min-height: 0;
+        padding: 16px;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > .bt-create[role="dialog"] > .bt-create-body > .bt-create-card {
+        align-self: flex-start;
+        max-width: 100%;
+        padding-bottom: 12px;
+        box-sizing: border-box;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-newchat[role="dialog"] .bt-to {
+        padding: 8px 12px;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-newchat[role="dialog"] .bt-to input {
+        min-width: 0;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-newchat[role="dialog"] .bt-drop {
+        position: static;
+        width: auto;
+        max-height: min(280px, 38dvh);
+        margin: 8px;
+        background: var(--dsk-content-surface);
+        border-color: var(--dsw-alias-border-l2);
+        backdrop-filter: none;
+        box-shadow: none;
       }
       body[data-dsh-desktop-ui="dsh"] .bt-leftcol :is(.bt-round, .bt-tile),
       body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] .bt-pill {
@@ -1647,17 +1716,9 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         padding-top: 6px;
       }
 
-      /* Conversation: gray surface with white user bubbles. */
+      /* Use the same gray surface across the conversation and its host card. */
       body[data-dsh-desktop-ui="dsh"] .wSkVaW_root {
-        background: var(--dsk-page-surface);
-      }
-      /*
-       * Work mode mounts the Harness conversation inside the card. Bisheng shows
-       * chat through the native view (white), so the work surface stays on the
-       * card surface instead of the page ground.
-       */
-      body[data-dsh-desktop-ui="dsh"] .dshWorkContent [class*="wSkVaW_root"] {
-        background: var(--dsk-card-surface);
+        background: var(--dsk-content-surface);
       }
       body[data-dsh-desktop-ui="dsh"] [class*="_bubble_"]:not([data-side]):not([data-portal]) {
         border: 1px solid var(--dsw-alias-border-l1);

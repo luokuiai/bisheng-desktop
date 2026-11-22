@@ -289,6 +289,29 @@ it('pushes landing state from the current remote main frame and rejects stale or
   } finally { f.host.dispose() }
 })
 
+it('accepts workspace docking only from the current conversation main frame', async () => {
+  const f = fixture()
+  try {
+    f.host.present(f.owner, presentation)
+    await flush()
+    const wc = fake.views[0].webContents
+    const path = '/workspace/c/first'
+    await wc.loadURL(`https://enterprise.example${path}`)
+    const report = (frame: unknown, input: unknown) => wc.emit('ipc-message', { senderFrame: frame }, 'enterprise-chat:workspace-dock', input)
+    report({}, { open: true, path })
+    report(wc.mainFrame, { open: true, path: '/workspace/c/stale' })
+    report(wc.mainFrame, { open: 'true', path })
+    expect(f.host.snapshot().workspaceDockOpen).toBe(false)
+    report(wc.mainFrame, { open: true, path })
+    expect(f.owner.webContents.send).toHaveBeenLastCalledWith('enterprise-chat:changed', expect.objectContaining({ workspaceDockOpen: true }))
+    report(wc.mainFrame, { open: false, path })
+    expect(f.host.snapshot().workspaceDockOpen).toBe(false)
+    report(wc.mainFrame, { open: true, path })
+    await wc.loadURL('https://enterprise.example/workspace/c/second')
+    expect(f.host.snapshot().workspaceDockOpen).toBe(false)
+  } finally { f.host.dispose() }
+})
+
 it('opens only account-published module entries and clears them with the identity', async () => {
   const f = fixture()
   try {

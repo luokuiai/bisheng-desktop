@@ -65,6 +65,7 @@ export interface EnterpriseChatViewState {
   path?: string
   epoch?: number
   landing?: boolean
+  workspaceDockOpen?: boolean
   conversationId?: string
   connected?: boolean
   phase: 'idle' | 'loading' | 'ready' | 'error'
