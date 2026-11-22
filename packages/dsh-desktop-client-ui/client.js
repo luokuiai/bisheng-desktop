@@ -310,8 +310,10 @@ window.__ModuleLoader__.load({
     }
     const MODES_NS = 'desktop.chatWork'
     const MODES_COPY = {
-      zh: { welcomeMessage: '来一起创造', welcome: '欢迎来到', newConversation: '新建对话', navigation: '导航', moreNavigation: '更多', recent: '对话', projects: '工作区', all: '所有会话', results: '搜索结果', cloud: '云端聊天', local: '本地工作', recentEmpty: '暂无最近会话', recentSearchEmpty: '当前列表没有匹配的会话', chat: '聊天', work: '工作', label: '聊天与工作', loading: '正在连接企业聊天…', error: '企业聊天连接失败，请重试', retry: '重新连接', refresh: '刷新聊天记录', historyLoading: '正在加载聊天记录…', historyError: '加载失败，点击重试', empty: '暂无聊天记录', more: '加载更多', newChat: '新聊天', signIn: '登录企业账号', signInTitle: '登录后使用聊天', signInDescription: '聊天由企业平台提供。登录后，即可使用平台中的模型和对话记录。', continueWork: '继续使用工作', close: '关闭', justNow: '刚刚' },
-      en: { welcomeMessage: "Let's Create Together", welcome: 'Welcome', newConversation: 'New conversation', navigation: 'Navigation', moreNavigation: 'More', recent: 'Conversations', projects: 'Workspaces', all: 'All conversations', results: 'Search results', cloud: 'Cloud chat', local: 'Local work', recentEmpty: 'No recent conversations', recentSearchEmpty: 'No matches in the current list', chat: 'Chat', work: 'Work', label: 'Chat and Work', loading: 'Connecting to enterprise Chat…', error: 'Could not connect to enterprise Chat. Try again.', retry: 'Reconnect', refresh: 'Refresh Chat history', historyLoading: 'Loading history…', historyError: 'Loading failed. Retry', empty: 'No chats yet', more: 'Load more', newChat: 'New chat', signIn: 'Sign in to your enterprise account', signInTitle: 'Sign in to use Chat', signInDescription: 'Chat is provided by your enterprise platform. Sign in to use its models and conversations.', continueWork: 'Continue in Work', close: 'Close', justNow: 'Now' }
+      zh: { welcomeMessage: '来一起创造', welcome: '欢迎来到', newConversation: '新建对话', navigation: '导航', moreNavigation: '更多', recent: '对话', projects: '工作区', all: '所有会话', results: '搜索结果', cloud: '云端聊天', local: '本地工作', recentEmpty: '暂无最近会话', recentSearchEmpty: '当前列表没有匹配的会话', chat: '聊天', work: '工作', label: '聊天与工作', loading: '正在连接企业聊天…', error: '企业聊天连接失败，请重试', retry: '重新连接', refresh: '刷新聊天记录', historyLoading: '正在加载聊天记录…', historyError: '加载失败，点击重试', empty: '暂无聊天记录', more: '加载更多', newChat: '新聊天', signIn: '登录企业账号', signInTitle: '登录后使用聊天', signInDescription: '聊天由企业平台提供。登录后，即可使用平台中的模型和对话记录。', continueWork: '继续使用工作', close: '关闭', justNow: '刚刚',
+        hostedAppBack: '返回应用中心', hostedAppBackToSquare: '返回应用广场', hostedAppLoading: '正在打开应用…', hostedAppError: '应用加载失败。', hostedAppActionError: '操作失败，请重试。', hostedAppRetry: '重试' },
+      en: { welcomeMessage: "Let's Create Together", welcome: 'Welcome', newConversation: 'New conversation', navigation: 'Navigation', moreNavigation: 'More', recent: 'Conversations', projects: 'Workspaces', all: 'All conversations', results: 'Search results', cloud: 'Cloud chat', local: 'Local work', recentEmpty: 'No recent conversations', recentSearchEmpty: 'No matches in the current list', chat: 'Chat', work: 'Work', label: 'Chat and Work', loading: 'Connecting to enterprise Chat…', error: 'Could not connect to enterprise Chat. Try again.', retry: 'Reconnect', refresh: 'Refresh Chat history', historyLoading: 'Loading history…', historyError: 'Loading failed. Retry', empty: 'No chats yet', more: 'Load more', newChat: 'New chat', signIn: 'Sign in to your enterprise account', signInTitle: 'Sign in to use Chat', signInDescription: 'Chat is provided by your enterprise platform. Sign in to use its models and conversations.', continueWork: 'Continue in Work', close: 'Close', justNow: 'Now',
+        hostedAppBack: 'Back to App Center', hostedAppBackToSquare: 'Back to Discover', hostedAppLoading: 'Opening app…', hostedAppError: 'Could not load the app.', hostedAppActionError: 'The action failed. Try again.', hostedAppRetry: 'Retry' }
     }
     /**
      * Host tokens the embedded enterprise document reuses. It cannot read the host's CSS, so the
@@ -381,7 +383,9 @@ window.__ModuleLoader__.load({
           publish({ signInPromptOpen: true })
           return false
         }
+        const dismissApp = mode === 'work' && value.mode !== 'work' && value.hostedApp
         publish({ mode, pageId: undefined, signInPromptOpen: false })
+        if (dismissApp) void window.dshEnterpriseChat.closeHostedApp(false).catch(() => { if (active) void readHostState() })
         return true
       }
       const refreshHistory = async (more = false) => {
@@ -419,7 +423,10 @@ publish({ items: [...new Map(items.map(item => [item.id, item])).values()], page
       const open = async (id) => {
         if (!select('chat')) return
         const epoch = value.epoch
-        try { await window.dshEnterpriseChat.open(id); if (active && epoch === value.epoch) { publish({ conversationId: id }); void refreshHistory() } }
+        try {
+          await window.dshEnterpriseChat.open(id)
+          if (active && epoch === value.epoch) { publish({ conversationId: id }); void refreshHistory() }
+        }
         catch { if (active && epoch === value.epoch) void readHostState() }
       }
       // Account notifications also follow ordinary enterprise reads. The host epoch,
@@ -433,6 +440,7 @@ publish({ items: [...new Map(items.map(item => [item.id, item])).values()], page
 if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
         publish({
           ...next,
+          hostedApp: next.connected ? next.hostedApp : undefined,
           ...(clearHistory ? { items: [], page: 0, hasMore: false, historyPhase: 'idle' } : {}),
           signInPromptOpen: next.connected ? false : value.signInPromptOpen,
           pageId: next.navigation?.entries.find(entry => entry.active)?.id,
@@ -481,10 +489,16 @@ if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
         },
         async openPage(id) {
           if (!value.connected || !value.navigation?.entries.some(entry => entry.id === id)) return
+          const hostedApp = value.hostedApp
+          const returningToDirectory = hostedApp && id === 'apps' && /^\/apps\/?$/u.test(value.path ?? '')
           ctx.layout.selectPanel(null)
           publish({ mode: 'chat', pageId: id })
           const epoch = value.epoch
-          try { await window.dshEnterpriseChat.openPage(id) }
+          try {
+            // Apps already owns the document behind an app launched from the center.
+            if (returningToDirectory) await window.dshEnterpriseChat.closeHostedApp()
+            else await window.dshEnterpriseChat.openPage(id)
+          }
           catch { if (active && epoch === value.epoch) void readHostState() }
         },
         choose(mode) {
@@ -543,7 +557,8 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
           const panel = () => {
             const { activePanelId } = ctx.layout.panelInfo.getSnapshot()
             const panelOpen = activePanelId !== null
-            publish({ panelOpen, activePanelId, ...(panelOpen ? { mode: 'work' } : {}) })
+            if (panelOpen && value.mode !== 'work') select('work')
+            publish({ panelOpen, activePanelId })
           }
           const unsubscribe = ctx.layout.panelInfo.subscribe(panel)
           const unsubscribeSessions = ctx.sessions.list.subscribe(workState)
@@ -692,31 +707,67 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         document.removeEventListener('visibilitychange', schedule)
       } }
     }
+    function HostedAppContent({ app, seat, sourcePath, t }) {
+      const [command, setCommand] = React.useState('idle')
+      const run = async (action) => {
+        setCommand('pending')
+        try { await action(); setCommand('idle') }
+        catch { setCommand('error') }
+      }
+      const backLabel = /^\/(?:square|apps\/explore)(?:\/|$)/u.test(sourcePath ?? '') ? 'hostedAppBackToSquare' : 'hostedAppBack'
+      return React.createElement(React.Fragment, null,
+        React.createElement('header', { className: 'dshHostedAppHeader' },
+          React.createElement(Button, { type: 'button', variant: 'outline', disabled: command === 'pending', onClick: () => { void run(() => window.dshEnterpriseChat.closeHostedApp()) } }, t(backLabel)),
+          command === 'error' && React.createElement('span', { role: 'alert' }, t('hostedAppActionError'))),
+        React.createElement('div', { ref: seat, className: 'dshModeBody' },
+          app.phase === 'loading' && React.createElement('div', { className: 'dshChatStatus', role: 'status' }, t('hostedAppLoading')),
+          app.phase === 'error' && React.createElement('div', { className: 'dshChatStatus' },
+            React.createElement('p', { role: 'alert' }, t('hostedAppError')),
+            React.createElement(Button, { type: 'button', variant: 'outline', disabled: command === 'pending', onClick: () => { void run(() => window.dshEnterpriseChat.retryHostedApp()) } }, t('hostedAppRetry')))))
+    }
+
     function DesktopModes({ work, columns, resizeHandle, navigation, t, locale }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const { mode, settingsOpen, settingsSurface } = state
       React.useEffect(() => navigation.start(), [navigation])
       const panel = React.useRef(null)
+      const hostedSeat = React.useRef(null)
       const [animateWork, setAnimateWork] = React.useState(false)
       const tabs = React.useRef({})
+      const surfaceOpen = settingsOpen || state.approvalsOpen || state.accountDialogOpen
+      const hostedApp = mode === 'chat' && !surfaceOpen ? state.hostedApp : undefined
+      const hostedAppSlug = hostedApp?.slug
       React.useEffect(() => {
         const bridge = window.dshEnterpriseChat
         if (!bridge) return
         const appRoot = document.getElementById('root')
         const modes = panel.current?.closest('.dshModes')
         const railSelector = '.bt-leftcol'
+        const botSidebarSelector = ':scope > .bt-leftcol[data-left]'
         let observedLeading
+        let observedBotSidebar
         let railInset = 0
         let railFrame = null
         const rails = new Set()
         let dialogOpen = false
         const present = () => {
+          const botSidebar = document.body.querySelector(botSidebarSelector)
+          if (botSidebar !== observedBotSidebar) {
+            botSidebarState.disconnect()
+            observedBotSidebar = botSidebar
+            if (botSidebar) botSidebarState.observe(botSidebar, { attributes: true, attributeFilter: ['data-left', 'data-leaving', 'aria-hidden', 'hidden'] })
+          }
+          const botSidebarMode = botSidebar?.matches(':not([data-leaving]):not([aria-hidden="true"]):not([hidden])')
+            ? botSidebar.dataset.left : undefined
+          const botSidebarDocked = botSidebarMode === 'open' || botSidebarMode === 'rail'
           if (modes) {
             // Both tabs follow the outer rail's visual edge, including its
             // slide animation (which does not trigger ResizeObserver).
             const baseLeft = modes.getBoundingClientRect().left - railInset
             let nextInset = 0
             for (const rail of rails) {
+              // A DS Bot drawer overlays the card, rather than moving it.
+              if (rail === botSidebar && !botSidebarDocked) continue
               const bounds = rail.getBoundingClientRect()
               if (!bounds.width || !bounds.height) continue
               nextInset = Math.max(nextInset, bounds.right + 12 - baseLeft)
@@ -730,7 +781,10 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           const rect = panel.current?.getBoundingClientRect()
           if (!rect) return
           const sidebarRight = document.querySelector('[data-dsh-sidebar-root]')?.getBoundingClientRect().right || 0
-          const contentLeft = Math.max(rect.x, sidebarRight)
+          // DS Bot folds the shell sidebar and portals its fixed-left replacement
+          // to body. Its layout width stays stable during the slide-in animation.
+          const botSidebarRight = botSidebarDocked ? botSidebar.getBoundingClientRect().width : 0
+          const contentLeft = Math.max(rect.x, sidebarRight, botSidebarRight)
           // Native WebContentsView paints above DOM chrome regardless of z-index.
           // macOS moves the sidebar opener into this seat when the rail disappears.
           const leading = document.querySelector('[data-shell-leading]')
@@ -744,26 +798,35 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           const x = chrome && chrome.bottom > rect.y && chrome.left < rect.right
             ? Math.max(contentLeft, chrome.right) : contentLeft
           const y = rect.y
-          const surfaceOpen = settingsOpen || state.approvalsOpen || state.accountDialogOpen
           const remote = surfaceOpen && state.settingsProtocolVersion === 1 && settingsSurface
-const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mode-page')
-const hostModalOpen = dialogOpen || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
-const palette = hostPalette()
-const modesStyle = modes && typeof getComputedStyle === 'function' ? getComputedStyle(modes) : undefined
-// The skin draws the card; round the native view to the card's inner radius
-// so its square corners never paint over them. Without the skin the radius is
-// 0 and the view stays a plain rectangle.
-const radius = modesStyle
-  ? Math.max(0, Math.round((Number.parseFloat(modesStyle.borderTopLeftRadius) || 0) - (Number.parseFloat(modesStyle.borderTopWidth) || 0)))
-  : 0
-void bridge.present({ visible: hostModalOpen ? false : (remote ? state.connected && remote.bounds.width > 0 && remote.bounds.height > 0 : mode === 'chat' && !surfaceOpen && !safeModePageOpen), ...(remote ? { settings: remote.section } : {}), ...(palette ? { palette } : {}), radius, bounds: remote ? remote.bounds : { x, y, width: Math.max(0, rect.right - x), height: Math.max(0, rect.y + rect.height - y) }, theme: document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light', locale: locale.getSnapshot().active === 'zh' ? 'zh' : 'en' }).catch(() => {})
+          const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mode-page')
+          const hostModalOpen = dialogOpen || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
+          const palette = hostPalette()
+          const modesStyle = modes && typeof getComputedStyle === 'function' ? getComputedStyle(modes) : undefined
+          // Keep the native view inside the skin card's inner corners.
+          const radius = modesStyle
+            ? Math.max(0, Math.round((Number.parseFloat(modesStyle.borderTopLeftRadius) || 0) - (Number.parseFloat(modesStyle.borderTopWidth) || 0)))
+            : 0
+          const chatVisible = mode === 'chat' && !surfaceOpen && !safeModePageOpen && !hostModalOpen && botSidebarMode !== 'drawer'
+          const hostedRect = chatVisible ? hostedSeat.current?.getBoundingClientRect() : undefined
+          if (hostedRect) panel.current.style.setProperty('--dsh-hosted-start-offset', `${x - rect.x}px`)
+          void bridge.present({
+            visible: remote ? !hostModalOpen && state.connected && remote.bounds.width > 0 && remote.bounds.height > 0 : chatVisible,
+            ...(remote ? { settings: remote.section } : {}),
+            ...(palette ? { palette } : {}),
+            radius,
+            bounds: remote ? remote.bounds : { x, y, width: Math.max(0, rect.right - x), height: Math.max(0, rect.height) },
+            ...(hostedRect ? { hostedAppBounds: { x, y: hostedRect.y, width: Math.max(0, hostedRect.right - x), height: Math.max(0, hostedRect.height) } } : {}),
+            theme: document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light',
+            locale: locale.getSnapshot().active === 'zh' ? 'zh' : 'en'
+          }).catch(() => {})
         }
         // The native view follows the host's modal interaction boundary.
         // Onboarding makes #root inert while its dialog lives in a body portal.
         const interaction = new MutationObserver(present)
         if (appRoot) interaction.observe(appRoot, { attributes: true, attributeFilter: ['inert'] })
-// About covers Chat and remote settings. The recovery page covers Chat only.
-interaction.observe(document.documentElement, { attributes: true, attributeFilter: ['data-dsh-about-open', 'data-dsh-safe-mode-page'] })
+        // About covers Chat and remote settings. The recovery page covers Chat only.
+        interaction.observe(document.documentElement, { attributes: true, attributeFilter: ['data-dsh-about-open', 'data-dsh-safe-mode-page'] })
         const resize = new ResizeObserver(present)
         const followRailMotion = () => {
           if (railFrame !== null) return
@@ -814,13 +877,19 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         syncRails()
         if (modes) resize.observe(modes)
         if (panel.current) resize.observe(panel.current)
+        if (hostedSeat.current) resize.observe(hostedSeat.current)
         const sidebar = document.querySelector('[data-dsh-sidebar-root]')
         if (sidebar) resize.observe(sidebar)
-        // The leading seat mounts/unmounts as a direct frame child on collapse.
-        // Observe only that boundary, not streaming conversation descendants.
-        const chromeLayout = new MutationObserver(present)
+        const botSidebarState = new MutationObserver(present)
+        // Watch the leading seat and the portalled sidebar without scanning the
+        // conversation subtree or reacting to the temporary palette probe.
+        const chromeLayout = new MutationObserver(records => {
+          if (records.some(record => record.target !== document.body) ||
+              document.body.querySelector(botSidebarSelector) !== observedBotSidebar) present()
+        })
         const frame = panel.current?.closest('.dshModes')?.parentElement
         if (frame) chromeLayout.observe(frame, { childList: true, attributes: true, attributeFilter: ['data-sidebar-collapsed'] })
+        chromeLayout.observe(document.body, { childList: true })
         const theme = new MutationObserver(present)
         theme.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
         const dialogs = observeHostDialogs(open => { dialogOpen = open; present() })
@@ -834,14 +903,14 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
           if (railFrame !== null) cancelAnimationFrame(railFrame)
           modes?.removeAttribute('data-dsh-plugin-rail-inset')
           if (railInset) modes?.style.removeProperty('--dsh-plugin-rail-inset')
-          dialogs.dispose(); interaction.disconnect(); resize.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
+          dialogs.dispose(); interaction.disconnect(); resize.disconnect(); botSidebarState.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
         }
-      }, [mode, settingsOpen, state.approvalsOpen, state.accountDialogOpen, settingsSurface, state.connected, state.settingsProtocolVersion, locale])
+      }, [mode, surfaceOpen, hostedAppSlug, settingsSurface, state.connected, state.settingsProtocolVersion, locale])
       React.useEffect(() => () => {
         void window.dshEnterpriseChat?.present({ visible: false, bounds: { x: 0, y: 48, width: 0, height: 0 }, theme: 'light' }).catch(() => {})
       }, [])
       const showModePicker = !settingsOpen && (mode === 'chat'
-        ? !state.pageId && state.conversationId === 'new' && state.landing !== false
+        ? !state.hostedApp && !state.pageId && state.conversationId === 'new' && state.landing !== false
         : state.nativeWork && state.workLanding && !state.panelOpen)
       const select = navigation.choose
       const keyDown = (event) => {
@@ -863,7 +932,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
             ...['chat', 'work'].map((key) => React.createElement('button', { key, id: `dsh-mode-${key}`, type: 'button', role: 'tab', 'aria-selected': mode === key, 'aria-controls': `dsh-panel-${key}`, tabIndex: mode === key ? 0 : -1, ref: (node) => { tabs.current[key] = node }, onClick: (event) => { setAnimateWork(event.detail > 0 && key === 'work'); select(key) } }, t(key))))),
         React.createElement('section', { id: 'dsh-panel-work', role: 'tabpanel', 'aria-label': t('work'), hidden: mode !== 'work', className: 'dshModeBody dshWorkContent', 'data-reveal-controls': animateWork, onTransitionEnd: event => { if (event.propertyName === 'clip-path') setAnimateWork(false) }, style: { gridTemplateColumns: columns } }, work, resizeHandle),
         React.createElement('section', { ref: panel, id: 'dsh-panel-chat', role: 'tabpanel', 'aria-label': t('chat'), hidden: mode !== 'chat', className: 'dshModeBody' },
-          React.createElement('div', { className: 'dshChatStatus', role: 'status' },
+          hostedApp ? React.createElement(HostedAppContent, { key: hostedAppSlug, app: hostedApp, seat: hostedSeat, sourcePath: state.path, t }) : React.createElement('div', { className: 'dshChatStatus', role: 'status' },
             React.createElement('p', null, state.phase === 'error' ? t('error') : state.phase === 'ready' ? '' : t('loading')),
             state.connected && state.phase === 'error' && React.createElement('button', { type: 'button', onClick: () => { void window.dshEnterpriseChat.retry().catch(() => {}) } }, t('retry')))))
     }
@@ -962,6 +1031,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
           .dshChatSignInActions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
           .dshChatStatus{margin:auto;text-align:center;font-size:14px;color:var(--dsw-alias-label-secondary)}
           .dshChatStatus button{font:inherit;color:inherit;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:8px 16px;cursor:pointer}
+          .dshHostedAppHeader{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:8px 16px;padding-inline-start:calc(16px + var(--dsh-hosted-start-offset, 0px));border-bottom:1px solid var(--dsw-alias-border-l2)}
         `
         document.head.appendChild(style)
         return () => style.remove()

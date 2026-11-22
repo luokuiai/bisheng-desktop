@@ -303,7 +303,16 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js 
  							useProjection,
  							t
  						})]
-@@ -19751,6 +19799,7 @@
+@@ -19438,6 +19486,8 @@
+ 		const inject = [
+ 			"slots",
+ 			"sessions",
++			// The send preflight enters the model directory with this caller's context.
++			"remote.session",
+ 			"fileUpload",
+ 			"uiSession",
+ 			"uiWorkspace",
+@@ -19751,6 +19801,7 @@
  						kind: "list",
  						scope: "session"
  					},
@@ -311,7 +320,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js 
  					"conversation.hero.brand.mark": {
  						kind: "single",
  						scope: "root"
-@@ -19766,6 +19815,14 @@
+@@ -19766,6 +19817,14 @@
  					"conversation.hero.options": {
  						kind: "list",
  						scope: "session"
@@ -326,7 +335,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js 
  					}
  				},
  				slots: {
-@@ -19889,6 +19946,10 @@
+@@ -19889,6 +19948,10 @@
  						kind: "list",
  						scope: "session"
  					},
@@ -337,7 +346,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js 
  					"conversation.input.permission": {
  						kind: "single",
  						scope: "session"
-@@ -19925,6 +19986,7 @@
+@@ -19925,6 +19988,7 @@
  						removeAttachment: void 0,
  						resolveDraftAttachments: void 0,
  						retryFileUpload: void 0,
@@ -345,7 +354,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js 
  						toggleCommandMenu: void 0,
  						stop: void 0,
  						hooks: {
-@@ -19991,6 +20053,11 @@
+@@ -19991,6 +20055,11 @@
  						retryFileUpload: (id) => {
  							if (sessions.binding(sessionId) !== void 0) conversation.retryFileUpload(sessionId, id);
  						},
@@ -357,7 +366,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js 
  						toggleCommandMenu: inputTriggers === void 0 ? void 0 : (selection) => {
  							shell.dismissPopup();
  							const snapshot = shell.snapshot;
-@@ -20023,10 +20090,7 @@
+@@ -20023,10 +20092,7 @@
  				yield slots.register({
  					name: "main",
  					key: "conversation",

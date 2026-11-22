@@ -17,7 +17,19 @@ await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'company-demo
 await writeFile(join(root, 'client.js'), 'export {}')
 await writeFile(join(root, 'index.js'), `import 'company-demo/extra'; export function apply(ctx, config) { if (!config.guarded) throw new Error("bundle name assertion was lost"); ctx.enterpriseAuth.getState(); globalThis.enterpriseContexts.push(ctx) }`)
 await writeFile(join(root, 'extra.js'), 'export function apply() {}')
-await writeFile(join(root, 'cordis.patch.yml'), '- id: compaction-basic\n  disabled: true\n- insert:\n    - id: compaction-acp\n      name: company-demo\n    - name: cordis:noop\n- id: compaction-acp\n  name: company-demo\n  config:\n    guarded: true\n')
+await writeFile(join(root, 'cordis.patch.yml'), `- id: compaction-basic
+  disabled: true
+- insert:
+    - id: compaction-acp
+      name: company-demo
+    - id: company-extra
+      name: company-demo/extra
+    - name: cordis:noop
+- id: compaction-acp
+  name: company-demo
+  config:
+    guarded: true
+`)
 await writeFile(join(home, 'cordis.yml'), '[]')
 globalThis.enterpriseContexts = []
 const ctx = new Context()
@@ -44,14 +56,43 @@ try {
   assert.equal(entry('compaction-basic').options.disabled, true)
   assert.equal(entry('compaction-acp').options.id, 'compaction-acp')
   assert.equal(entry('compaction-acp').parent, entry('compaction-basic').parent)
-  const clientFiber = ctx.plugin(ClientModuleRegistry)
+  assert.equal(entry('company-extra').options.name, pathToFileURL(join(root, 'extra.js')).href)
+  assert.equal(entry('company-extra').fiber.state, 2)
+  let clientFiber = ctx.plugin(ClientModuleRegistry)
   await clientFiber
   assert.equal(ctx.clientModules.resolveMeta(entry('compaction-acp').options.name, pathToFileURL(`${home}/`).href).meta.clientPath, join(root, 'client.js'))
-  const graph = ctx.clientModules.graph()
-  const clientRow = graph.entries.find(row => row.id === 'company-demo')
+  const [clientRow, ...duplicates] = ctx.clientModules.graph().entries.filter(row => row.id === 'company-demo')
   assert.ok(clientRow)
+  assert.deepEqual(duplicates, [])
   const response = await ctx.clientModules.fetchBundle(new Request(new URL(clientRow.url, 'http://fixture.invalid')))
   assert.equal(response.status, 200)
+
+  const primaryId = entry('compaction-acp').id
+  await ctx.loader.update(primaryId, { disabled: true })
+  await ctx.loader.await()
+  assert.equal(entry('compaction-acp').disabled, true)
+  assert.deepEqual(ctx.clientModules.graph().entries.filter(row => row.id === 'company-demo'), [clientRow])
+  await ctx.loader.update(primaryId, { disabled: false })
+  await ctx.loader.await()
+  assert.equal(entry('compaction-acp').fiber.state, 2)
+  assert.deepEqual(ctx.clientModules.graph().entries.filter(row => row.id === 'company-demo'), [clientRow])
+
+  // A second package root with the same name is still a composition error.
+  await clientFiber.dispose()
+  const conflictingRoot = join(home, 'conflicting/node_modules/company-demo')
+  await mkdir(conflictingRoot, { recursive: true })
+  await writeFile(join(conflictingRoot, 'package.json'), JSON.stringify({ name: 'company-demo', type: 'module', exports: { './client': './client.js' }, dsh: { client: { platform: 'web' } } }))
+  await writeFile(join(conflictingRoot, 'index.js'), 'export function apply() {}')
+  await writeFile(join(conflictingRoot, 'client.js'), 'export {}')
+  const conflictingEntry = await ctx.loader.create({ name: pathToFileURL(join(conflictingRoot, 'index.js')).href })
+  await ctx.loader.await()
+  const conflictingRegistry = ctx.plugin(ClientModuleRegistry)
+  await assert.rejects(async () => { await conflictingRegistry }, /package company-demo resolves from multiple active Loader sources/)
+  await conflictingRegistry.dispose()
+  await ctx.loader.remove(conflictingEntry)
+  clientFiber = ctx.plugin(ClientModuleRegistry)
+  await clientFiber
+
   const secondRoot = join(home, 'second/node_modules/second-demo')
   await mkdir(join(secondRoot, 'node_modules/private-dep'), { recursive: true })
   await writeFile(join(secondRoot, 'package.json'), JSON.stringify({ name: 'second-demo', type: 'module', exports: { '.': { import: './index.js' } } }))
@@ -70,12 +111,15 @@ try {
   assert.equal(entry('compaction-basic').fiber.state, 2)
   assert.equal(entry('user-extra').fiber.state, 2)
   assert.equal(entry('compaction-acp'), undefined)
+  assert.equal(entry('company-extra'), undefined)
+  assert.equal(ctx.clientModules.graph().entries.some(row => row.id === 'company-demo'), false)
   assert.equal(second.state, 2)
   await second.dispose()
   assert.throws(() => old.enterpriseAuth.getState(), /not authorized/)
   const again = await runtime(record)
   assert.throws(() => old.enterpriseAuth.getState(), /not authorized/)
   assert.equal(again.state, 2)
+  assert.equal(ctx.clientModules.graph().entries.filter(row => row.id === 'company-demo').length, 1)
   await again.dispose()
   // A distinct generation prevents module caching from hiding an activation failure.
   const badRoot = join(home, 'bad/node_modules/bad-demo')

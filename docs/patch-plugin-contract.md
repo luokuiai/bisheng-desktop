@@ -38,6 +38,10 @@ Harness 0.2.0-rc.2 的 `dsh-client-ui-input-trigger` 将 pointer hover 与 keybo
 
 这是原生窗口展示接缝：Harness slot 位于另一个 renderer。preload 只观察 portal 与 root 的背景隔离属性，按动画帧汇总变化；隐藏时暂停，卸载时释放。语义为普通浮层的 popover 保持原范围。知识空间旧展示入口触发同一个汇总状态刷新。验证入口为 `test/enterprise-modal.test.mjs`、`test/enterprise-chat-view.test.ts` 和跨平台 `scripts/verify-enterprise-modal.mjs`。
 
+### ds-bot 侧栏的聊天视图定位
+
+ds-bot 0.3.9 在 Bot 模式折叠 Harness 侧栏，并把自己的固定侧栏挂到 `body`。桌面 UI 只能从该版本的 `.bt-leftcol[data-left]` 读取其布局，因为 Harness 的侧栏尺寸服务只报告原生侧栏。企业 Chat 在展开或窄栏时按侧栏宽度定位，在抽屉打开时让出原生视图。挂载、卸载及模式变化通过直接子节点和属性变化重算，拖动通过尺寸观察重算。回归入口为 `test/desktop-modes-ui.test.mjs`。ds-bot 或 Harness 暴露实际占位后使用该契约。
+
 ### 安全模式管理页的原生视图展示（2026-10-29）
 
 安全模式 preload 已通过 `html[data-dsh-safe-mode-page]` 声明管理页占用内容区。桌面内容贡献项读取当前属性并仅观察该属性变化，通过现有 presentation IPC 隐藏背景 Chat 子视图；关闭管理页后按当前模式恢复。远程设置仍作为前景内容展示，`#root.inert` 继续管理宿主模态边界。观察器随贡献项卸载释放。该修复直接修改自有插件；验证见 `test/desktop-modes-ui.test.mjs` 与 [macOS 原生验证记录](status/safe-mode-panel-20261029.md)。
@@ -231,6 +235,8 @@ The official DeepSeek catalog uses the request path's credential resolver, so au
 
 These changes belong to `dsh-client-ui-model-selection`, `dsh-client-ui-conversation`, and `dsh-llm-deepseek-api-key` at `0.2.0-rc.2`. Existing slots expose rendering contributions; shared selection reconciliation and the composer send boundary live inside the upstream implementations, so these corrections are recorded as replayable dependency changes. Remove the corresponding hunks when Harness supplies equivalent behavior. Regressions: `test/model-revocation.test.mjs`, `test/deepseek-model-credentials.test.mjs`, and `test/deepseek-model-credentials-runtime.test.ts`.
 
+The `0.2.1-rc.2` Conversation patch explicitly injects `remote.session` for the send preflight. Cordis resolves that namespace in the caller's context when the model directory is first created. A plugin can replace the native model picker, so the send path must work before any picker opens. `test/model-revocation.test.mjs` covers that first send through the installed Cordis and Session Remote. Remove the declaration with the custom preflight when Harness provides an equivalent send contract.
+
 The conversation model trigger, menu/search labels, tooltips, and `/model` rows share an enterprise display-name formatter. A missing, blank, or internal-ID display name becomes localized “企业模型 {index}” / “Enterprise model {index}”; configured names remain intact. The catalog and selection requests retain their original IDs. Model-label regression cases cover both locales and distinguish multiple unnamed models.
 
 ### Turn usage model labels (Harness 0.2.0-rc.2, 2026-10-21)
@@ -277,6 +283,8 @@ Work 知识空间引用在原生输入的 `plain` 和 `claimed` 两个可编辑�
 加载变更覆盖 Profile 组合、后端导入与客户端发现：从已校验的 `.enterprise-generations/<generation>/node_modules/<package>` 读取声明，以该包的 `package.json` URL 为解析基准，通过 Harness 的 `resolvePluginResource` 使用 Node ESM 条件导出解析。普通 Profile 使用此路径；Safe Mode 不提供该接缝。入口解析和内部依赖错误保留原始 cause，控制器继续使用已安装旧版本回退和启停恢复入口。
 
 删除企业 `MarketTree`、独立 group、手工 `packageEntry` 加载和 `createRequire().resolve()`。bundle patches 由标准 `loadOverlayPatches` 读取，插入入口锚定为实际模块 URL，交给 Harness 根 Include；已声明的插件 ID 保持稳定，匿名条目由标准 Loader 分配 ID，重复插入 ID 会明确拒绝，不再随机改写 bundle 身份。patch 的 name 仍是匹配断言。插件直接修改宿主根条目（例如禁用 `compaction-basic`），不再对空树应用补丁。客户端沿用现有 ClientModuleRegistry 的实际模块位置发现机制。
+
+`dsh-client-modules@0.2.1-rc.2` 根据 Loader 解析到的 manifest 所在物理目录合并同一安装的客户端贡献。企业 bundle 可以同时挂载包主入口和子路径入口，它们共享一个 `dsh.client`。逐入口保留启停跟踪，最后一个入口退出时移除客户端模块；不同物理目录中的同名包仍报告来源冲突。该修复只涉及客户端发现，Profile 组合、后端入口和 Safe Mode 解析基准保持原有协议。真实 Loader 回归由 `test/helpers/enterprise-root-smoke.mjs` 覆盖。上游按安装目录识别同一客户端贡献后移除该补丁。
 
 app-boot 增加可选 `profileRuntimeLayers.set/remove` 内存接缝，使用原生 `recomposeCore`、激活审计与回滚。内存层按启用顺序应用在持久 Profile patches 之后，不写 manifest、用户 patch 或 Profile 投影；普通配置重载/HMR 组合保留这些层。移除后使用最新持久层恢复宿主配置，失败不重新添加已撤权层。企业入口自身处于卸载事务时，先撤销凭据并停止自身插件，再排队恢复根配置，避免等待正在等待自己的根事务；排队恢复失败记录日志。
 
