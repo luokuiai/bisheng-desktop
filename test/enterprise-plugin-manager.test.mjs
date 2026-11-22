@@ -10,7 +10,7 @@ const roots = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
 const id = 'a'.repeat(32), key = 'b'.repeat(64)
 
-async function fixture() {
+async function fixture(displayName) {
   const root = await mkdtemp(join(tmpdir(), 'enterprise-manager-'))
   roots.push(root)
   await mkdir(root, { recursive: true })
@@ -21,7 +21,10 @@ async function fixture() {
     act: vi.fn(async input => {
       if (input.expectedAccountKey !== state.accountKey) throw new Error('Enterprise account changed.')
       if (input.action === 'uninstall') state.installed = []
-      else if (input.action === 'install') state.installed = [{ plugin_id: id, name: 'company-demo', version: '1.0.0', enabled: true, status: 'enabled' }]
+      else if (input.action === 'install') state.installed = [{
+        plugin_id: id, name: 'company-demo', version: '1.0.0', enabled: true, status: 'enabled',
+        ...(displayName === undefined ? {} : { display_name: displayName })
+      }]
       else state.installed[0].status = input.action === 'enable' ? 'enabled' : 'disabled'
       return market.state()
     })
@@ -39,14 +42,19 @@ async function fixture() {
 }
 
 describe('enterprise source through the real Plugin Manager methods', () => {
-  it('installs, inventories, toggles and removes through the Manager without ordinary Profile projection', async () => {
-    const { manager, source, market, events, root } = await fixture()
+  it.each([
+    ['企业示例插件', '企业示例插件'],
+    [undefined, 'company-demo']
+  ])('lists title %2$s and manages the bundle without ordinary Profile projection', async (displayName, title) => {
+    const { manager, source, market, events, root } = await fixture(displayName)
     const before = await readFile(join(root, 'package.json'), 'utf8')
     const installed = await performMarketAction(manager, source, market, { action: 'install', plugin_id: id })
     expect(installed.result).toMatchObject({ application: 'applied', stage: 'enable', changed: true })
     expect(installed.result.restartReason).toBeUndefined()
     const target = `enterprise:${key}:${id}`
-    expect((await manager.listBundles()).find(row => row.name === target)).toMatchObject({ installed: true, enabled: true })
+    expect((await manager.listBundles()).find(row => row.name === target)).toMatchObject({
+      installed: true, enabled: true, meta: { title }
+    })
     expect(await manager.setBundleEnabled(target, false)).toMatchObject({ application: 'applied', enabled: false })
     expect(await manager.setBundleEnabled(target, true)).toMatchObject({ application: 'applied', enabled: true })
     expect(await manager.removeBundle(target)).toMatchObject({ application: 'applied', stage: 'remove', changed: true })
