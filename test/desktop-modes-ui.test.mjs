@@ -45,14 +45,24 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   disposers.push(() => disposeWorkbench?.())
   let snapshot = { connected, phase: 'ready', epoch: 1, conversationId: 'new', settingsProtocolVersion: 1 }
   let chatListener
+  const dismissHostedApp = async () => {
+    if (!snapshot.hostedApp) return
+    snapshot = { ...snapshot, hostedApp: undefined }
+    chatListener(snapshot)
+  }
   window.dshEnterpriseChat = {
     subscribe: fn => { chatListener = fn; return () => { chatListener = undefined } },
     state: vi.fn(async () => ({ ...snapshot })),
     present: vi.fn(async () => ({ ...snapshot })),
     retry: vi.fn(async () => {}),
     history: vi.fn(async () => ({ epoch: 1, items: [{ id: 'cloud-a', title: 'Cloud chat', updatedAt: '2026-10-16' }], hasMore: false })),
-    openPage: vi.fn(async () => {}),
-    open: vi.fn(async () => {})
+    openPage: vi.fn(dismissHostedApp),
+    open: vi.fn(dismissHostedApp),
+    closeHostedApp: vi.fn(dismissHostedApp),
+    retryHostedApp: vi.fn(async () => {
+      snapshot = { ...snapshot, hostedApp: { ...snapshot.hostedApp, phase: 'loading' } }
+      chatListener(snapshot)
+    })
   }
   const resizeObservers = new Set()
   vi.stubGlobal('ResizeObserver', class {
@@ -76,6 +86,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   let panelState = { activePanelId: null }
   const sessionListeners = new Set(), panelListeners = new Set()
   const localeListeners = new Set()
+  const dictionaries = new Map()
   let activeLocale = 'en'
   const setSessions = value => { sessionList = value; sessionListeners.forEach(fn => fn()) }
   const setPanel = id => { panelState = { activePanelId: id }; panelListeners.forEach(fn => fn()) }
@@ -98,7 +109,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     uiWorkspace: { registerNavigationHandler: (fn) => { navigate = fn; return () => {} }, startSession: () => { navigate('new'); setSessions({ phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }); setPanel(null) } },
     sessions: { binding: id => id === 'draft' ? { session: liveSession } : undefined, list: { getSnapshot: () => sessionList, subscribe: fn => { sessionListeners.add(fn); return () => sessionListeners.delete(fn) } } },
     layout: { selectPanel: setPanel, panelInfo: { getSnapshot: () => panelState, subscribe: fn => { panelListeners.add(fn); return () => panelListeners.delete(fn) } } },
-    remote: {}, locale: { register() {}, bind: () => key => key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) } },
+    remote: {}, locale: { register: (ns, copy) => dictionaries.set(ns, copy), bind: ns => key => key.startsWith('hostedApp') ? dictionaries.get(ns)?.[activeLocale]?.[key] : key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) } },
     effect(fn) { const dispose = fn(); if (typeof dispose === 'function') disposers.push(dispose) },
     slots: {
       inject(name, fn) { if (['desktop.mode.content', 'sidebar.workspaces.collection', 'sidebar.primaryNavigation'].includes(name)) fn() },
@@ -542,6 +553,98 @@ it('reserves a docked DS Bot sidebar mounted in the body and follows its lifecyc
     portal.remove()
     nativeSidebar.remove()
   }
+})
+
+it('reserves the hosted app toolbar, yields to host overlays and returns to the existing app directory', async () => {
+  const sidebar = document.createElement('div')
+  sidebar.className = 'bt-leftcol'
+  sidebar.dataset.left = 'open'
+  sidebar.getBoundingClientRect = () => new DOMRect(0, 0, 240, 748)
+  const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+    if (this.hasAttribute('data-shell-leading')) return { left: 80, right: 156, bottom: 70 }
+    if (this.parentElement?.id === 'dsh-panel-chat') return { x: 0, y: 100, right: 960, width: 960, height: 648 }
+    return { x: 0, y: 48, right: 960, width: 960, height: 700 }
+  })
+  try {
+    const ui = await mount(true)
+    const bridge = window.dshEnterpriseChat
+    const draft = ui.draft()
+    await ui.navigation([{ id: 'apps', label: 'Apps', path: '/apps', primary: true, active: true }], '/apps')
+    await ui.pushState({ hostedApp: { slug: 'fixture-app', phase: 'loading' } })
+    const chat = container.querySelector('#dsh-panel-chat')
+    const leading = document.createElement('div')
+    leading.dataset.shellLeading = ''
+    await act(async () => container.append(leading))
+    expect(chat.querySelector('header button').textContent).toBe('Back to App Center')
+    expect(chat.querySelector('[role=status]').textContent).toBe('Opening app…')
+    expect(bridge.present).toHaveBeenLastCalledWith(expect.objectContaining({
+      visible: true, bounds: { x: 156, y: 48, width: 804, height: 700 },
+      hostedAppBounds: { x: 156, y: 100, width: 804, height: 648 }
+    }))
+    await ui.pushState({ hostedApp: { slug: 'fixture-app', phase: 'ready' } })
+    expect(chat.querySelector('[role=status]')).toBeNull()
+    await act(async () => document.body.append(sidebar))
+    expect(bridge.present.mock.lastCall[0]).toMatchObject({ hostedAppBounds: { x: 240, y: 100, width: 720, height: 648 } })
+    await act(async () => { sidebar.dataset.left = 'drawer' })
+    expect(bridge.present.mock.lastCall[0]).toMatchObject({ visible: false })
+    expect(bridge.present.mock.lastCall[0]).not.toHaveProperty('hostedAppBounds')
+    await act(async () => sidebar.remove())
+    expect(bridge.present.mock.lastCall[0]).toMatchObject({ hostedAppBounds: { x: 156, y: 100, width: 804, height: 648 } })
+    await act(async () => { container.inert = true })
+    expect(bridge.present.mock.lastCall[0]).toMatchObject({ visible: false })
+    expect(bridge.present.mock.lastCall[0]).not.toHaveProperty('hostedAppBounds')
+    await act(async () => { container.inert = false })
+    await act(async () => window.dispatchEvent(new CustomEvent('dsh-desktop:settings-visibility', { detail: { open: true } })))
+    expect(chat.querySelector('header')).toBeNull()
+    expect(bridge.present.mock.lastCall[0]).not.toHaveProperty('hostedAppBounds')
+    await act(async () => window.dispatchEvent(new CustomEvent('dsh-desktop:settings-visibility', { detail: { open: false } })))
+    expect(bridge.present.mock.lastCall[0]).toHaveProperty('hostedAppBounds')
+    await act(async () => chat.querySelector('header button').click())
+    expect(bridge.closeHostedApp).toHaveBeenCalledOnce()
+    expect(bridge.openPage).not.toHaveBeenCalled()
+    expect(chat.querySelector('header')).toBeNull()
+    expect(bridge.present.mock.lastCall[0]).not.toHaveProperty('hostedAppBounds')
+    expect(ui.draft()).toBe(draft)
+  } finally { geometry.mockRestore(); sidebar.remove() }
+})
+
+it('retries a hosted app and routes closing through the destination owner', async () => {
+  const ui = await mount(true)
+  const bridge = window.dshEnterpriseChat
+  await ui.navigation([
+    { id: 'apps', label: 'Apps', path: '/apps', primary: true, active: true },
+    { id: 'knowledge', label: 'Knowledge', path: '/knowledge', primary: false, active: false }
+  ], '/apps')
+  await ui.locale('zh')
+  await ui.pushState({ hostedApp: { slug: 'fixture-app', phase: 'error' } })
+  const chat = container.querySelector('#dsh-panel-chat')
+  expect(chat.querySelector('header button').textContent).toBe('返回应用中心')
+  expect(chat.querySelector('[role=alert]').textContent).toBe('应用加载失败。')
+  await act(async () => [...chat.querySelectorAll('button')].find(button => button.textContent === '重试').click())
+  expect(bridge.retryHostedApp).toHaveBeenCalledOnce()
+  expect(chat.querySelector('[role=status]').textContent).toBe('正在打开应用…')
+  const choose = async label => {
+    await act(async () => container.querySelector('[data-navigation-id=more]').click())
+    await act(async () => [...container.querySelectorAll('[role=menuitem]')].find(item => item.textContent === label).click())
+  }
+  await choose('Apps')
+  expect(bridge.closeHostedApp).toHaveBeenCalledOnce()
+  expect(bridge.openPage).not.toHaveBeenCalled()
+  await ui.pushState({ path: '/square', hostedApp: { slug: 'fixture-app', phase: 'ready' } })
+  expect(chat.querySelector('header button').textContent).toBe('返回应用广场')
+  await choose('Apps')
+  expect(bridge.openPage).toHaveBeenCalledWith('apps')
+  await ui.pushState({ hostedApp: { slug: 'fixture-app', phase: 'ready' } })
+  await choose('Knowledge')
+  expect(bridge.closeHostedApp).toHaveBeenCalledOnce()
+  expect(bridge.openPage).toHaveBeenLastCalledWith('knowledge')
+  await ui.pushState({ hostedApp: { slug: 'fixture-app', phase: 'ready' } })
+  await act(async () => container.querySelector('[data-navigation-id=plugins]').click())
+  expect(ui.selected()).toBe('work')
+  expect(bridge.closeHostedApp).toHaveBeenCalledTimes(2)
+  expect(bridge.closeHostedApp).toHaveBeenLastCalledWith(false)
+  expect(bridge.present.mock.lastCall[0]).toMatchObject({ visible: false })
+  expect(bridge.present.mock.lastCall[0]).not.toHaveProperty('hostedAppBounds')
 })
 
 

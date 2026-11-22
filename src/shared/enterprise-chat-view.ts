@@ -1,6 +1,14 @@
+export interface EnterpriseViewBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface EnterpriseChatPresentation {
   visible: boolean
-  bounds: { x: number; y: number; width: number; height: number }
+  bounds: EnterpriseViewBounds
+  hostedAppBounds?: EnterpriseViewBounds
   theme: 'light' | 'dark'
   locale?: 'zh' | 'en'
   settings?: EnterpriseSettingsSection
@@ -70,6 +78,21 @@ export interface EnterpriseChatViewState {
   settingsSection?: EnterpriseSettingsSection
   settingsReady?: boolean
   settingsFailure?: 'load' | 'unsupported'
+  hostedApp?: EnterpriseHostedAppState
+}
+
+export interface EnterpriseHostedAppState {
+  slug: string
+  phase: 'loading' | 'ready' | 'error'
+}
+
+function parseViewBounds(value: unknown): EnterpriseViewBounds {
+  if (!value || typeof value !== 'object') throw new Error('Invalid Chat bounds.')
+  const bounds = value as Record<string, unknown>
+  if (['x', 'y', 'width', 'height'].some((key) =>
+    typeof bounds[key] !== 'number' || !Number.isFinite(bounds[key]) || Number(bounds[key]) < 0 || Number(bounds[key]) > 20000
+  )) throw new Error('Invalid Chat bounds.')
+  return { x: Number(bounds.x), y: Number(bounds.y), width: Number(bounds.width), height: Number(bounds.height) }
 }
 
 export function parseChatPresentation(value: unknown): EnterpriseChatPresentation {
@@ -83,17 +106,15 @@ export function parseChatPresentation(value: unknown): EnterpriseChatPresentatio
   }
   const settings = input.settings === undefined ? undefined : parseEnterpriseSettingsSection(input.settings)
   const palette = parseEnterprisePalette(input.palette)
-  const bounds = input.bounds as Record<string, unknown> | undefined
-  if (!bounds || ['x', 'y', 'width', 'height'].some((key) =>
-    typeof bounds[key] !== 'number' || !Number.isFinite(bounds[key]) || Number(bounds[key]) < 0 || Number(bounds[key]) > 20000
-  )) throw new Error('Invalid Chat bounds.')
+  const hostedAppBounds = input.hostedAppBounds === undefined ? undefined : parseViewBounds(input.hostedAppBounds)
   return {
     visible: input.visible,
     theme: input.theme as 'light' | 'dark',
     locale: input.locale,
     settings,
     ...(palette ? { palette } : {}),
-    bounds: { x: Number(bounds.x), y: Number(bounds.y), width: Number(bounds.width), height: Number(bounds.height) }
+    ...(hostedAppBounds ? { hostedAppBounds } : {}),
+    bounds: parseViewBounds(input.bounds)
   }
 }
 
