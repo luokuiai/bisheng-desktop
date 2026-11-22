@@ -351,6 +351,21 @@ it('switches modes without a transient light zero-sized presentation', async () 
   expect(window.dshEnterpriseChat.open).not.toHaveBeenCalled()
 })
 
+it('removes the shared host card only while the enterprise workspace is docked in Chat', async () => {
+  const ui = await mount(true)
+  const modes = container.querySelector('.dshModes')
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(false)
+  await ui.pushState({ workspaceDockOpen: true })
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(true)
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ radius: 0 }))
+  await ui.click('work')
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(false)
+  await ui.click('chat')
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(true)
+  await ui.pushState({ workspaceDockOpen: false })
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(false)
+})
+
 it('keeps Chat and Work clear of the dynamically mounted DS Bot column', async () => {
   let tick = 0
   const frames = new Map()
@@ -949,6 +964,22 @@ it('keeps native Chat behind nested host confirmations until their final removal
   await act(async () => { second = hostDialog('<div role="alertdialog" aria-modal="true">Confirm</div>'); first.remove() })
   expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
   await act(async () => second.remove())
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }))
+})
+
+it('keeps native Chat hidden through the DS Bot picker and creation form until close', async () => {
+  const view = await mount(true)
+  await view.click('chat')
+  let portal
+  await act(async () => {
+    portal = hostDialog('<div class="bt-pane"><div class="bt-newchat" role="dialog"><input aria-label="Recipient"></div></div>')
+  })
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+  await act(async () => {
+    portal.firstElementChild.innerHTML = '<div class="bt-create" role="dialog"><input aria-label="Bot name"></div>'
+  })
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+  await act(async () => portal.remove())
   expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }))
 })
 
