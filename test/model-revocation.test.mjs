@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import vm from 'node:vm'
+import { Context, Service } from '@deepseek-ai/cordis'
+import * as gateway from '@deepseek-ai/dsh-api-gateway/client'
+import sessionRemote from '@deepseek-ai/dsh-api-session-controller/remote'
+import * as registry from '@deepseek-ai/dsh-typert-registry/client'
 import { describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
@@ -27,7 +31,7 @@ vm.runInNewContext(modelSource.replace('exports.apply = apply;', 'exports.ModelS
   window: { __ModuleLoader__: { load({ factory }) {
     modelClient = factory(id => ({
       react, 'react/jsx-runtime': { jsx, jsxs: jsx }, 'react-dom': {},
-      '@deepseek-ai/cordis': { Service: class {} },
+      '@deepseek-ai/cordis': { Service },
       '@deepseek-ai/dsh-client-store': { createSnapshotStore },
       '@deepseek-ai/dsh-client-ui-primitives': { rankByName: models => models }
     })[id])
@@ -208,6 +212,51 @@ it('sends through the confirmed replacement and preserves attachments', async ()
   expect(i.sendSession).toHaveBeenCalledWith(expect.anything(), 'Keep this draft', ['image-1'], 'queue', undefined)
   expect(f.directory.store.getSnapshot().current).toEqual(replacement)
 })
+
+it('submits an unopened model directory through the installed Cordis scopes', async () => {
+  const ctx = new Context()
+  const call = vi.fn(async () => ({ ok: true, value: initial }))
+  const sendSession = vi.fn(async () => ({ kind: 'success' }))
+  const session = { sessionId: 'session-1', getSnapshot: () => ({ subagent: null, blank: false }) }
+  const projected = createSnapshotStore({ next: old, lastUsed: old })
+  const binding = { session: { ...session, projections: { faceOf: () => projected } } }
+  try {
+    ctx.provide('sessions', {
+      scope: () => ctx,
+      binding: () => binding,
+      subagentAddress: () => undefined
+    })
+    ctx.provide('conversation', { sendSession })
+    ctx.provide('connection', {
+      interactions: 'answer',
+      rpc: { call, open: vi.fn() },
+      start: () => ({ stop() {} }),
+      registerGenerationSource: () => () => {},
+      generation: { getSnapshot: () => undefined }
+    })
+    await ctx.plugin(registry)
+    await ctx.plugin(gateway)
+    await ctx.inject(['remote'], scope => scope.remote.$mount(sessionRemote))
+    await ctx.plugin(modelClient.ModelDirectoryResolver)
+
+    // Use the shipped declaration so the fixture has Conversation's actual inject boundary.
+    const declaration = conversationSource.match(/\/\/#region lib\/types\/client\/apply\.js[\s\S]*?const inject = (\[[\s\S]*?\]);/)?.[1]
+    expect(declaration).toBeDefined()
+    const inject = vm.runInNewContext(declaration)
+    for (const service of inject) {
+      if (ctx.get(service) === undefined) ctx.provide(service, {})
+    }
+    let hub
+    await ctx.inject(inject, scope => { hub = new InputHub(scope, key => key) })
+    expect(hub).toBeDefined()
+    await expect(hub.sink(session, 'Keep this draft', ['image-1'], 'queue')).resolves.toEqual({ kind: 'success' })
+    expect(call).toHaveBeenCalledWith('/api', 'session/modelCatalog', { args: {} }, expect.any(AbortSignal))
+    expect(sendSession).toHaveBeenCalledExactlyOnceWith(session, 'Keep this draft', ['image-1'], 'queue', undefined)
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
+
 it('returns an actionable empty-catalog error before submitting the draft', async () => {
   const f = fixture(catalogValue([]))
   const i = input(f)

@@ -44,6 +44,15 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-modules/lib/client.js b/node_m
 diff --git a/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js b/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js
 --- a/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js
 +++ b/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js
+@@ -1,7 +1,7 @@
+ import { createRequire } from "node:module";
+ import { createHash } from "node:crypto";
+-import { existsSync, readFileSync, statSync } from "node:fs";
++import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+ import { readFile } from "node:fs/promises";
+ import { dirname, isAbsolute, join } from "node:path";
+ import { fileURLToPath, pathToFileURL } from "node:url";
+ import { Service } from "@deepseek-ai/cordis";
 @@ -283,9 +283,9 @@
  }
  /** Count generated lines while assembling indexed-map section offsets. */
@@ -97,7 +106,23 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js b/node_mo
  				body: artifact.scriptBody,
  				contentType: "text/javascript; charset=utf-8"
  			});
-@@ -785,9 +796,17 @@
+@@ -735,12 +746,14 @@
+ 			return null;
+ 		}
+ 		const clientRel = clientExportOf(packageName, pkg.exports);
+ 		if (clientRel === void 0) throw new Error(`client-modules: ${packageName} declares dsh.client but exports no "./client" bundle`);
++		const packageRoot = realpathSync(dirname(pkgPath));
+ 		const resolved = {
+ 			packageName,
++			packageRoot,
+ 			meta: {
+-				clientPath: join(dirname(pkgPath), clientRel),
++				clientPath: join(packageRoot, clientRel),
+ 				...decl.inject !== void 0 ? { inject: decl.inject } : {},
+ 				external: decl.external ?? [],
+ 				immediately: decl.immediately === true
+ 			}
+@@ -785,9 +798,17 @@
  				specifier: loaderName,
  				attributes: {}
  			}).url : internal.resolveSync(loaderName, baseUrl, {}).url;
@@ -116,3 +141,37 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js b/node_mo
  		return this.nearestPackage(moduleUrl, expectedPackageName);
  	}
  	nearestPackage(moduleUrl, expectedPackageName) {
+@@ -887,23 +908,25 @@
+ 			sourceKey: this.sourceKey(loaderName, baseUrl)
+ 		};
+ 	}
+ 	reconcilePackage(packageName) {
+-		const sources = [];
+-		for (const source of this.sources.values()) if (source.packageName === packageName) sources.push(source);
+-		if (sources.length > 1) {
+-			const locations = sources.map((source) => `${JSON.stringify(source.loaderName)} from ${source.baseUrl}`).join(", ");
++		// One installed manifest owns one client bundle even with multiple host entries.
++		const sources = new Map();
++		for (const source of this.sources.values()) {
++			if (source.packageName === packageName) sources.set(source.packageRoot, source);
++		}
++		if (sources.size > 1) {
++			const locations = [...sources.values()].map((source) => `${JSON.stringify(source.loaderName)} from ${source.baseUrl}`).join(", ");
+ 			throw new Error(`client-modules: package ${packageName} resolves from multiple active Loader sources: ${locations}; remove one entry`);
+ 		}
+-		const source = sources[0];
++		const source = sources.values().next().value;
+ 		if (source === void 0) return this.table.delete(packageName);
+-		if (this.table.get(packageName)?.sourceKey === source.sourceKey) return false;
++		if (this.table.get(packageName)?.packageRoot === source.packageRoot) return false;
+ 		const snapshot = this.initialBundleSnapshot(packageName, source.meta.clientPath);
+ 		const rev = artifactRevision(snapshot.baseline);
+ 		this.table.set(packageName, {
+ 			entry: graphRow(packageName, rev, source.meta),
+-			loaderName: source.loaderName,
+-			sourceKey: source.sourceKey,
++			packageRoot: source.packageRoot,
+ 			meta: source.meta,
+ 			bundle: snapshot.bundle,
+ 			baseline: snapshot.baseline
+ 		});
