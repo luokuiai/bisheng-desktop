@@ -379,7 +379,10 @@ export class EnterpriseChatView {
     const [width = 0, height = 0] = this.owner.getContentSize()
     const x = Math.max(0, Math.round(bounds.x * zoom))
     const y = Math.max(0, Math.round(bounds.y * zoom))
-    const contentBounds = { x, y, width: Math.max(0, Math.min(width - x, Math.round(bounds.width * zoom))), height: Math.max(0, Math.min(height - y, Math.round(bounds.height * zoom))) }
+    // Fractional card edges round down inside the embedded document and expose a
+    // page scrollbar (macOS "always show"); ceil keeps the viewport at least the
+    // card's size, and the card clips the extra pixel.
+    const contentBounds = { x, y, width: Math.max(0, Math.min(width - x, Math.ceil(bounds.width * zoom))), height: Math.max(0, Math.min(height - y, Math.ceil(bounds.height * zoom))) }
     const windowDialog = this.modalOpen && !this.presentation.settings
     this.view.setBounds(windowDialog ? { x: 0, y: 0, width, height } : contentBounds)
     // The host card is drawn by the desktop skin; the native view must not

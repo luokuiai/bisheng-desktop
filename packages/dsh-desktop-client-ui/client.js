@@ -645,47 +645,51 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       if (elapsed >= 0 && elapsed < 60000) return t('justNow')
       return new Date(time).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })
     }
-    /** Host body portals own modal input; native content yields until the last one closes. */
+    /**
+     * Host dialogs own modal input; native content yields until the last one
+     * closes. Scan the whole document, not only body portals: settings mounts
+     * its surface as a portal today, but the shell must not depend on where a
+     * future dialog lands. Mutations are collapsed to one microtask because
+     * conversation streaming touches the DOM continuously.
+     */
     function observeHostDialogs(report) {
       const selector = '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], dialog[open]'
-      const portals = new Map()
       let previous = false
       let initialized = false
       let disposed = false
+      let scheduled = false
+      const read = () => [...document.querySelectorAll(selector)].some(dialog =>
+        dialog.checkVisibility({ checkVisibilityCSS: true }) &&
+        (dialog.getAttribute('aria-modal') === 'true' || dialog.matches(':modal')))
       const refresh = () => {
-        if (disposed || document.hidden) return
-        const children = new Set([...document.body.children].filter(element => element.id !== 'root' && !element.matches('script, style, link')))
-        for (const [element, observer] of portals) {
-          if (children.has(element)) continue
-          observer.disconnect()
-          portals.delete(element)
-        }
-        for (const element of children) {
-          if (portals.has(element)) continue
-          const observer = new MutationObserver(refresh)
-          observer.observe(element, { childList: true, subtree: true, attributes: true, attributeFilter: ['role', 'aria-modal', 'open', 'hidden', 'style', 'class'] })
-          portals.set(element, observer)
-        }
-        const open = [...children].some(element => {
-          const dialogs = [...(element.matches(selector) ? [element] : []), ...element.querySelectorAll(selector)]
-          return dialogs.some(dialog => dialog.checkVisibility({ checkVisibilityCSS: true }) &&
-            (dialog.getAttribute('aria-modal') === 'true' || dialog.matches(':modal')))
-        })
+        if (disposed) return
+        const open = read()
         if (open === previous) return
         previous = open
         if (initialized) report(open)
       }
-      const body = new MutationObserver(refresh)
-      body.observe(document.body, { childList: true })
-      document.addEventListener('visibilitychange', refresh)
+      const schedule = () => {
+        if (disposed || scheduled) return
+        scheduled = true
+        queueMicrotask(() => {
+          scheduled = false
+          refresh()
+        })
+      }
+      const body = new MutationObserver(schedule)
+      body.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['role', 'aria-modal', 'open', 'hidden', 'style', 'class']
+      })
+      document.addEventListener('visibilitychange', schedule)
       refresh()
       initialized = true
       return { isOpen: () => previous, dispose: () => {
         disposed = true
         body.disconnect()
-        for (const observer of portals.values()) observer.disconnect()
-        portals.clear()
-        document.removeEventListener('visibilitychange', refresh)
+        document.removeEventListener('visibilitychange', schedule)
       } }
     }
     function DesktopModes({ work, columns, resizeHandle, navigation, t, locale }) {

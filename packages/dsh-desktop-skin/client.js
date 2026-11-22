@@ -52,6 +52,19 @@ window.__ModuleLoader__.load({
      * new-session card uses the pinned module class instead of that later hook.
      */
     const STYLE = `
+      /* App shell: the frame owns scrolling; never expose document scrollbars. */
+      html, body {
+        overflow: hidden;
+      }
+      /*
+       * macOS keeps the traffic lights over the content (hiddenInset). The stock
+       * frame starts at 10px, which puts the card under the buttons; reserve the
+       * same clearance the compact toolbars use.
+       */
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-skin="luokui"] .pI_x6G_frame {
+        padding-top: calc(var(--dsh-frame-top-clearance, 48px) + 10px);
+      }
+
       body[data-dsh-desktop-skin="luokui"] {
         --dsk-card-radius: 24px;
         --dsk-card-border: 1px solid var(--dsw-alias-border-l2);
