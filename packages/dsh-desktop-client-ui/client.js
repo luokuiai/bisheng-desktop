@@ -8,6 +8,16 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const { Menu, MenuItemButton, Modal, Button, ReferenceIconRegular } = require('@deepseek-ai/dsh-client-ui-primitives')
 
+    // luokui-ui:list-section:start
+    /** A host can inject its own React runtime (including classic script loaders). */
+    function createListSection(h) {
+        return function ListSection({ heading, headingClassName, before, after, children, ...props }) {
+            return h('section', props, heading == null ? null : h('div', { className: headingClassName }, heading), before, children, after);
+        };
+    }
+    // luokui-ui:list-section:end
+    const ListSection = createListSection(React.createElement)
+
     // Paths are copied from build/bisheng-logo-mark.svg. Keeping the browser
     // occupant self-contained makes it replayable when Harness loads plugins
     // from an installed Profile rather than the repository.
@@ -642,16 +652,19 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       const rows = [...local, ...cloud].sort((a, b) => Number(!!b.blank) - Number(!!a.blank) || Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt - a.updatedAt || a.key.localeCompare(b.key))
       return React.createElement('div', { className: 'dshSharedCollection', 'data-mode': state.mode },
         projects(state.mode === 'work'),
-        React.createElement('section', { className: 'dshRecentHistory', 'aria-label': t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all') },
-          React.createElement('div', { className: 'dshHistoryHeading' },
-            React.createElement('span', null, t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all'))),
-          ...rows.map(item => item.kind === 'work'
-            ? React.createElement('div', { key: item.key, 'data-history-kind': 'work' }, item.render(state.mode === 'work'))
-            : React.createElement(CloudHistoryRow, { key: item.key, item, selected: state.mode === 'chat' && !state.pageId && state.conversationId === item.id, navigation, t, deleteText })),
-          state.historyPhase === 'error' && React.createElement('button', { type: 'button', className: 'dshHistoryNotice', onClick: () => navigation.refreshHistory() }, t('historyError')),
-          initialHistoryLoading && React.createElement('div', { className: 'dshHistoryNotice', role: 'status' }, t('historyLoading')),
-          rows.length === 0 && !resultsPending && React.createElement('div', { className: 'dshHistoryNotice' }, t(search ? 'recentSearchEmpty' : 'recentEmpty')),
-          state.hasMore && !archivedOnly && React.createElement('button', { type: 'button', className: 'dshHistoryNotice', disabled: state.historyPhase === 'loading', onClick: () => navigation.refreshHistory(true) }, t('more'))))
+        React.createElement(ListSection, {
+          className: 'dshRecentHistory',
+          'aria-label': t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all'),
+          headingClassName: 'dshHistoryHeading',
+          heading: React.createElement('span', null, t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all')),
+          after: React.createElement(React.Fragment, null,
+            state.historyPhase === 'error' && React.createElement('button', { type: 'button', className: 'dshHistoryNotice', onClick: () => navigation.refreshHistory() }, t('historyError')),
+            initialHistoryLoading && React.createElement('div', { className: 'dshHistoryNotice', role: 'status' }, t('historyLoading')),
+            rows.length === 0 && !resultsPending && React.createElement('div', { className: 'dshHistoryNotice' }, t(search ? 'recentSearchEmpty' : 'recentEmpty')),
+            state.hasMore && !archivedOnly && React.createElement('button', { type: 'button', className: 'dshHistoryNotice', disabled: state.historyPhase === 'loading', onClick: () => navigation.refreshHistory(true) }, t('more')))
+        }, rows.map(item => item.kind === 'work'
+          ? React.createElement('div', { key: item.key, 'data-history-kind': 'work' }, item.render(state.mode === 'work'))
+          : React.createElement(CloudHistoryRow, { key: item.key, item, selected: state.mode === 'chat' && !state.pageId && state.conversationId === item.id, navigation, t, deleteText }))))
     }
     function historyTime(date, t) {
       const time = new Date(date).getTime()

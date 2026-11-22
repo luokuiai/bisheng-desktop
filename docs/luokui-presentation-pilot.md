@@ -1,0 +1,5 @@
+# LUOKUI presentation pilot
+
+The recent-conversations slot uses `ListSection` from independent `@luokui/ui` 0.2.0. The checked-in block between `luokui-ui:list-section` markers is the portable `src/list-section.ts` implementation (compiled, de-exported and indented for the classic Harness factory). Refresh or verify it with `npm run sync:bisheng -- [--check] <bingsheng-ee> <bisheng-desktop>` in LUOKUI UI; don't hand-edit the block.
+
+This is a rendering-only change in the existing `sidebar.workspaces.collection` contribution. The factory receives the host's existing React. The client asset/export, discovery graph and activation order do not change, and no global styles, network calls or modules are added. Existing headings, classes, localization, row keys, native Work row renderers, and Chat row menu/selection stay in the host. Search/archiving/ordering/delete/pagination ownership and profile behavior are unchanged. Regression tests: `test/desktop-modes-ui.test.mjs`, `test/session-search-recovery.test.mjs`, `test/desktop-client-ui.test.ts`.
