@@ -517,7 +517,7 @@ describe('GitHub release contract', () => {
     expect(workflow.match(/Prepare macOS signing keychain/g)).toHaveLength(1)
     expect(workflow.match(/xcrun stapler validate/g)).toHaveLength(2)
     expect(workflow.match(/xcrun notarytool submit/g)).toHaveLength(1)
-    expect(workflow.match(/CSC_IDENTITY_AUTO_DISCOVERY: 'false'/g)).toHaveLength(1)
+    expect(workflow).not.toContain('CSC_IDENTITY_AUTO_DISCOVERY')
     expect(workflow).not.toContain("CSC_LINK: ''")
     expect(workflow).toContain("runs-on: ${{ matrix.runner }}")
     expect(workflow).toContain("runner: [self-hosted, macOS, ARM64]")
