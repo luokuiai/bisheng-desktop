@@ -54,7 +54,20 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     openPage: vi.fn(async () => {}),
     open: vi.fn(async () => {})
   }
-  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  const resizeObservers = new Set()
+  vi.stubGlobal('ResizeObserver', class {
+    targets = new Set()
+    constructor(callback) { this.callback = callback }
+    observe(target) {
+      this.targets.add(target)
+      resizeObservers.add(this)
+    }
+    unobserve(target) { this.targets.delete(target) }
+    disconnect() {
+      this.targets.clear()
+      resizeObservers.delete(this)
+    }
+  })
   let plugin, navigate
   let sessionList = { phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }
   let liveState = { blank: true, pendingSubmissions: [], running: false, awaitingFirstTurn: false }
@@ -105,6 +118,13 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     React.createElement(content.component, { ...content.props, columns: '1fr 0px', work: React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }) })
   )))
   return {
+    async resize(element) {
+      await act(async () => {
+        for (const observer of [...resizeObservers]) {
+          if (observer.targets.has(element)) observer.callback([{ target: element, contentRect: element.getBoundingClientRect() }], observer)
+        }
+      })
+    },
     async workbench(active, enabled = true) {
       await act(async () => {
         workbenchSnapshot = { state: { active }, enabled }
@@ -460,6 +480,67 @@ it('keeps the native sidebar visible when the embedded pane spans the frame', as
   } finally {
     HTMLElement.prototype.getBoundingClientRect = original
     sidebar.remove()
+  }
+})
+
+it('reserves a docked DS Bot sidebar mounted in the body and follows its lifecycle', async () => {
+  const nativeSidebar = document.createElement('div')
+  nativeSidebar.dataset.dshSidebarRoot = ''
+  nativeSidebar.getBoundingClientRect = () => new DOMRect(0, 0, 20, 748)
+  document.body.append(nativeSidebar)
+  const portal = document.createElement('div')
+  portal.className = 'bt-leftcol'
+  portal.dataset.left = 'open'
+  let portalWidth = 280
+  let portalLeft = -280
+  portal.getBoundingClientRect = () => new DOMRect(portalLeft, 0, portalWidth, 748)
+  const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockImplementation(() => new DOMRect(0, 56, 960, 692))
+  try {
+    const ui = await mount(true, { archivedOnly: true })
+    const present = window.dshEnterpriseChat.present
+    const expectLeft = x => expect(present).toHaveBeenLastCalledWith(expect.objectContaining({
+      visible: true,
+      bounds: { x, y: 56, width: 960 - x, height: 692 }
+    }))
+    expectLeft(20)
+
+    // The entrance transform changes the right edge without firing a size notification.
+    await act(async () => document.body.append(portal))
+    expectLeft(280)
+    portalLeft = 0
+    portalWidth = 320
+    await ui.resize(portal)
+    expectLeft(320)
+
+    portalWidth = 88
+    await act(async () => { portal.dataset.left = 'rail' })
+    await ui.resize(portal)
+    expectLeft(88)
+
+    await act(async () => { portal.dataset.left = 'drawer' })
+    expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+    const settingsBounds = { x: 200, y: 80, width: 500, height: 400 }
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('dsh-desktop:settings-visibility', { detail: { open: true } }))
+      window.dispatchEvent(new CustomEvent('dsh-desktop:settings-surface', { detail: { section: 'tools', bounds: settingsBounds } }))
+    })
+    expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, settings: 'tools', bounds: settingsBounds }))
+    await act(async () => window.dispatchEvent(new CustomEvent('dsh-desktop:settings-visibility', { detail: { open: false } })))
+    expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+    await act(async () => { portal.dataset.left = 'rail' })
+    expectLeft(88)
+
+    await act(async () => portal.setAttribute('data-leaving', ''))
+    expectLeft(20)
+    await act(async () => portal.removeAttribute('data-leaving'))
+    expectLeft(88)
+    await act(async () => portal.remove())
+    expectLeft(20)
+  } finally {
+    bounds.mockRestore()
+    portal.remove()
+    nativeSidebar.remove()
   }
 })
 

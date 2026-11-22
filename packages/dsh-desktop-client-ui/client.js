@@ -699,13 +699,31 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         const bridge = window.dshEnterpriseChat
         if (!bridge) return
         const appRoot = document.getElementById('root')
+        const botSidebarSelector = ':scope > .bt-leftcol[data-left]'
         let observedLeading
+        let observedBotSidebar
         let dialogOpen = false
         const present = () => {
           const rect = panel.current?.getBoundingClientRect()
           if (!rect) return
           const sidebarRight = document.querySelector('[data-dsh-sidebar-root]')?.getBoundingClientRect().right || 0
-          const contentLeft = Math.max(rect.x, sidebarRight)
+          // DS Bot folds the shell sidebar and portals its fixed-left replacement
+          // to body. Its layout width stays stable during the slide-in animation.
+          const botSidebar = document.body.querySelector(botSidebarSelector)
+          if (botSidebar !== observedBotSidebar) {
+            if (observedBotSidebar) resize.unobserve(observedBotSidebar)
+            botSidebarState.disconnect()
+            observedBotSidebar = botSidebar
+            if (botSidebar) {
+              resize.observe(botSidebar)
+              botSidebarState.observe(botSidebar, { attributes: true, attributeFilter: ['data-left', 'data-leaving', 'aria-hidden', 'hidden'] })
+            }
+          }
+          const botSidebarMode = botSidebar?.matches(':not([data-leaving]):not([aria-hidden="true"]):not([hidden])')
+            ? botSidebar.dataset.left : undefined
+          const botSidebarRight = botSidebarMode === 'open' || botSidebarMode === 'rail'
+            ? botSidebar.getBoundingClientRect().width : 0
+          const contentLeft = Math.max(rect.x, sidebarRight, botSidebarRight)
           // Native WebContentsView paints above DOM chrome regardless of z-index.
           // macOS moves the sidebar opener into this seat when the rail disappears.
           const leading = document.querySelector('[data-shell-leading]')
@@ -721,10 +739,20 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           const y = rect.y
           const surfaceOpen = settingsOpen || state.approvalsOpen || state.accountDialogOpen
           const remote = surfaceOpen && state.settingsProtocolVersion === 1 && settingsSurface
-const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mode-page')
-const hostModalOpen = dialogOpen || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
-const palette = hostPalette()
-void bridge.present({ visible: hostModalOpen ? false : (remote ? state.connected && remote.bounds.width > 0 && remote.bounds.height > 0 : mode === 'chat' && !surfaceOpen && !safeModePageOpen), ...(remote ? { settings: remote.section } : {}), ...(palette ? { palette } : {}), bounds: remote ? remote.bounds : { x, y, width: Math.max(0, rect.right - x), height: Math.max(0, rect.y + rect.height - y) }, theme: document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light', locale: locale.getSnapshot().active === 'zh' ? 'zh' : 'en' }).catch(() => {})
+          const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mode-page')
+          const hostModalOpen = dialogOpen || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
+          const visible = !hostModalOpen && (remote
+            ? state.connected && remote.bounds.width > 0 && remote.bounds.height > 0
+            : mode === 'chat' && !surfaceOpen && !safeModePageOpen && botSidebarMode !== 'drawer')
+          const palette = hostPalette()
+          void bridge.present({
+            visible,
+            ...(remote ? { settings: remote.section } : {}),
+            ...(palette ? { palette } : {}),
+            bounds: remote ? remote.bounds : { x, y, width: Math.max(0, rect.right - x), height: Math.max(0, rect.y + rect.height - y) },
+            theme: document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light',
+            locale: locale.getSnapshot().active === 'zh' ? 'zh' : 'en'
+          }).catch(() => {})
         }
         // The native view follows the host's modal interaction boundary.
         // Onboarding makes #root inert while its dialog lives in a body portal.
@@ -736,11 +764,16 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         if (panel.current) resize.observe(panel.current)
         const sidebar = document.querySelector('[data-dsh-sidebar-root]')
         if (sidebar) resize.observe(sidebar)
-        // The leading seat mounts/unmounts as a direct frame child on collapse.
-        // Observe only that boundary, not streaming conversation descendants.
-        const chromeLayout = new MutationObserver(present)
+        const botSidebarState = new MutationObserver(present)
+        // Watch the leading seat and the portalled sidebar without scanning the
+        // conversation subtree or reacting to the temporary palette probe.
+        const chromeLayout = new MutationObserver(records => {
+          if (records.some(record => record.target !== document.body) ||
+              document.body.querySelector(botSidebarSelector) !== observedBotSidebar) present()
+        })
         const frame = panel.current?.closest('.dshModes')?.parentElement
         if (frame) chromeLayout.observe(frame, { childList: true, attributes: true, attributeFilter: ['data-sidebar-collapsed'] })
+        chromeLayout.observe(document.body, { childList: true })
         const theme = new MutationObserver(present)
         theme.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
         const dialogs = observeHostDialogs(open => { dialogOpen = open; present() })
@@ -749,7 +782,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         window.addEventListener('resize', present)
         present()
         return () => {
-          dialogs.dispose(); interaction.disconnect(); resize.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
+          dialogs.dispose(); interaction.disconnect(); resize.disconnect(); botSidebarState.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
         }
       }, [mode, settingsOpen, state.approvalsOpen, state.accountDialogOpen, settingsSurface, state.connected, state.settingsProtocolVersion, locale])
       React.useEffect(() => () => {
