@@ -4,7 +4,7 @@
 
 The `Release desktop installers` workflow accepts a `mode` on `workflow_dispatch`. `target` defaults to `macos` and is always honored: `macos` does not start Windows jobs, and `windows` does not start macOS jobs.
 
-- `development` (default): unsigned Dev packages, no signing or public publication. Packages are stored in a per-run draft GitHub Release (`dev-<run_id>-<run_attempt>`); its location is recorded in the validation job summary.
+- `development` (default): isolated Dev packages with ad-hoc signing by default on macOS and unsigned installers on Windows. Packages are stored in a per-run draft GitHub Release (`dev-<run_id>-<run_attempt>`). Its location is recorded in the validation job summary.
 - `signed`: production-identity signed packages. Fill `signed_version` with a non-`v` semver such as `0.9.2-test.1`. Every target uses a draft GitHub Release for handoff, then publishes to ModelScope `releases/test/<version>/`. `target=all` also updates `releases/test/latest/`. The GitHub Release stays a draft and is not marked pre-release. After public metadata and installer downloads are verified, Feishu receives the selected platforms' ModelScope download links. These builds check the public stable update feed; draft and ModelScope test-channel builds are not offered as online updates.
 - `prerelease`: production-identity signed packages. Fill `prerelease_tag` with a non-`v` semver such as `2.1.0-rc.1`. When `target=all`, publish to GitHub `--prerelease` and ModelScope `releases/prerelease/<tag>/` plus `releases/prerelease/latest/`. A single-platform prerelease signs that platform and skips publish.
 
@@ -28,7 +28,9 @@ The packaged Harness smoke remains enabled for manual Windows dispatches. It run
 
 Local `npm test` and `package:*` commands still prepare their own inputs. Local `npm run test:windows` prepares only PPT, without the Python/Office payload. Installers are uploaded directly as GitHub Release assets without an additional archive. Formal publication reuses the full history fetched by checkout and installs Copilot once for both GitHub and Feishu notes; both note validators and deterministic fallbacks remain enabled. The obsolete DSH archive-backfill workflow and orphaned version-index declaration have been removed: BISHENG does not expose that rollback index, and the old workflow targeted the DSH repository. Existing remote archives are unaffected.
 
-The [Build desktop installers workflow](../.github/workflows/desktop-build.yml) packages unsigned development installers for macOS ARM64, macOS Intel, and Windows x64 on pull requests targeting `develop`. PR runs skip artifact upload. Pushes to `develop`, including PR merges, build and upload the DMGs and the Windows installer as Actions artifacts with one-day retention.
+The [Build desktop installers workflow](../.github/workflows/desktop-build.yml) packages development installers for macOS ARM64, macOS Intel, and Windows x64 on pull requests targeting `develop`. PR runs sign macOS apps ad hoc and skip artifact upload. On pushes to `develop`, the macOS build uses `DESKTOP_CSC_LINK` and `DESKTOP_CSC_KEY_PASSWORD` when a certificate is configured, with ad-hoc signing when the certificate is absent. Certificate errors fail the build. The macOS jobs mount each DMG read-only to verify the app signature before upload. These Dev artifacts are not notarized, so Gatekeeper may still block the downloaded app.
+
+Pushes to `develop`, including PR merges, upload each `.dmg` and `.exe` as a directly downloadable Actions artifact under its original filename with one-day retention. A rerun replaces the installer for the same target in that workflow run.
 
 The release workflow uses per-run draft Releases for development packages and recovery diagnostics. Signed, prerelease (including single-platform), and formal builds use versioned draft Releases for cross-job handoff. Draft assets do not expire automatically. Delete obsolete drafts manually after downloads and diagnosis are complete.
 
@@ -60,7 +62,7 @@ The GitHub-hosted Windows job uses `setup-node`'s npm cache keyed by `package-lo
 
 Before dispatching, confirm that GitHub Actions is enabled for this repository, that the organization runner group grants it access, and that the runner is online. Do not install dependencies on the runner's persistent checkout by hand; each job uses `npm ci`.
 
-For a first packaging check, dispatch `Release desktop installers` on `main` with `target=macos` and `mode=development`. This creates unsigned, isolated Dev packages in the per-run draft Release and does not publish them publicly. Signed builds additionally require the Apple signing and notarization secrets listed in the workflow. Verify both architecture artifacts and their bundled runtime before using a signed package as a release candidate.
+For a first packaging check, dispatch `Release desktop installers` on `main` with `target=macos` and `mode=development`. This creates ad-hoc signed Dev packages in the per-run draft Release by default. Signed release builds require the Apple signing and notarization secrets listed in the workflow. Verify both architecture artifacts and their bundled runtime before using a signed package as a release candidate.
 
 ## GitHub Actions parameters for signing and publishing
 

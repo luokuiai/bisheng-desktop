@@ -22,19 +22,17 @@ jobs:
             runner: macos-15
             arch: arm64
             script: package:dev:mac:arm64
-            installer: dist-dev/bisheng-dev-mac-arm64.dmg
+            installer: bisheng-dev-mac-arm64.dmg
           - target: mac-x64
             runner: macos-15-intel
             arch: x64
             script: package:dev:mac:x64
-            installer: dist-dev/bisheng-dev-mac-x64.dmg
+            installer: bisheng-dev-mac-x64.dmg
           - target: windows-x64
             runner: windows-2022
             arch: x64
             script: package:dev:win
-            installer: dist-dev/bisheng-dev-windows-x64-setup.exe
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+            installer: bisheng-dev-windows-x64-setup.exe
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,12 +45,27 @@ jobs:
       - run: npm ci --prefer-offline
       - run: npm run typecheck
       - run: npm run ${{ matrix.script }}
+        env:
+          CSC_LINK: ${{ runner.os == 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/develop' && secrets.DESKTOP_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/develop' && secrets.DESKTOP_CSC_KEY_PASSWORD || '' }}
+          CSC_FOR_PULL_REQUEST: ${{ runner.os == 'macOS' && github.event_name == 'pull_request' && 'true' || 'false' }}
+      - name: Verify app signature inside the macOS installer
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          INSTALLER: dist-dev/${{ matrix.installer }}
+        run: |
+          mount_point="$(mktemp -d)"
+          hdiutil attach "$INSTALLER" -readonly -nobrowse -mountpoint "$mount_point"
+          trap 'hdiutil detach "$mount_point" >/dev/null' EXIT
+          codesign --verify --deep --strict --verbose=2 "$mount_point/BISHENG Dev.app"
       - name: Upload development installer
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: bisheng-dev-${{ matrix.target }}-${{ github.run_attempt }}
-          path: ${{ matrix.installer }}
+          name: ${{ matrix.installer }}
+          path: dist-dev/${{ matrix.installer }}
           if-no-files-found: error
           retention-days: 1
-          compression-level: 0
+          archive: false
+          overwrite: true

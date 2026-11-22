@@ -16,7 +16,7 @@ on:
           - windows
           - macos
       mode:
-        description: development=unsigned Dev; signed=ModelScope test channel; resign=sign existing unsigned Windows; prerelease=GitHub and ModelScope
+        description: development=Dev packages; signed=ModelScope test channel; resign=sign existing unsigned Windows; prerelease=GitHub and ModelScope
         required: false
         default: development
         type: choice
@@ -328,8 +328,6 @@ jobs:
         run: node scripts/verify-target.mjs darwin ${{ matrix.arch }} && npx --no-install electron-builder --mac --${{ matrix.arch }} --publish never --config.directories.output="$MACOS_OUTPUT_DIR"
       - name: Build isolated ${{ matrix.label }} development package
         if: ${{ !startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'workflow_dispatch' || inputs.mode == 'development') }}
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: node scripts/verify-target.mjs darwin ${{ matrix.arch }} && npx --no-install electron-builder --mac --${{ matrix.arch }} --publish never --config electron-builder.dev.cjs --config.directories.output="$MACOS_OUTPUT_DIR"
       - name: Preserve ${{ matrix.label }} update metadata
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.mode == 'signed' || inputs.mode == 'prerelease'))
