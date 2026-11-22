@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { shell } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EnterpriseChatView } from '../src/main/enterprise/chat-view'
 import { EnterprisePlatformError } from '../src/main/enterprise/enterprise-request'
@@ -10,7 +11,7 @@ vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
   return {
     session: { fromPartition: () => {
-      const isolated = { webRequest: { onCompleted: vi.fn() }, fetch: vi.fn(async (url: string) => url.endsWith('usage-summary') || url.endsWith('quota/effective') ? usageResponse(url) : ({ ok: true, json: async () => ({ data: [{ chat_id: 'cloud-a', name: 'Cloud A', flow_type: 15, update_time: '2026-10-16' }] }) })), cookies: { set: vi.fn(async () => {}) }, clearStorageData: vi.fn(async () => {}), closeAllConnections: vi.fn(async () => {}), setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn() }
+      const isolated = { webRequest: { onBeforeRequest: vi.fn(), onBeforeSendHeaders: vi.fn(), onCompleted: vi.fn() }, fetch: vi.fn(async (url: string) => url.endsWith('usage-summary') || url.endsWith('quota/effective') ? usageResponse(url) : ({ ok: true, json: async () => ({ data: [{ chat_id: 'cloud-a', name: 'Cloud A', flow_type: 15, update_time: '2026-10-16' }] }) })), cookies: { set: vi.fn(async () => {}) }, clearStorageData: vi.fn(async () => {}), closeAllConnections: vi.fn(async () => {}), setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn() }
       fake.sessions.push(isolated)
       return isolated
     } },
@@ -26,6 +27,7 @@ vi.mock('electron', async () => {
           if (fake.hangLoads) return await new Promise<void>(() => {})
           if (fake.loadFailures > 0) { fake.loadFailures -= 1; throw Object.assign(new Error('load failed'), { code: fake.loadErrorCode }) }
           url = fake.loadLanding ?? next
+          this.webContents.emit('did-navigate', {}, url, 200, 'OK')
           this.webContents.emit('did-finish-load')
         }) })
         fake.views.push(this)
@@ -47,6 +49,251 @@ function fixture() {
   const host = new EnterpriseChatView(enterprise as any, vi.fn())
   return { host, owner, enterprise, change: (next: typeof state) => { state = next; change(next) } }
 }
+
+const hostedAppUrl = 'https://enterprise.example/apps/writing-assistant/'
+const hostedAppBounds = { x: 32, y: 104, width: 1068, height: 652 }
+type PopupHandler = Parameters<Electron.WebContents['setWindowOpenHandler']>[0]
+
+async function prepareHostedPopup(f: ReturnType<typeof fixture>, path = '/workspace/apps'): Promise<PopupHandler> {
+  f.host.present(f.owner, presentation)
+  await flush()
+  const contents = fake.views[0].webContents
+  await contents.loadURL(new URL(path, hostedAppUrl).href)
+  const handler: PopupHandler = contents.setWindowOpenHandler.mock.lastCall[0]
+  return (details) => handler({ ...details, referrer: { url: contents.getURL(), policy: 'default' } })
+}
+
+function popupDetails(url: string): Electron.HandlerDetails {
+  return { url, frameName: '_blank', features: 'noopener', disposition: 'new-window', referrer: { url: '', policy: 'default' } }
+}
+
+describe('enterprise hosted app popup', () => {
+  it('opens in a separate native view and restores the existing application list on return', async () => {
+    const f = fixture()
+    try {
+      const popup = await prepareHostedPopup(f)
+      const chat = fake.views[0]
+      vi.mocked(shell.openExternal).mockClear()
+      expect(popup(popupDetails(hostedAppUrl))).toEqual({ action: 'deny' })
+      await flush()
+      expect(shell.openExternal).not.toHaveBeenCalled()
+      expect(f.host.snapshot().hostedApp).toEqual({ slug: 'writing-assistant', phase: 'ready' })
+      const hosted = fake.views[1]
+      expect(hosted.options.webPreferences).toMatchObject({ sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true })
+      expect(hosted.options.webPreferences.preload).toBeUndefined()
+      expect(hosted.webContents.session).not.toBe(chat.webContents.session)
+      expect(hosted.webContents.session.cookies.set).not.toHaveBeenCalled()
+      expect(hosted.webContents.loadURL).toHaveBeenCalledWith(hostedAppUrl)
+      expect(f.owner.contentView.addChildView).toHaveBeenLastCalledWith(hosted)
+
+      f.host.present(f.owner, { ...presentation, hostedAppBounds })
+      expect(hosted.setBounds).toHaveBeenLastCalledWith(hostedAppBounds)
+      expect(hosted.setVisible).toHaveBeenLastCalledWith(true)
+      expect(chat.setVisible).toHaveBeenLastCalledWith(false)
+      f.host.present(f.owner, { ...presentation, visible: false })
+      expect(hosted.setVisible).toHaveBeenLastCalledWith(false)
+      f.host.present(f.owner, { ...presentation, hostedAppBounds })
+      expect(hosted.setVisible).toHaveBeenLastCalledWith(true)
+
+      f.host.closeHostedApp()
+      await flush()
+      expect(f.host.snapshot().hostedApp).toBeUndefined()
+      expect(hosted.webContents.close).toHaveBeenCalledOnce()
+      expect(hosted.webContents.session.clearStorageData).toHaveBeenCalledOnce()
+      expect(chat.setVisible).toHaveBeenLastCalledWith(true)
+      expect(chat.webContents.loadURL).toHaveBeenCalledTimes(2)
+      expect(chat.webContents.getURL()).toBe('https://enterprise.example/workspace/apps')
+    } finally { f.host.dispose() }
+  })
+
+  it('attaches credentials only to the current guest and its app routes', async () => {
+    vi.useFakeTimers()
+    const f = fixture()
+    try {
+      const popup = await prepareHostedPopup(f, '/workspace/square')
+      popup(popupDetails(hostedAppUrl))
+      await flush()
+      const guest = fake.views[1].webContents
+      const beforeRequest: Parameters<Electron.WebRequest['onBeforeRequest']>[0] = guest.session.webRequest.onBeforeRequest.mock.calls[0].find((argument: unknown) => typeof argument === 'function')
+      const beforeHeaders: Parameters<Electron.WebRequest['onBeforeSendHeaders']>[0] = guest.session.webRequest.onBeforeSendHeaders.mock.calls[0].find((argument: unknown) => typeof argument === 'function')
+      if (!beforeRequest || !beforeHeaders) throw new Error('Expected hosted request handlers to be installed')
+      const request = {
+        url: new URL('api/me', hostedAppUrl).href,
+        resourceType: 'xhr' as const,
+        method: 'GET', id: 1, timestamp: 0, referrer: hostedAppUrl, uploadData: [],
+        webContentsId: guest.id,
+        requestHeaders: { Accept: 'application/json', cOoKiE: 'untrusted=1', aUtHoRiZaTiOn: 'untrusted' }
+      }
+      const allowed = vi.fn()
+      beforeRequest(request, allowed)
+      expect(allowed).toHaveBeenCalledWith({ cancel: false })
+      const attached = vi.fn<(response: Electron.BeforeSendResponse) => void>()
+      beforeHeaders(request, attached)
+      const response = attached.mock.lastCall?.[0]
+      expect(response?.cancel).not.toBe(true)
+      const delivered = Object.fromEntries(Object.entries(response?.requestHeaders ?? {}).map(([key, value]) => [key.toLowerCase(), value]))
+      expect(delivered).toEqual({ accept: 'application/json', cookie: 'bs_credits_3007=test-cookie' })
+
+      const blockedRequests = [
+        { ...request, webContentsId: fake.views[0].webContents.id },
+        { ...request, webContentsId: undefined },
+        ...['https://other.example/apps/writing-assistant/api/me', 'https://enterprise.example:8443/apps/writing-assistant/api/me', 'https://enterprise.example/apps/writing-assistant-copy/api/me', 'https://enterprise.example/apps/writing-assistant/%252f..%252fapi/v1/user/info', 'https://enterprise.example/workspace/api/v1/user/info'].map(url => ({ ...request, url }))
+      ]
+      for (const blocked of blockedRequests) {
+        const cancel = vi.fn()
+        beforeRequest(blocked, cancel)
+        expect(cancel).toHaveBeenCalledWith({ cancel: true })
+        const denied = vi.fn()
+        beforeHeaders(blocked, denied)
+        expect(denied).toHaveBeenCalledWith({ cancel: true })
+      }
+
+      f.enterprise.webSession.mockResolvedValueOnce({
+        base: 'https://enterprise.example', cookie: 'renewed-cookie', cookieName: 'bs_credits_3007',
+        connectionKey: 'tenant-a', expiresAt: Date.now() + 600_000
+      })
+      await elapse(270_000)
+      const renewed = vi.fn()
+      beforeHeaders(request, renewed)
+      expect(renewed).toHaveBeenCalledWith({ requestHeaders: { Accept: 'application/json', Cookie: 'bs_credits_3007=renewed-cookie' } })
+      expect(guest.close).not.toHaveBeenCalled()
+
+      f.change({ connected: false, connectionKey: 'tenant-a' })
+      await flush()
+      expect(f.host.snapshot().hostedApp).toBeUndefined()
+      expect(guest.close).toHaveBeenCalledOnce()
+      const stale = vi.fn()
+      beforeHeaders(request, stale)
+      expect(stale).toHaveBeenCalledWith({ cancel: true })
+    } finally { f.host.dispose(); vi.useRealTimers() }
+  })
+
+  it('keeps ordinary links external and rejects hosted paths from unrelated workspace pages', async () => {
+    const f = fixture()
+    try {
+      const popup = await prepareHostedPopup(f, '/workspace/apps/explore')
+      vi.mocked(shell.openExternal).mockClear()
+      const external = [
+        'https://other.example/apps/writing-assistant/',
+        'https://enterprise.example/apps/writing-assistant/report',
+        'https://enterprise.example/help'
+      ]
+      for (const url of external) expect(popup(popupDetails(url))).toEqual({ action: 'deny' })
+      await fake.views[0].webContents.loadURL('https://enterprise.example/workspace/c/new')
+      expect(popup(popupDetails(hostedAppUrl))).toEqual({ action: 'deny' })
+      await flush()
+      expect(vi.mocked(shell.openExternal).mock.calls.flat()).toEqual([...external, hostedAppUrl])
+      expect(fake.views).toHaveLength(1)
+      expect(f.host.snapshot().hostedApp).toBeUndefined()
+    } finally { f.host.dispose() }
+  })
+
+  it('blocks recognized hosted popups while their application list is hidden', async () => {
+    const f = fixture()
+    try {
+      const popup = await prepareHostedPopup(f)
+      f.host.present(f.owner, { ...presentation, visible: false })
+      vi.mocked(shell.openExternal).mockClear()
+      expect(popup(popupDetails(hostedAppUrl))).toEqual({ action: 'deny' })
+      await flush()
+      expect(shell.openExternal).not.toHaveBeenCalled()
+      expect(fake.views).toHaveLength(1)
+      expect(f.host.snapshot().hostedApp).toBeUndefined()
+    } finally { f.host.dispose() }
+  })
+
+  it('keeps the application list intact when a hosted load fails and is retried', async () => {
+    const f = fixture()
+    try {
+      const popup = await prepareHostedPopup(f)
+      fake.loadFailures = 1
+      popup(popupDetails(hostedAppUrl))
+      await flush()
+      expect(f.host.snapshot()).toMatchObject({ hostedApp: { slug: 'writing-assistant', phase: 'error' }, phase: 'ready' })
+      const chat = fake.views[0].webContents
+      const failed = fake.views[1].webContents
+      expect(failed.close).toHaveBeenCalledOnce()
+
+      await f.host.retryHostedApp()
+      await flush()
+      expect(f.host.snapshot().hostedApp).toEqual({ slug: 'writing-assistant', phase: 'ready' })
+      const retried = fake.views[2].webContents
+      expect(retried.session).not.toBe(failed.session)
+      expect(retried.loadURL).toHaveBeenCalledWith(hostedAppUrl)
+      expect(chat.getURL()).toBe('https://enterprise.example/workspace/apps')
+      expect(chat.loadURL).toHaveBeenCalledTimes(2)
+    } finally { f.host.dispose() }
+  })
+
+  it('releases the partition and exposes retry when Chromium destroys the hosted contents', async () => {
+    const f = fixture()
+    try {
+      const popup = await prepareHostedPopup(f)
+      popup(popupDetails(hostedAppUrl))
+      await flush()
+      const hosted = fake.views[1]
+      const guest = hosted.webContents
+      const isolated = guest.session
+      guest.isDestroyed = () => true
+      guest.emit('destroyed')
+      expect(f.host.snapshot()).toMatchObject({ hostedApp: { slug: 'writing-assistant', phase: 'error' }, phase: 'ready' })
+      expect(f.owner.contentView.removeChildView).toHaveBeenCalledExactlyOnceWith(hosted)
+      expect(guest.close).not.toHaveBeenCalled()
+      expect(isolated.clearStorageData).toHaveBeenCalledOnce()
+      expect(isolated.closeAllConnections).toHaveBeenCalledOnce()
+      const late = vi.fn()
+      isolated.webRequest.onBeforeRequest.mock.lastCall[1]({ url: hostedAppUrl, webContentsId: guest.id }, late)
+      expect(late).toHaveBeenCalledWith({ cancel: true })
+    } finally { f.host.dispose() }
+  })
+
+  it('shows a retryable error only when an expired session is needed for a scoped app request', async () => {
+    vi.useFakeTimers()
+    const f = fixture()
+    try {
+      const popup = await prepareHostedPopup(f)
+      popup(popupDetails(hostedAppUrl))
+      await flush()
+      const guest = fake.views[1].webContents
+      const beforeRequest = guest.session.webRequest.onBeforeRequest.mock.lastCall[1]
+      const scoped = { url: new URL('api/me', hostedAppUrl).href, webContentsId: guest.id }
+      f.enterprise.webSession.mockRejectedValue(networkError())
+      await elapse(300_001)
+      expect(f.enterprise.webSession.mock.calls.length).toBeGreaterThan(1)
+      expect(f.host.snapshot().hostedApp?.phase).toBe('ready')
+
+      const cancelled = vi.fn()
+      beforeRequest({ ...scoped, url: 'https://enterprise.example/workspace/api/v1/user/info' }, cancelled)
+      beforeRequest({ ...scoped, webContentsId: fake.views[0].webContents.id }, cancelled)
+      await flush()
+      expect(cancelled.mock.calls).toEqual([[{ cancel: true }], [{ cancel: true }]])
+      expect(f.host.snapshot().hostedApp?.phase).toBe('ready')
+      expect(guest.close).not.toHaveBeenCalled()
+
+      cancelled.mockClear()
+      beforeRequest(scoped, cancelled)
+      expect(cancelled).toHaveBeenCalledWith({ cancel: true })
+      await flush()
+      expect(f.host.snapshot()).toMatchObject({ hostedApp: { slug: 'writing-assistant', phase: 'error' }, phase: 'ready' })
+      expect(guest.close).toHaveBeenCalledOnce()
+
+      f.enterprise.webSession.mockImplementation(async () => ({
+        base: 'https://enterprise.example', cookie: 'recovered-cookie', cookieName: 'bs_credits_3007',
+        connectionKey: 'tenant-a', expiresAt: Date.now() + 300_000
+      }))
+      const exchangesBeforeRetry = f.enterprise.webSession.mock.calls.length
+      await f.host.retryHostedApp()
+      await flush()
+      expect(f.enterprise.webSession).toHaveBeenCalledTimes(exchangesBeforeRetry + 1)
+      const retried = fake.views[2].webContents
+      expect(f.host.snapshot().hostedApp?.phase).toBe('ready')
+      expect(retried.session).not.toBe(guest.session)
+      const recovered = vi.fn()
+      retried.session.webRequest.onBeforeSendHeaders.mock.lastCall[1]({ ...scoped, webContentsId: retried.id, requestHeaders: {} }, recovered)
+      expect(recovered).toHaveBeenCalledWith({ requestHeaders: { Cookie: 'bs_credits_3007=recovered-cookie' } })
+    } finally { f.host.dispose(); vi.useRealTimers() }
+  })
+})
 
 describe('enterprise Chat host boundary', () => {
   it('reads fixed self-service usage with the isolated session and discards logout races', async () => {
@@ -130,6 +377,7 @@ describe('enterprise Chat host boundary', () => {
 
   it('rejects malformed geometry and long-lived server credentials', () => {
     expect(() => parseChatPresentation({ ...presentation, bounds: { ...presentation.bounds, width: NaN } })).toThrow()
+    expect(() => parseChatPresentation({ ...presentation, hostedAppBounds: { ...hostedAppBounds, width: Infinity } })).toThrow()
     expect(() => parseWebSession({ cookie: 'a'.repeat(40), expires_in: 3600 }, 'https://enterprise.example', 'a')).toThrow()
     for (const locale of ['ja', 'zh-Hans', '', 0, null, { value: 'zh' }]) {
       expect(() => parseChatPresentation({ ...presentation, locale })).toThrow('locale')
@@ -727,6 +975,7 @@ it('keeps a ready workspace across a transient renewal and ignores publishes unt
 
 it('spaces later renewal failures at 2s, 5s, 10s and then 30s until the platform returns', async () => {
   vi.useFakeTimers()
+  const jitter = vi.spyOn(Math, 'random').mockReturnValue(0.5)
   const f = fixture()
   try {
     f.host.present(f.owner, presentation)
@@ -734,19 +983,21 @@ it('spaces later renewal failures at 2s, 5s, 10s and then 30s until the platform
     f.enterprise.webSession.mockRejectedValue(networkError())
     await elapse(270_000)
     expect(f.enterprise.webSession).toHaveBeenCalledTimes(2)
-    for (const gap of [2_400, 6_000, 12_000, 36_000, 36_000]) {
+    for (const gap of [2_000, 5_000, 10_000, 30_000, 30_000]) {
       const before = f.enterprise.webSession.mock.calls.length
-      await elapse(gap)
+      await elapse(gap - 1)
+      expect(f.enterprise.webSession.mock.calls.length).toBe(before)
+      await elapse(1)
       expect(f.enterprise.webSession.mock.calls.length).toBe(before + 1)
       expect(f.host.snapshot().phase).toBe('ready')
       expect(fake.views[0].webContents.close).not.toHaveBeenCalled()
     }
     f.enterprise.webSession.mockImplementation(async () => ({ base: 'https://enterprise.example', cookie: 'renewed-cookie', cookieName: 'bs_credits_3007', connectionKey: 'tenant-a', expiresAt: Date.now() + 300_000 }))
-    await elapse(36_000)
+    await elapse(30_000)
     expect(f.host.snapshot().phase).toBe('ready')
     expect(fake.views).toHaveLength(1)
     expect(fake.sessions[0].cookies.set).toHaveBeenLastCalledWith(expect.objectContaining({ value: 'renewed-cookie' }))
-  } finally { f.host.dispose(); vi.useRealTimers() }
+  } finally { f.host.dispose(); jitter.mockRestore(); vi.useRealTimers() }
 })
 
 it('reloads the workspace when a renewal lands after the document left it', async () => {

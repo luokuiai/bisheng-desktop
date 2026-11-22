@@ -1701,7 +1701,7 @@ function registerHarnessHandlers(): void {
     }
   })
 
-  for (const channel of ['enterprise-chat:present', 'enterprise-chat:state', 'enterprise-chat:retry', 'enterprise-chat:usage', 'enterprise-chat:history', 'enterprise-chat:open', 'enterprise-chat:remove', 'enterprise-chat:open-page', 'enterprise-chat:focus-settings']) ipcMain.removeHandler(channel)
+  for (const channel of ['enterprise-chat:present', 'enterprise-chat:state', 'enterprise-chat:retry', 'enterprise-chat:usage', 'enterprise-chat:history', 'enterprise-chat:open', 'enterprise-chat:remove', 'enterprise-chat:open-page', 'enterprise-chat:focus-settings', 'enterprise-chat:close-hosted-app', 'enterprise-chat:retry-hosted-app']) ipcMain.removeHandler(channel)
   ipcMain.handle('enterprise-chat:focus-settings', (event) => {
     assertTrustedMainWindowEvent(event)
     enterpriseChat?.focusSettings()
@@ -1717,6 +1717,15 @@ function registerHarnessHandlers(): void {
   ipcMain.handle('enterprise-chat:retry', (event) => {
     assertTrustedMainWindowEvent(event)
     enterpriseChat?.retry()
+  })
+  ipcMain.handle('enterprise-chat:close-hosted-app', (event, restoreFocus: unknown) => {
+    assertTrustedMainWindowEvent(event)
+    if (restoreFocus !== undefined && typeof restoreFocus !== 'boolean') throw new Error('Invalid application focus preference.')
+    enterpriseChat?.closeHostedApp(restoreFocus)
+  })
+  ipcMain.handle('enterprise-chat:retry-hosted-app', (event) => {
+    assertTrustedMainWindowEvent(event)
+    return enterpriseChat?.retryHostedApp()
   })
   ipcMain.handle('enterprise-chat:usage', (event) => {
     assertTrustedMainWindowEvent(event)

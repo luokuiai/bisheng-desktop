@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { session, shell, WebContentsView, type BrowserWindow, type Session } from 'electron'
-import { parseEnterpriseNavigation, parseEnterpriseSettingsSection, parseChatPage, parseChatId, parseChatPresentation, type EnterpriseSettingsSection, type EnterpriseChatHistory, type EnterpriseChatPresentation, type EnterpriseChatViewState } from '../../shared/enterprise-chat-view'
+import { parseEnterpriseNavigation, parseEnterpriseSettingsSection, parseChatPage, parseChatId, parseChatPresentation, type EnterpriseSettingsSection, type EnterpriseChatHistory, type EnterpriseChatPresentation, type EnterpriseChatViewState, type EnterpriseViewBounds } from '../../shared/enterprise-chat-view'
 import type { EnterpriseDesktopRuntime } from './enterprise-desktop'
 import { MODULE_ROUTE_PATTERN, MODULE_THEME_CSS, moduleThemeScript } from './chat-module-theme'
 import { chatDialogViewportScript } from './chat-dialog-viewport'
@@ -9,6 +9,8 @@ import { chatLocaleScript } from './chat-locale'
 import { chatLayoutCss } from './chat-layout'
 import { parseUsageSummary, parseUsageStorage, type EnterpriseUsage, type UsageSection } from '../../shared/enterprise-usage'
 import { EnterprisePlatformError, isEnterprisePlatformError } from './enterprise-request'
+import { HostedAppView, hostedApplication } from './hosted-app-view'
+import type { EnterpriseWebSession } from './web-session'
 
 /** Remote Chat gets its own in-memory browser session and a presentation-only preload. */
 const DOCUMENT_LOAD_TIMEOUT_MS = 45_000
@@ -66,6 +68,12 @@ async function loadWithin<T>(operation: Promise<T>, ms: number): Promise<T> {
   } finally { clearTimeout(timer) }
 }
 
+function windowBounds(bounds: EnterpriseViewBounds, zoom: number, width: number, height: number): EnterpriseViewBounds {
+  const x = Math.max(0, Math.round(bounds.x * zoom))
+  const y = Math.max(0, Math.round(bounds.y * zoom))
+  return { x, y, width: Math.max(0, Math.min(width - x, Math.round(bounds.width * zoom))), height: Math.max(0, Math.min(height - y, Math.round(bounds.height * zoom))) }
+}
+
 export class EnterpriseChatView {
   private modalOpen = false
   private dialogViewport?: string
@@ -100,8 +108,14 @@ export class EnterpriseChatView {
   private settingsFailure?: 'load' | 'unsupported'
   private settingsTimer?: NodeJS.Timeout
   private appearance?: string
+  private webCredential?: EnterpriseWebSession
+  private hostedApp: HostedAppView
 
   constructor(private enterprise: EnterpriseDesktopRuntime, private note: (line: string) => void, private notificationWindow?: () => BrowserWindow | undefined) {
+    this.hostedApp = new HostedAppView(() => {
+      const account = this.enterprise.snapshot()
+      if (account.connected && this.webCredential?.connectionKey === account.connectionKey) return this.webCredential
+    }, () => { this.layout(); this.notify() }, note)
     this.unsubscribe = enterprise.subscribe((state) => {
       if (!state.connected || (this.key !== undefined && state.connectionKey !== this.key)) this.clear()
       this.notify()
@@ -112,7 +126,7 @@ export class EnterpriseChatView {
   }
 
   snapshot(): EnterpriseChatViewState {
-    return { ...this.state, settingsProtocolVersion: 1, settingsSection: this.settingsSection, settingsReady: this.isSettingsReady(), settingsFailure: this.settingsFailure, navigation: this.navigation, path: this.view ? new URL(this.view.webContents.getURL() || 'about:blank').pathname.replace(/^\/workspace/u, '') : undefined, landing: this.landing, epoch: this.generation, conversationId: this.view?.webContents.getURL().match(/\/workspace\/(?:c|chat|linsight)\/([a-zA-Z0-9_-]+)/u)?.[1], connected: this.enterprise.snapshot().connected }
+    return { ...this.state, settingsProtocolVersion: 1, settingsSection: this.settingsSection, settingsReady: this.isSettingsReady(), settingsFailure: this.settingsFailure, navigation: this.navigation, path: this.view ? new URL(this.view.webContents.getURL() || 'about:blank').pathname.replace(/^\/workspace/u, '') : undefined, landing: this.landing, epoch: this.generation, conversationId: this.view?.webContents.getURL().match(/\/workspace\/(?:c|chat|linsight)\/([a-zA-Z0-9_-]+)/u)?.[1], connected: this.enterprise.snapshot().connected, hostedApp: this.hostedApp.snapshot() }
   }
 
   private notify(): void {
@@ -137,6 +151,23 @@ export class EnterpriseChatView {
   }
 
   retry(): void { this.clear(); void this.connect() }
+
+  closeHostedApp(restoreFocus = true): void {
+    if (!this.hostedApp.close()) return
+    this.layout()
+    this.notify()
+    if (restoreFocus && this.presentation?.visible && !this.presentation.settings && this.state.phase === 'ready') this.view?.webContents.focus()
+  }
+
+  retryHostedApp(): Promise<void> {
+    return this.hostedApp.retry(async () => {
+      if (!this.webCredential || this.webCredential.expiresAt <= Date.now()) {
+        this.cancelTimer()
+        await this.connect()
+      }
+      return !!this.webCredential && this.webCredential.expiresAt > Date.now()
+    })
+  }
 
   private isSettingsReady(): boolean {
     if (!this.view || !this.settingsSection || !this.settingsReady) return false
@@ -279,6 +310,7 @@ export class EnterpriseChatView {
     if (epoch !== this.generation || !this.view || !this.origin) throw new Error('Chat unavailable.')
     const route = id === 'new' ? '/workspace/c/new' : this.routes.get(id)
     if (!route) throw new Error('Select a conversation from current Chat history.')
+    this.closeHostedApp(false)
     await this.navigate(route)
   }
 
@@ -287,6 +319,7 @@ export class EnterpriseChatView {
     const id = parseChatId(input)
     const entry = this.navigation?.entries.find(item => item.id === id)
     if (!entry || !this.enterprise.snapshot().connected) throw new Error('Enterprise page unavailable.')
+    this.closeHostedApp(false)
     await this.navigate(`/workspace${entry.path}`)
   }
 
@@ -368,18 +401,19 @@ export class EnterpriseChatView {
 
   private layout(): void {
     if (!this.view || !this.owner || this.owner.isDestroyed() || !this.presentation) return
-    const { bounds, visible, theme } = this.presentation
+    const { bounds, visible, theme, hostedAppBounds } = this.presentation
+    const hosted = !this.presentation.settings && !!this.hostedApp.snapshot()
     const onSettingsPath = /\/workspace\/settings\//u.test(this.view.webContents.getURL())
     const surfaceReady = this.presentation.settings ? this.settingsSection === this.presentation.settings && this.isSettingsReady() : !onSettingsPath
-    this.view.setVisible(visible && this.state.phase === 'ready' && surfaceReady)
+    this.view.setVisible(!hosted && visible && this.state.phase === 'ready' && surfaceReady)
     // Settings hides the view while changing locale; its navigation labels still need updates.
     if (this.state.phase === 'ready') this.applyLocale()
-    if (!visible) return
+    if (!visible) { this.hostedApp.present(undefined); return }
     const zoom = this.owner.webContents.getZoomFactor()
     const [width = 0, height = 0] = this.owner.getContentSize()
-    const x = Math.max(0, Math.round(bounds.x * zoom))
-    const y = Math.max(0, Math.round(bounds.y * zoom))
-    const contentBounds = { x, y, width: Math.max(0, Math.min(width - x, Math.round(bounds.width * zoom))), height: Math.max(0, Math.min(height - y, Math.round(bounds.height * zoom))) }
+    this.hostedApp.present(hosted && hostedAppBounds ? windowBounds(hostedAppBounds, zoom, width, height) : undefined)
+    const contentBounds = windowBounds(bounds, zoom, width, height)
+    const { x, y } = contentBounds
     const windowDialog = this.modalOpen && !this.presentation.settings
     this.view.setBounds(windowDialog ? { x: 0, y: 0, width, height } : contentBounds)
     const viewZoom = this.view.webContents.getZoomFactor()
@@ -471,7 +505,16 @@ export class EnterpriseChatView {
         })
         view.setVisible(false)
         view.setBackgroundColor(this.presentation?.theme === 'dark' ? '#141416' : '#ffffff')
-        view.webContents.setWindowOpenHandler(({ url }) => {
+        view.webContents.setWindowOpenHandler(({ url, postBody }) => {
+          if (this.view !== view || generation !== this.generation) return { action: 'deny' }
+          const owner = this.owner
+          const target = !postBody && hostedApplication(origin, view.webContents.getURL(), url)
+          if (target) {
+            const account = this.enterprise.snapshot()
+            if (owner && !owner.isDestroyed() && this.presentation?.visible && !this.presentation.settings &&
+                this.state.phase === 'ready' && account.connected && account.connectionKey === key) this.hostedApp.open(owner, target)
+            return { action: 'deny' }
+          }
           if (/^https?:\/\//u.test(url)) void shell.openExternal(url).catch(() => this.note('[enterprise-chat] external_link_failed'))
           return { action: 'deny' }
         })
@@ -587,6 +630,7 @@ export class EnterpriseChatView {
       stage = 'cookie'
       await view.webContents.session.cookies.set({ url: credential.base, name: credential.cookieName, value: credential.cookie, path: '/', httpOnly: true, secure: new URL(credential.base).protocol === 'https:', sameSite: 'lax', expirationDate: credential.expiresAt / 1000 })
       if (generation !== this.generation) return
+      this.webCredential = credential
       stage = this.renewalMode ? 'renew' : 'load'
       const reloaded = !this.onWorkspace()
       if (reloaded) {
@@ -747,6 +791,8 @@ export class EnterpriseChatView {
   }
 
   private clear(): void {
+    this.webCredential = undefined
+    this.hostedApp.close()
     this.modalOpen = false
     this.dialogViewport = undefined
     clearTimeout(this.settingsTimer)
