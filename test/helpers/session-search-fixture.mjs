@@ -3,7 +3,7 @@ import * as defaultReactDOM from 'react-dom/client'
 import * as defaultJsx from 'react/jsx-runtime'
 
 // Host stores and search transport are fixtures; native checks supply shipped shared modules.
-export function createSessionSearchFixture(workspaceSource, desktopSource, { groupBy = 'flat', shared = true, archivedOnly = false, locale, runtime = {}, searchSessions = async () => ({ items: [], hasMore: false }) } = {}) {
+export function createSessionSearchFixture(workspaceSource, desktopSource, { groupBy = 'flat', shared = true, archivedOnly = false, locale, runtime = {}, workspaceItems = [], groupExpansion = {}, botNavigation, searchSessions = async () => ({ items: [], hasMore: false }) } = {}) {
   const React = runtime.react || defaultReact
   const { createRoot } = runtime['react-dom/client'] || defaultReactDOM
   const jsx = runtime['react/jsx-runtime'] || defaultJsx
@@ -34,8 +34,8 @@ export function createSessionSearchFixture(workspaceSource, desktopSource, { gro
   const desktopT = key => locale ? MODES_COPY[locale][key] || key : key
   const controls = createWorkspaceShortcutControls()
   const catalog = { phase: 'ready', projectionsBySession: {}, ids: ['one', 'two'], byId: Object.fromEntries(['one', 'two'].map(id => [id, { id, title: `会话 ${id}`, updatedAt: 1, blank: false, retainedBy: {} }])) }
-  const workspaces = { phase: 'ready', state: 'ready', items: [], archivedSessionIds: [], pinnedSessionIds: [] }
-  const view = { groupBy, orderBy: 'updated', archivedFilter: archivedOnly ? 'only' : 'default', groupExpansion: { '': true }, sessionOrderByAccount: {}, unreadSessionIds: [] }
+  const workspaces = { phase: 'ready', state: 'ready', items: workspaceItems, archivedSessionIds: [], pinnedSessionIds: [] }
+  const view = { groupBy, orderBy: 'updated', archivedFilter: archivedOnly ? 'only' : 'default', groupExpansion: { '': true, ...groupExpansion }, sessionOrderByAccount: {}, unreadSessionIds: [] }
   let cloud = { mode: 'work', page: 1, historyPhase: 'ready', items: [{ id: 'cloud', title: '云端会话', updatedAt: '2026-01-01T00:00:00Z' }] }
   const cloudListeners = new Set()
   const opened = []
@@ -63,7 +63,7 @@ export function createSessionSearchFixture(workspaceSource, desktopSource, { gro
     open: id => opened.push(`work:${id}`),
     actions,
     renderSlot: (name, props, options) => shared && name === 'sidebar.workspaces.collection'
-      ? React.createElement(SharedCollection, { ...props, navigation, t: desktopT, deleteText: key => CLOUD_DELETE_COPY[locale || 'en'][key] })
+      ? React.createElement(SharedCollection, { ...props, navigation, botNavigation, t: desktopT, deleteText: key => CLOUD_DELETE_COPY[locale || 'en'][key] })
       : options?.fallback,
     t
   }
@@ -71,9 +71,10 @@ export function createSessionSearchFixture(workspaceSource, desktopSource, { gro
   document.body.append(host)
   const root = createRoot(host)
   return {
-    host, catalog, get cloud() { return cloud }, opened,
+    host, catalog, workspaces, get cloud() { return cloud }, opened,
     updateCloud(patch) { cloud = { ...cloud, ...patch }; cloudListeners.forEach(fn => fn()) },
     mount: () => root.render(React.createElement(WorkspaceBrowser, props)),
+    setGrouping(group) { view.groupBy = group; root.render(React.createElement(WorkspaceBrowser, props)) },
     openSearch: () => host.querySelector(`[aria-label="${t('search.sessions.aria')}"]`).click(),
     type(query) {
       const input = host.querySelector(`input[placeholder="${t('search.placeholder')}"]`)

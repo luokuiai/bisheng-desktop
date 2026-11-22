@@ -6,7 +6,7 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' })
 
     const React = require('react')
-    const { Menu, MenuItemButton, Modal, Button, ReferenceIconRegular } = require('@deepseek-ai/dsh-client-ui-primitives')
+    const { Menu, MenuItemButton, Modal, Button, ReferenceIconRegular, IconUsersOutlineRegular, IconChevronLeftOutlineRegular } = require('@deepseek-ai/dsh-client-ui-primitives')
 
     // Paths are copied from build/bisheng-logo-mark.svg. Keeping the browser
     // occupant self-contained makes it replayable when Harness loads plugins
@@ -311,9 +311,9 @@ window.__ModuleLoader__.load({
     const MODES_NS = 'desktop.chatWork'
     const MODES_COPY = {
       zh: { welcomeMessage: '来一起创造', welcome: '欢迎来到', newConversation: '新建对话', navigation: '导航', moreNavigation: '更多', recent: '对话', projects: '工作区', all: '所有会话', results: '搜索结果', cloud: '云端聊天', local: '本地工作', recentEmpty: '暂无最近会话', recentSearchEmpty: '当前列表没有匹配的会话', chat: '聊天', work: '工作', label: '聊天与工作', loading: '正在连接企业聊天…', error: '企业聊天连接失败，请重试', retry: '重新连接', refresh: '刷新聊天记录', historyLoading: '正在加载聊天记录…', historyError: '加载失败，点击重试', empty: '暂无聊天记录', more: '加载更多', newChat: '新聊天', signIn: '登录企业账号', signInTitle: '登录后使用聊天', signInDescription: '聊天由企业平台提供。登录后，即可使用平台中的模型和对话记录。', continueWork: '继续使用工作', close: '关闭', justNow: '刚刚',
-        hostedAppBack: '返回应用中心', hostedAppBackToSquare: '返回应用广场', hostedAppLoading: '正在打开应用…', hostedAppError: '应用加载失败。', hostedAppActionError: '操作失败，请重试。', hostedAppRetry: '重试' },
+        multiAgentCollaboration: '多代理协作', botBack: '返回', botBackToAgent: '返回经典 Agent 界面', hostedAppBack: '返回应用中心', hostedAppBackToSquare: '返回应用广场', hostedAppLoading: '正在打开应用…', hostedAppError: '应用加载失败。', hostedAppActionError: '操作失败，请重试。', hostedAppRetry: '重试' },
       en: { welcomeMessage: "Let's Create Together", welcome: 'Welcome', newConversation: 'New conversation', navigation: 'Navigation', moreNavigation: 'More', recent: 'Conversations', projects: 'Workspaces', all: 'All conversations', results: 'Search results', cloud: 'Cloud chat', local: 'Local work', recentEmpty: 'No recent conversations', recentSearchEmpty: 'No matches in the current list', chat: 'Chat', work: 'Work', label: 'Chat and Work', loading: 'Connecting to enterprise Chat…', error: 'Could not connect to enterprise Chat. Try again.', retry: 'Reconnect', refresh: 'Refresh Chat history', historyLoading: 'Loading history…', historyError: 'Loading failed. Retry', empty: 'No chats yet', more: 'Load more', newChat: 'New chat', signIn: 'Sign in to your enterprise account', signInTitle: 'Sign in to use Chat', signInDescription: 'Chat is provided by your enterprise platform. Sign in to use its models and conversations.', continueWork: 'Continue in Work', close: 'Close', justNow: 'Now',
-        hostedAppBack: 'Back to App Center', hostedAppBackToSquare: 'Back to Discover', hostedAppLoading: 'Opening app…', hostedAppError: 'Could not load the app.', hostedAppActionError: 'The action failed. Try again.', hostedAppRetry: 'Retry' }
+        multiAgentCollaboration: 'Multi-Agent Collaboration', botBack: 'Back', botBackToAgent: 'Back to classic Agent', hostedAppBack: 'Back to App Center', hostedAppBackToSquare: 'Back to Discover', hostedAppLoading: 'Opening app…', hostedAppError: 'Could not load the app.', hostedAppActionError: 'The action failed. Try again.', hostedAppRetry: 'Retry' }
     }
     /**
      * Host tokens the embedded enterprise document reuses. It cannot read the host's CSS, so the
@@ -631,8 +631,9 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         }, deleteText('menu'))))
     }
     /** Cloud identities stay namespaced; project ownership is projected by Harness. */
-    function SharedCollection({ projects, items, mode, query, archivedOnly, searchPending = false, navigation, t, deleteText }) {
+    function SharedCollection({ projects, items, mode, query, archivedOnly, searchPending = false, navigation, botNavigation, t, deleteText }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
+      const hiddenWorkspaceId = useHiddenBotWorkspace(botNavigation, mode === 'projects' && typeof window.dshDesktop?.restartHarness === 'function')
       const initialHistoryLoading = state.historyPhase === 'loading' && state.page === 0
       const resultsPending = initialHistoryLoading || (mode === 'search' && searchPending)
       const search = query.trim().toLocaleLowerCase()
@@ -641,7 +642,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         .map(item => ({ ...item, key: `chat:${item.id}`, kind: 'chat', updatedAt: Date.parse(item.updatedAt) || 0 }))
       const rows = [...local, ...cloud].sort((a, b) => Number(!!b.blank) - Number(!!a.blank) || Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt - a.updatedAt || a.key.localeCompare(b.key))
       return React.createElement('div', { className: 'dshSharedCollection', 'data-mode': state.mode },
-        projects(state.mode === 'work'),
+        projects(state.mode === 'work', hiddenWorkspaceId),
         React.createElement('section', { className: 'dshRecentHistory', 'aria-label': t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all') },
           React.createElement('div', { className: 'dshHistoryHeading' },
             React.createElement('span', null, t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all'))),
@@ -737,7 +738,6 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         const bridge = window.dshEnterpriseChat
         if (!bridge) return
         const appRoot = document.getElementById('root')
-        const botSidebarSelector = ':scope > .bt-leftcol[data-left]'
         let observedLeading
         let observedBotSidebar
         let dialogOpen = false
@@ -747,7 +747,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           const sidebarRight = document.querySelector('[data-dsh-sidebar-root]')?.getBoundingClientRect().right || 0
           // DS Bot folds the shell sidebar and portals its fixed-left replacement
           // to body. Its layout width stays stable during the slide-in animation.
-          const botSidebar = document.body.querySelector(botSidebarSelector)
+          const botSidebar = document.body.querySelector(BOT_SIDEBAR_SELECTOR)
           if (botSidebar !== observedBotSidebar) {
             if (observedBotSidebar) resize.unobserve(observedBotSidebar)
             botSidebarState.disconnect()
@@ -808,7 +808,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         // conversation subtree or reacting to the temporary palette probe.
         const chromeLayout = new MutationObserver(records => {
           if (records.some(record => record.target !== document.body) ||
-              document.body.querySelector(botSidebarSelector) !== observedBotSidebar) present()
+              document.body.querySelector(BOT_SIDEBAR_SELECTOR) !== observedBotSidebar) present()
         })
         const frame = panel.current?.closest('.dshModes')?.parentElement
         if (frame) chromeLayout.observe(frame, { childList: true, attributes: true, attributeFilter: ['data-sidebar-collapsed'] })
@@ -871,7 +871,199 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: id === 'more' ? 3 : 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
         React.createElement('path', { d: NAV_ICON_PATHS[id === 'capabilities' ? 'skills' : id] || NAV_ICON_PATHS.apps }))
     }
-    function PrimaryNavigation({ wide, renderAction, expandSidebar, panels, selectPanel, renderPanelIcon, navigation, t }) {
+    const BOT_FOOTER_SLOT = 'sidebar.footer.action'
+    const BOT_RETURN_ID = 'bot-return'
+    const BOT_SIDEBAR_SELECTOR = ':scope > .bt-leftcol[data-left]'
+    const BOT_ACCOUNT_MENU_SELECTOR = ':scope > .bt-account-menu[role="menu"]'
+    const BOT_MENU_HIDDEN = 'data-dsh-bot-menu-hidden'
+    const EMPTY_BOT_SOURCE = { subscribe: () => () => {}, snapshot: () => undefined }
+    function HiddenBotReturn() { return null }
+
+    function createBotNavigation(slots) {
+      const snapshot = () => slots.entries(BOT_FOOTER_SLOT).find(entry =>
+        entry.options.id === BOT_RETURN_ID && entry.component !== HiddenBotReturn)
+      return {
+        snapshot,
+        subscribe: listener => slots.subscribe(BOT_FOOTER_SLOT, listener),
+        hideFooter: entry => slots.inject(BOT_FOOTER_SLOT, () => slots.register({
+          name: BOT_FOOTER_SLOT, id: BOT_RETURN_ID, priority: (entry.options.priority ?? 0) - 1
+        }, HiddenBotReturn))
+      }
+    }
+
+    function readBotReturn(entry) {
+      // DS Bot 0.3.9 exposes its surface and switch action through this registration.
+      // Keep its own footer entry available if a later version changes that face.
+      try {
+        const face = entry?.inject?.()
+        const surface = face?.hooks?.surface
+        const roster = face?.hooks?.roster
+        const actions = face?.actions
+        if (typeof surface?.subscribe !== 'function' || typeof surface.getSnapshot !== 'function' || typeof actions?.setSurface !== 'function') return undefined
+        const workspace = typeof roster?.subscribe === 'function' && typeof roster.getSnapshot === 'function'
+          ? { subscribe: listener => roster.subscribe(listener), snapshot: () => roster.getSnapshot()?.workspaceId }
+          : EMPTY_BOT_SOURCE
+        return {
+          subscribe: listener => surface.subscribe(listener),
+          snapshot: () => surface.getSnapshot()?.mode,
+          workspace,
+          open: () => actions.setSurface('bot'),
+          back: () => actions.setSurface('agent')
+        }
+      } catch (error) {
+        console.warn('Could not read the DS Bot sidebar action', error)
+        return undefined
+      }
+    }
+
+    function useBotReturn(botNavigation = EMPTY_BOT_SOURCE) {
+      const entry = React.useSyncExternalStore(botNavigation.subscribe, botNavigation.snapshot)
+      const action = React.useMemo(() => readBotReturn(entry), [entry])
+      return { entry, action }
+    }
+
+    function useHiddenBotWorkspace(botNavigation, enabled) {
+      const { action } = useBotReturn(enabled ? botNavigation : undefined)
+      const surface = action ?? EMPTY_BOT_SOURCE
+      const workspace = action?.workspace ?? EMPTY_BOT_SOURCE
+      const mode = React.useSyncExternalStore(surface.subscribe, surface.snapshot)
+      const teamId = React.useSyncExternalStore(workspace.subscribe, workspace.snapshot)
+      const candidate = mode === 'agent' && typeof teamId === 'string' && teamId ? teamId : undefined
+      const [verified, setVerified] = React.useState(null)
+      React.useEffect(() => {
+        setVerified(null)
+        if (!candidate) return
+        const controller = new AbortController()
+        void fetch('/api/desktop-ds-bot-workspace', { signal: controller.signal, cache: 'no-store' })
+          .then(response => response.ok ? response.json() : null)
+          .then(result => {
+            if (!controller.signal.aborted && result?.workspaceId === candidate) setVerified({ action, id: candidate })
+          })
+          .catch(error => {
+            if (!controller.signal.aborted) console.warn('Could not verify the desktop DS Bot workspace', error)
+          })
+        return () => controller.abort()
+      }, [action, candidate])
+      return verified?.action === action && verified?.id === candidate ? candidate : undefined
+    }
+
+    function BotNavigationEntry({ botNavigation, wide, renderAction, t }) {
+      const { entry, action } = useBotReturn(botNavigation)
+      return action ? React.createElement(BotNavigationRow, { botNavigation, entry, action, wide, renderAction, t }) : null
+    }
+
+    function BotNavigationRow({ botNavigation, entry, action, wide, renderAction, t }) {
+      const mode = React.useSyncExternalStore(action.subscribe, action.snapshot)
+      React.useLayoutEffect(() => {
+        if (mode === 'agent') return botNavigation.hideFooter(entry)
+      }, [botNavigation, entry, mode])
+      if (mode !== 'agent') return null
+      return renderAction({
+        id: BOT_RETURN_ID, label: t('multiAgentCollaboration'), onClick: action.open,
+        icon: React.createElement(IconUsersOutlineRegular, { size: wide ? 16 : 18 })
+      })
+    }
+
+    function useBotBackSeat(active) {
+      const [seat, setSeat] = React.useState(null)
+      React.useLayoutEffect(() => {
+        if (!active) { setSeat(null); return }
+        const root = document.getElementById('root')
+        let column
+        const columnObserver = new MutationObserver(sync)
+        const bodyObserver = new MutationObserver(sync)
+        function sync() {
+          const current = document.body.querySelector(BOT_SIDEBAR_SELECTOR)
+          if (current !== column) {
+            columnObserver.disconnect()
+            column = current
+            if (column) columnObserver.observe(column, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-left', 'data-leaving', 'aria-hidden', 'hidden'] })
+          }
+          const visible = !root?.inert && column?.matches(':not([data-leaving]):not([aria-hidden="true"]):not([hidden])')
+          setSeat(visible ? column.querySelector(':scope > .bt-side > .bt-side-top > span.bt-brand, :scope > .bt-side > .bt-rail-top') : null)
+        }
+        bodyObserver.observe(document.body, { childList: true })
+        if (root) bodyObserver.observe(root, { attributes: true, attributeFilter: ['inert'] })
+        sync()
+        return () => { bodyObserver.disconnect(); columnObserver.disconnect() }
+      }, [active])
+      return active ? seat : null
+    }
+
+    function findOldBotSwitch(menu, label) {
+      // DS Bot 0.3.9 supplies no ID for this action. Require its localized label
+      // and both paths of its switch glyph inside the account menu.
+      const matches = [...(menu?.querySelectorAll(':scope > button[role="menuitem"]') ?? [])].filter(button =>
+        button.querySelector(':scope > .bt-menu-label')?.textContent === label &&
+        button.querySelector(':scope > svg:has(> path[d="M4 7h9.5M10.5 3.5L14 7l-3.5 3.5"]):has(> path[d="M16 13H6.5M9.5 9.5L6 13l3.5 3.5"])'))
+      return matches.length === 1 ? matches[0] : undefined
+    }
+
+    function hideOldBotSwitch(backButton, label) {
+      let menu, hiddenButton, restore
+      const menuObserver = new MutationObserver(sync)
+      const bodyObserver = new MutationObserver(sync)
+      function sync() {
+        const menus = document.body.querySelectorAll(BOT_ACCOUNT_MENU_SELECTOR)
+        const current = menus.length === 1 ? menus[0] : undefined
+        if (menu !== current) {
+          menuObserver.disconnect()
+          menu = current
+          if (menu) menuObserver.observe(menu, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['d', 'role', 'class'] })
+        }
+        const button = backButton.isConnected && backButton.checkVisibility() ? findOldBotSwitch(menu, label) : undefined
+        if (button === hiddenButton) return
+        restore?.()
+        restore = undefined
+        hiddenButton = button
+        if (!button) return
+        const separator = button.previousElementSibling
+        const spacer = separator?.matches('.bt-menu-sep[role="separator"]') ? separator : undefined
+        const previousDisabled = button.disabled
+        const hadFocus = document.activeElement === button
+        // DS Bot's Arrow/Home/End handling enumerates enabled buttons.
+        button.disabled = true
+        button.setAttribute(BOT_MENU_HIDDEN, '')
+        spacer?.setAttribute(BOT_MENU_HIDDEN, '')
+        if (hadFocus) menu.querySelector(':scope > button[role="menuitem"]:not(:disabled)')?.focus()
+        restore = () => {
+          button.disabled = previousDisabled
+          button.removeAttribute(BOT_MENU_HIDDEN)
+          spacer?.removeAttribute(BOT_MENU_HIDDEN)
+        }
+      }
+      bodyObserver.observe(document.body, { childList: true })
+      sync()
+      return () => { bodyObserver.disconnect(); menuObserver.disconnect(); restore?.() }
+    }
+
+    function BotSidebarBackButton({ action, t, botText }) {
+      const mode = React.useSyncExternalStore(action.subscribe, action.snapshot)
+      const seat = useBotBackSeat(mode === 'bot')
+      const button = React.useRef(null)
+      const oldLabel = botText('Classic Agent mode')
+      React.useLayoutEffect(() => {
+        if (seat && button.current && typeof oldLabel === 'string') return hideOldBotSwitch(button.current, oldLabel)
+      }, [seat, oldLabel])
+      if (!seat) return null
+      const label = t('botBackToAgent')
+      const rail = seat.matches('.bt-rail-top')
+      const brand = seat.firstElementChild
+      // The 0.3.9 title is a plain span. A different title shape keeps its plugin rendering.
+      const showTitle = !rail && brand?.matches('span:not([class])') && brand.textContent === 'DS Bot'
+      const back = React.createElement('button', {
+        ref: button, type: 'button', className: 'dshBotSidebarBack', 'aria-label': label, title: label, onClick: action.back
+      }, React.createElement(IconChevronLeftOutlineRegular, { size: 16 }), rail ? null : t('botBack'))
+      return require('react-dom').createPortal(React.createElement(React.Fragment, null, back,
+        showTitle && React.createElement('span', { className: 'dshBotSidebarTitle' }, t('multiAgentCollaboration'))), seat)
+    }
+
+    function BotSidebarBack({ botNavigation, t, botText }) {
+      const { action } = useBotReturn(botNavigation)
+      return action ? React.createElement(BotSidebarBackButton, { action, t, botText }) : null
+    }
+
+    function PrimaryNavigation({ wide, renderAction, expandSidebar, panels, selectPanel, renderPanelIcon, navigation, botNavigation, t }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const [menuOpen, setMenuOpen] = React.useState(false)
       React.useEffect(() => { setMenuOpen(false) }, [state.epoch])
@@ -893,6 +1085,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         ...morePanels.map(panel => ({ id: `local:${panel.id}`, label: panel.label, icon: renderPanelIcon(panel.id) }))
       ]
       return React.createElement('nav', { className: 'dshPrimaryNavigation', 'data-wide': wide, 'aria-label': t('navigation') },
+        React.createElement(BotNavigationEntry, { botNavigation, wide, renderAction, t }),
         plugins && renderAction({ id: plugins.id, label: plugins.label, icon: renderPanelIcon(plugins.id), active: state.mode === 'work' && state.activePanelId === plugins.id, onClick: () => { setMenuOpen(false); navigation.select('work'); selectPanel(plugins.id) } }),
         items.length > 0 && React.createElement(Menu, {
           open: menuOpen, onClose: () => setMenuOpen(false), items, autoFocus: true, dense: true,
@@ -906,6 +1099,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
     // their fixed-position containing block attached to the viewport.
     function installDesktopModes(ctx) {
       const navigation = createChatNavigation(ctx)
+      const botNavigation = createBotNavigation(ctx.slots)
       ctx.effect(() => () => navigation.deletion.dispose())
       ctx.effect(() => ctx.locale.register(MODES_NS, MODES_COPY), 'desktop: Chat and Work locale')
       ctx.effect(() => ctx.locale.register(CLOUD_DELETE_NS, CLOUD_DELETE_COPY))
@@ -913,12 +1107,24 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         name: 'shell.overlay', id: 'desktop-cloud-chat-delete-dialog', locale: CLOUD_DELETE_NS,
         inject: () => ({ deletion: navigation.deletion, t: ctx.locale.bind(CLOUD_DELETE_NS) })
       }, DeleteSessionDialog))
+      if (typeof window.dshDesktop?.restartHarness === 'function') {
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+          name: 'shell.overlay', id: 'desktop-bot-sidebar-back', locale: MODES_NS,
+          inject: () => ({ botNavigation, botText: ctx.locale.bind('ds-bot') })
+        }, BotSidebarBack))
+      }
       ctx.effect(() => {
         const style = document.createElement('style')
         style.dataset.plugin = 'dsh-desktop-client-ui'
         style.textContent = `
           .dshPrimaryNavigation{display:flex;flex-direction:column;flex:none;gap:4px;padding:0 0 12px}
           .dshPrimaryNavigation[data-wide=false]{gap:12px}
+          .dshBotSidebarBack{display:inline-flex;align-items:center;justify-content:center;gap:4px;flex:none;padding:4px 6px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer;-webkit-app-region:no-drag}
+          .dshBotSidebarBack:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+          .dshBotSidebarBack:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}
+          .bt-side-top>span.bt-brand:has(>.dshBotSidebarTitle)>span:first-child:not([class]){display:none}
+          .dshBotSidebarTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+          .bt-account-menu>[data-dsh-bot-menu-hidden]{display:none!important}
           .dshNavigationMenu{display:flex;flex-direction:column;position:relative;width:100%}.dshNavigationMenu .dshNavigationMenuList{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
           .dshModes{grid-column:2 / -1;min-width:0;min-height:0;width:100%;height:100%;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
           .dshModesHeader{height:56px;flex:none;display:flex;align-items:center;justify-content:center}
@@ -954,10 +1160,10 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         document.head.appendChild(style)
         return () => style.remove()
       })
-      ctx.slots.inject('sidebar.primaryNavigation', () => ctx.slots.register({ name: 'sidebar.primaryNavigation', id: 'desktop-primary-navigation', inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS) }) }, PrimaryNavigation))
+      ctx.slots.inject('sidebar.primaryNavigation', () => ctx.slots.register({ name: 'sidebar.primaryNavigation', id: 'desktop-primary-navigation', inject: () => ({ navigation, botNavigation, t: ctx.locale.bind(MODES_NS) }) }, PrimaryNavigation))
       ctx.slots.inject('sidebar.workspaces.title', () => ctx.slots.register({ name: 'sidebar.workspaces.title', inject: () => ({ t: ctx.locale.bind(MODES_NS) }) }, ({ flat, t }) => t(flat ? 'all' : 'projects')))
       ctx.slots.inject('desktop.mode.content', () => ctx.slots.register({ name: 'desktop.mode.content', id: 'desktop-chat-work', inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS), locale: ctx.locale }) }, DesktopModes))
-      ctx.slots.inject('sidebar.workspaces.collection', () => ctx.slots.register({ name: 'sidebar.workspaces.collection', id: 'desktop-shared-collection', inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS), deleteText: ctx.locale.bind(CLOUD_DELETE_NS) }) }, SharedCollection))
+      ctx.slots.inject('sidebar.workspaces.collection', () => ctx.slots.register({ name: 'sidebar.workspaces.collection', id: 'desktop-shared-collection', inject: () => ({ navigation, botNavigation, t: ctx.locale.bind(MODES_NS), deleteText: ctx.locale.bind(CLOUD_DELETE_NS) }) }, SharedCollection))
       return navigation
     }
 

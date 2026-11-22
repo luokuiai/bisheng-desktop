@@ -42,6 +42,16 @@ Harness 0.2.0-rc.2 的 `dsh-client-ui-input-trigger` 将 pointer hover 与 keybo
 
 ds-bot 0.3.9 在 Bot 模式折叠 Harness 侧栏，并把自己的固定侧栏挂到 `body`。桌面 UI 只能从该版本的 `.bt-leftcol[data-left]` 读取其布局，因为 Harness 的侧栏尺寸服务只报告原生侧栏。企业 Chat 在展开或窄栏时按侧栏宽度定位，在抽屉打开时让出原生视图。挂载、卸载及模式变化通过直接子节点和属性变化重算，拖动通过尺寸观察重算。回归入口为 `test/desktop-modes-ui.test.mjs`。ds-bot 或 Harness 暴露实际占位后使用该契约。
 
+### DS Bot 的主菜单入口
+
+经典 Agent 模式的「多代理协作」由桌面 UI 插件通过现有 `sidebar.primaryNavigation` 渲染。插件读取 ds-bot 0.3.9 注册在 `sidebar.footer.action` 的 `bot-return`，沿用其 `surface` 快照及 `setSurface('bot')`。主菜单渲染入口时，通过列表插槽的优先级接管同 ID 的页脚位置。入口卸载时释放页脚占位，缺少兼容注册时保留插件自己的页脚。升级 ds-bot 或 Harness 时重跑 `test/desktop-modes-ui.test.mjs` 的菜单与页脚回归，并用对应企业插件验证实际切换。ds-bot 提供正式的模式切换接缝后迁移。
+
+Bot 模式通过 `shell.overlay` 在可见的 `.bt-side-top > .bt-brand` 或 `.bt-rail-top` 内挂载宿主返回按钮，沿用侧栏留白，进入 `setSurface('agent')`。0.3.9 的账号菜单没有单项 ID，适配按 `.bt-account-menu`、切换图标和 DS Bot 词典的标签识别唯一按钮。顶部返回存在时临时隐藏并禁用旧项，同时收起它前面的分隔线。原账号菜单的键盘处理会跳过禁用项。卸载或失配时恢复原状态。升级时连同 Windows 标题栏、窄栏和键盘路径一起验证，等 DS Bot 提供正式导航接缝后移除这段 DOM 兼容代码。
+
+识别到 0.3.9 的原始标题后，展开的侧栏在「返回」右侧显示宿主标题，并用局部样式隐藏原始标题。标题与主菜单共用「多代理协作」文案。标题结构变化时保留插件标题。
+
+经典 Agent 的工作区分组读取 `bot-return` 所携带的 roster 工作区 ID，并向 Harness 宿主验证 `$DSH_HOME/bot/workspace` 的原生路径和登记 ID。两者一致时，通过 Harness 0.2.1-rc.2 的 `sidebar.workspaces.collection.projects` 可选工作区 ID 参数省略该组。会话归属及已有排序数据继续参与计算，搜索和平铺仍使用原列表。子工作区提升一层显示。路径链接到普通项目、DS Bot 使用自定义团队目录或查询失败时，沿用原分组。回归入口为 `test/desktop-ds-bot-workspace.test.mjs` 和 `test/session-search-recovery.test.mjs`。Harness 提供同等渲染参数后移除本地补丁增量。
+
 ### 安全模式管理页的原生视图展示（2026-10-29）
 
 安全模式 preload 已通过 `html[data-dsh-safe-mode-page]` 声明管理页占用内容区。桌面内容贡献项读取当前属性并仅观察该属性变化，通过现有 presentation IPC 隐藏背景 Chat 子视图；关闭管理页后按当前模式恢复。远程设置仍作为前景内容展示，`#root.inert` 继续管理宿主模态边界。观察器随贡献项卸载释放。该修复直接修改自有插件；验证见 `test/desktop-modes-ui.test.mjs` 与 [macOS 原生验证记录](status/safe-mode-panel-20261029.md)。
