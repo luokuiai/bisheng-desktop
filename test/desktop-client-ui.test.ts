@@ -22,7 +22,7 @@ describe('BISHENG client slot occupants', () => {
         inject: string[]
       }
     } | undefined
-    const appended: Array<{ textContent?: string }> = []
+    const appended: Array<{ id?: string; textContent?: string }> = []
     const removeStyle = vi.fn()
     let disposeStyle: (() => void) | undefined
     const document = {
@@ -120,13 +120,18 @@ describe('BISHENG client slot occupants', () => {
       'sidebar.workspaces.session.menu.item',
       'sidebar.workspaces.session.menu.item'
     ])
-    // Desktop toolbar styles have an owned lifetime; branding stays in currentColor.
-    expect(appended).toHaveLength(2)
+    // Desktop shell + toolbar styles have owned lifetimes; branding stays in currentColor.
+    expect(appended).toHaveLength(3)
+    const uiStyle = appended.find(node => node.id === 'dsh-desktop-ui-style')
+    expect(uiStyle?.textContent).toContain('body[data-dsh-desktop-ui="dsh"] .dshModes')
+    expect(uiStyle?.textContent).toContain('body[data-dsh-desktop-ui="dsh"] .dshWorkContent [class*="wSkVaW_root"]')
+    expect(uiStyle?.textContent).toContain('html, body {')
+    const toolbarStyle = appended.find(node => node.textContent?.includes('.dshPrimaryNavigation'))
     // Match Harness panelList spacing without changing navigation's outer padding.
-    expect(appended[0]?.textContent).toContain('.dshPrimaryNavigation{display:flex;flex-direction:column;flex:none;gap:4px;padding:0 0 12px}')
-    expect(appended[0]?.textContent).toContain('.dshPrimaryNavigation[data-wide=false]{gap:12px}')
+    expect(toolbarStyle?.textContent).toContain('.dshPrimaryNavigation{display:flex;flex-direction:column;flex:none;gap:4px;padding:0 0 12px}')
+    expect(toolbarStyle?.textContent).toContain('.dshPrimaryNavigation[data-wide=false]{gap:12px}')
     // The in-place dropdown fills its trigger wrapper instead of shrink-wrapping its labels.
-    expect(appended[0]?.textContent).toContain('.dshNavigationMenu .dshNavigationMenuList{width:100%;min-width:0;max-width:100%;box-sizing:border-box}')
+    expect(toolbarStyle?.textContent).toContain('.dshNavigationMenu .dshNavigationMenuList{width:100%;min-width:0;max-width:100%;box-sizing:border-box}')
     const primaryNavigation = registrations.find(({ config }) => config.name === 'sidebar.primaryNavigation')!.component
     for (const wide of [true, false]) {
       const nav = primaryNavigation({
@@ -147,7 +152,7 @@ describe('BISHENG client slot occupants', () => {
     setMenuOpen.mockClear()
     windowEvents.dispatchEvent(new Event('blur'))
     expect(setMenuOpen).not.toHaveBeenCalled()
-    expect(appended[1]?.textContent).toContain("[data-dsh-preset-search]")
+    expect(appended.find(node => node.textContent?.includes('[data-dsh-preset-search]'))).toBeDefined()
     disposeStyle?.()
     expect(removeStyle).toHaveBeenCalledOnce()
 

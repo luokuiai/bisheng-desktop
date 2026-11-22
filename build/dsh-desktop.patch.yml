@@ -32,11 +32,6 @@
     - id: dsh-desktop-enterprise
       name: dsh-desktop-enterprise
 
-    # LUOKUI-aligned visual skin: soft card shell, radii, chat and composer
-    # surfaces. Pure UI plugin, safe to mount in every profile composition.
-    - id: dsh-desktop-skin
-      name: dsh-desktop-skin
-
     - id: dsh-desktop-workbenches
       name: dsh-desktop-workbenches
       config:

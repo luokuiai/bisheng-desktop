@@ -729,7 +729,7 @@ const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mo
 const hostModalOpen = dialogOpen || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
 const palette = hostPalette()
 const modes = panel.current?.closest('.dshModes')
-const modesStyle = modes ? getComputedStyle(modes) : undefined
+const modesStyle = modes && typeof getComputedStyle === 'function' ? getComputedStyle(modes) : undefined
 // The skin draws the card; round the native view to the card's inner radius
 // so its square corners never paint over them. Without the skin the radius is
 // 0 and the view stays a plain rectangle.
@@ -1336,8 +1336,218 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       })
     }
 
+    /**
+     * Desktop UI layer. These values are the product's shell, not an optional
+     * skin: the client UI plugin is mounted in every profile, so the card
+     * layout, tokens and surfaces apply without a separate plugin row.
+     */
+    const both = value => ({ light: value, dark: value })
+    const UI_TOKENS = {
+      '--dsw-radius-xs': both('6px'),
+      '--dsw-radius-sm': both('10px'),
+      '--dsw-radius-md': both('12px'),
+      '--dsw-radius-lg': both('16px'),
+      '--dsw-radius-xl': both('16px'),
+      '--dsw-radius-panel': both('24px'),
+      '--dsw-alias-button-primary-fill': both('var(--dsw-static-blue-500)'),
+      '--dsw-alias-button-primary-hover': {
+        light: 'var(--dsw-static-blue-600)',
+        dark: 'var(--dsw-static-blue-400)'
+      },
+      '--dsw-alias-label-primary-foreground': both('var(--dsw-static-neutral-bluish-00)'),
+      '--dsw-specific-bubble': {
+        light: 'var(--dsw-static-neutral-bluish-00)',
+        dark: 'var(--dsw-static-neutral-bluish-850)'
+      },
+      '--dsw-specific-input-major': {
+        light: 'var(--dsw-static-neutral-bluish-00)',
+        dark: 'var(--dsw-static-neutral-bluish-850)'
+      }
+    }
+
+    /*
+     * Structural selectors use stable data hooks wherever the host provides
+     * them. The hash-suffixed module classes are pinned by the locked 0.2.1-rc.2
+     * packages and match upstream 0.2.2, so they stay aligned with DSH Desktop.
+     * `data-dsh-sidebar-new-session` is not in the 0.2.1 sidebar patch, so the
+     * new-session card uses the pinned module class instead of that later hook.
+     */
+    const UI_STYLE = `
+      /* App shell: the frame owns scrolling; never expose document scrollbars. */
+      html, body {
+        overflow: hidden;
+      }
+      /*
+       * macOS keeps the traffic lights over the content (hiddenInset). The stock
+       * frame starts at 10px, which puts the card under the buttons; reserve the
+       * same clearance the compact toolbars use.
+       */
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
+        padding-top: calc(var(--dsh-frame-top-clearance, 48px) + 10px);
+      }
+
+      body[data-dsh-desktop-ui="dsh"] {
+        --dsk-card-radius: 24px;
+        --dsk-card-border: 1px solid var(--dsw-alias-border-l2);
+        --dsk-card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -24px rgb(0 0 0 / 0.30);
+        --dsk-card-surface: var(--dsw-alias-bg-layer-1);
+        --dsk-page-surface: var(--dsw-alias-bg-module-platform);
+        background: var(--dsk-page-surface);
+      }
+
+      /* Shell: page ground, inset cards, hairline separators. */
+      body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
+        background: var(--dsk-page-surface);
+        padding: calc(var(--dsh-windows-titlebar-height, 0px) + 10px) 12px 12px;
+        column-gap: 12px;
+      }
+      body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol {
+        background: var(--dsk-card-surface);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: var(--dsk-card-shadow);
+        overflow: hidden;
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] {
+        background: transparent;
+      }
+      body[data-dsh-desktop-ui="dsh"] .pI_x6G_centerCol {
+        background: var(--dsk-card-surface);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: var(--dsk-card-shadow);
+        overflow: hidden;
+      }
+      /*
+       * Bisheng mounts 'desktop.mode.content' instead of the stock center column,
+       * so chat and work share this panel. It is the visible card: the native
+       * enterprise chat view is rounded to the inner radius reported from here.
+       */
+      body[data-dsh-desktop-ui="dsh"] .dshModes {
+        box-sizing: border-box;
+        background: var(--dsk-card-surface);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: var(--dsk-card-shadow);
+        overflow: hidden;
+      }
+      /* Work mode nests the stock center column; the mode panel already carries the card. */
+      body[data-dsh-desktop-ui="dsh"] .dshModes .pI_x6G_centerCol {
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      /* Sidebar navigation: quiet rows, blue pill for the active page. */
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow {
+        border-radius: 10px;
+        color: var(--dsw-alias-label-secondary);
+        transition: background-color .15s var(--ds-ease-in-out), color .15s var(--ds-ease-in-out);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow:hover {
+        background: var(--dsw-alias-interactive-bg-hover);
+        color: var(--dsw-alias-label-primary);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow[aria-current="page"] {
+        background: var(--dsw-static-blue-500);
+        color: var(--dsw-static-neutral-bluish-00);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow[aria-current="page"] svg {
+        color: currentColor;
+      }
+      body[data-dsh-desktop-ui="dsh"] .hHd-Xa_newSession {
+        background: var(--dsk-card-surface);
+        border: 1px solid var(--dsw-alias-border-l2);
+        border-radius: 12px;
+        box-shadow: 0 1px 1px rgb(0 0 0 / 0.03);
+      }
+      body[data-dsh-desktop-ui="dsh"] .hHd-Xa_newSession:hover {
+        background: var(--dsw-alias-interactive-bg-hover);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-workbench-switcher] {
+        background: var(--dsk-page-surface);
+        border-radius: 10px;
+        padding: 2px;
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-settings] {
+        border-top: 1px solid var(--dsw-alias-border-l1);
+        margin-top: 4px;
+        padding-top: 6px;
+      }
+
+      /* Conversation: gray surface with white user bubbles. */
+      body[data-dsh-desktop-ui="dsh"] .wSkVaW_root {
+        background: var(--dsk-page-surface);
+      }
+      /*
+       * Work mode mounts the Harness conversation inside the card. Bisheng shows
+       * chat through the native view (white), so the work surface stays on the
+       * card surface instead of the page ground.
+       */
+      body[data-dsh-desktop-ui="dsh"] .dshWorkContent [class*="wSkVaW_root"] {
+        background: var(--dsk-card-surface);
+      }
+      body[data-dsh-desktop-ui="dsh"] [class*="_bubble_"]:not([data-side]):not([data-portal]) {
+        border: 1px solid var(--dsw-alias-border-l1);
+        border-radius: 16px;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+      }
+
+      /* Composer: white capsule with a soft contact shadow. */
+      body[data-dsh-desktop-ui="dsh"] [data-composer-card] {
+        background: var(--dsk-card-surface);
+        border: 1px solid var(--dsw-alias-border-l2);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 18px 40px -28px rgb(0 0 0 / 0.38);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-composer-card]:focus-within {
+        border-color: color-mix(in srgb, var(--dsw-static-blue-500) 45%, var(--dsw-alias-border-l2));
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-static-blue-500) 10%, transparent), 0 18px 40px -28px rgb(0 0 0 / 0.38);
+      }
+
+      /* Thin scrollbars keep the card surface calm. */
+      body[data-dsh-desktop-ui="dsh"] * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--dsw-alias-scrollbar-bg-l2) transparent;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow {
+          transition: none;
+        }
+      }
+    `
+
     const inject = ['slots', 'locale', 'remote', 'remote.session', 'sessions', 'uiWorkspace', 'layout']
     function apply(ctx) {
+      // Ship the card shell as the default UI: tokens stack over the active
+      // palette through the theme registry, and the stylesheet is owned here.
+      if (typeof ctx.inject === 'function') {
+        ctx.inject(['theme'], scoped => {
+          if (!scoped.theme || typeof scoped.theme.overrideTokens !== 'function' || typeof scoped.effect !== 'function') return
+          scoped.effect(
+            () => scoped.theme.overrideTokens('dsh-desktop-ui', UI_TOKENS),
+            'desktop ui: theme tokens'
+          )
+        })
+      }
+      if (document.body) {
+        ctx.effect(() => {
+          document.body.dataset.dshDesktopUi = 'dsh'
+          return () => { delete document.body.dataset.dshDesktopUi }
+        }, 'desktop ui: body scope')
+      }
+      ctx.effect(() => {
+        const id = 'dsh-desktop-ui-style'
+        if (document.getElementById(id) !== null) return
+        const style = document.createElement('style')
+        style.id = id
+        style.dataset.pluginCss = 'dsh-desktop-client-ui'
+        style.textContent = UI_STYLE
+        document.head.appendChild(style)
+        return () => style.remove()
+      }, 'desktop ui: shell styles')
       ctx.effect(() => ctx.locale.register(DELETE_SESSION_NS, {
         zh: {
           menu: '永久删除会话', title: '删除会话', close: '关闭', cancel: '取消', confirm: '删除会话',

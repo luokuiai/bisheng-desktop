@@ -16,7 +16,7 @@ diff --git a/node_modules/@deepseek-ai/dsh/package.json b/node_modules/@deepseek
 index 5176856..56c3efd 100644
 --- a/node_modules/@deepseek-ai/dsh/package.json
 +++ b/node_modules/@deepseek-ai/dsh/package.json
-@@ -105,7 +105,22 @@
+@@ -105,7 +105,21 @@
      "@deepseek-ai/dsh-experimental-terminal-bundle": "0.2.1-rc.2",
      "@deepseek-ai/dsh-experimental-session-search": "0.2.1-rc.2",
      "@deepseek-ai/dsh-experimental-tool-worktree": "0.2.1-rc.2",
@@ -35,7 +35,6 @@ index 5176856..56c3efd 100644
 +    "dsh-desktop-onboarding": "0.1.0",
 +    "dsh-desktop-workbenches": "0.1.0",
 +    "dsh-desktop-office": "0.1.0",
-+    "dsh-desktop-skin": "0.1.0",
 +    "dsh-desktop-enterprise": "0.2.0"
    },
    "devDependencies": {
