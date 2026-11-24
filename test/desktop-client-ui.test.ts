@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 const projectRoot = path.resolve(import.meta.dirname, '..')
 
 interface Registration {
-  config: { name: string; id?: string; order?: number }
+  config: { name: string; id?: string; order?: number; inject?: () => Record<string, unknown> }
   component: (props: Record<string, unknown>) => unknown
 }
 
@@ -93,7 +93,10 @@ describe('BISHENG client slot occupants', () => {
         return () => undefined
       }
     }
+    let colorScheme = 'light'
     plugin.apply({
+      theme: { getTheme: () => ({ active: { colorScheme } }) },
+      on: vi.fn(),
       slots,
       locale: {
         register: () => () => undefined,
@@ -103,7 +106,7 @@ describe('BISHENG client slot occupants', () => {
       effect: (setup: () => (() => void) | undefined) => { disposeStyle = setup() }
     })
 
-    expect(plugin.inject).toEqual(['slots', 'locale', 'remote', 'remote.session', 'sessions', 'uiWorkspace', 'layout'])
+    expect(plugin.inject).toEqual(['slots', 'locale', 'remote', 'remote.session', 'sessions', 'uiWorkspace', 'layout', 'theme'])
     expect(registrations.map(({ config }) => config.name)).toEqual([
       'shell.overlay',
       'shell.overlay',
@@ -156,52 +159,45 @@ describe('BISHENG client slot occupants', () => {
     )!.component({})
     expect(sidebarName).toBeNull()
 
-    const sidebarMark = registrations.find(
+    const sidebarRegistration = registrations.find(
       ({ config }) => config.name === 'sidebar.brand.mark'
-    )!.component({ size: 24 }) as { type: unknown; props: Record<string, unknown> }
-    expect(sidebarMark.type).toBe('svg')
+    )!
+    const themeProps = sidebarRegistration.config.inject?.() ?? {}
+    const sidebarMark = sidebarRegistration.component({ ...themeProps, size: 24 }) as { type: unknown; props: Record<string, unknown> }
+    expect(sidebarMark.type).toBe('img')
     expect(sidebarMark.props.width).toBe(17)
     expect(sidebarMark.props.height).toBe(17)
-    const [markField, ...markPaths] = sidebarMark.props.children as Array<{
-      type: unknown
-      props: Record<string, unknown>
-    }>
-    expect(markField?.type).toBe('rect')
-    expect(markField?.props.fill).toBe('#000000')
-    expect(markPaths).toHaveLength(8)
-    expect(markPaths.every(({ type, props }) => type === 'path' && props.fill === 'white')).toBe(true)
+    expect(sidebarMark.props.src).toBe('/dsh-desktop-logo-light.png')
+    expect(sidebarMark.props.alt).toBe('')
 
     const heroMark = registrations.find(
       ({ config }) => config.name === 'conversation.hero.brand.mark'
-    )!.component({ size: 48, className: 'hero-mark', navigation: { subscribe: vi.fn(), snapshot: () => ({}) } }) as {
+    )!.component({ ...themeProps, size: 48, className: 'hero-mark', navigation: { subscribe: vi.fn(), snapshot: () => ({}) } }) as {
       type: unknown
       props: Record<string, unknown>
     }
-    expect(heroMark.type).toBe('svg')
+    expect(heroMark.type).toBe('img')
     expect(heroMark.props.width).toBe(48)
     expect(heroMark.props.height).toBe(48)
-    expect(heroMark.props.viewBox).toBe('0 0 2400 2400')
-    expect(heroMark.props.fill).toBe('none')
+    expect(heroMark.props.src).toBe('/dsh-desktop-logo-light.png')
     expect(heroMark.props.className).toBe('hero-mark')
     expect(heroMark.props.size).toBeUndefined()
-    const heroChildren = heroMark.props.children as Array<{
-      type: unknown
-      props: Record<string, unknown>
-    }>
-    const [heroField, ...heroPaths] = heroChildren
-    expect(heroField?.type).toBe('rect')
-    expect(heroField?.props.fill).toBe('#000000')
-    expect(heroPaths).toHaveLength(8)
-    expect(heroPaths.every(({ type, props }) => type === 'path' && props.fill === 'white')).toBe(true)
+    colorScheme = 'dark'
+    const darkSidebar = sidebarRegistration.component(themeProps) as { props: Record<string, unknown> }
+    expect(darkSidebar.props.src).toBe('/dsh-desktop-logo-dark.png')
+    const darkHero = registrations.find(({ config }) => config.name === 'conversation.hero.brand.mark')!.component({ ...themeProps, size: 48, navigation: { subscribe: vi.fn(), snapshot: () => ({}) } }) as { props: Record<string, unknown> }
+    expect(darkHero.props.src).toBe('/dsh-desktop-logo-dark.png')
+    colorScheme = 'light'
+    expect((sidebarRegistration.component(themeProps) as { props: Record<string, unknown> }).props.src).toBe('/dsh-desktop-logo-light.png')
     const branding = { welcomeMessage: 'Team workspace', assistantIcon: { enabled: true, image: 'https://enterprise.example/custom.svg' } }
     const navigation = { subscribe: vi.fn(), snapshot: () => ({ navigation: { branding } }) }
-    const configuredMark = registrations.find(({ config }) => config.name === 'conversation.hero.brand.mark')!.component({ size: 34, navigation }) as { type: unknown; props: Record<string, unknown> }
+    const configuredMark = registrations.find(({ config }) => config.name === 'conversation.hero.brand.mark')!.component({ ...themeProps, size: 34, navigation }) as { type: unknown; props: Record<string, unknown> }
     expect(configuredMark.type).toBe('img')
     expect(configuredMark.props.src).toBe(branding.assistantIcon.image)
     const configuredTitle = registrations.find(({ config }) => config.name === 'conversation.hero.brand.title')!.component({ navigation, t: (key: string) => key }) as { props: Record<string, unknown> }
     expect(configuredTitle.props.children).toEqual(['Team workspace'])
     branding.assistantIcon.enabled = false
-    expect(registrations.find(({ config }) => config.name === 'conversation.hero.brand.mark')!.component({ size: 34, navigation })).toBeNull()
+    expect(registrations.find(({ config }) => config.name === 'conversation.hero.brand.mark')!.component({ ...themeProps, size: 34, navigation })).toBeNull()
 
   })
 

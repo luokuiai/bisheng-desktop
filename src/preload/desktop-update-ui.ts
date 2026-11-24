@@ -10,7 +10,7 @@ import {
   rollbackEmptyMessage,
   type UpdateLocale
 } from './update-view'
-import brandMark from '../../build/brand-mark.svg?raw'
+import { createAppIcon, mountAppIconTheme } from './app-icon'
 const ROOT_ID = 'dsh-desktop-update-root'
 let locale: UpdateLocale = 'en'
 let detailOpen = false
@@ -512,9 +512,8 @@ const styles = `
   .row { display:flex; gap:12px; align-items:center; }
   .body { min-width:0; flex:1; }
   .centered .row { display:block; }
-  .app-icon { display:inline-flex; width:56px; height:56px; padding:6px; background:#0d1716; color:#fff; border-radius:12px; flex:none; position:relative; }
+  .app-icon { display:inline-flex; width:56px; height:56px; flex:none; position:relative; }
   .app-icon svg { width:100%; height:100%; }
-  .app-icon svg path { fill:currentColor; }
   .notification { padding:16px; }
   .notification .app-icon { width:40px; height:40px; border-radius:9px; }
   .title,.about-title { margin:16px 0 8px; font-size:18px; line-height:26px; font-weight:600; }
@@ -573,11 +572,7 @@ const styles = `
 const aboutStyles = styles
 
 function appIcon(): HTMLSpanElement {
-  const icon = element('span', 'app-icon')
-  icon.setAttribute('aria-hidden', 'true')
-  // Trusted, bundled branding; release text is always assigned with textContent.
-  icon.innerHTML = brandMark
-  return icon
+  return createAppIcon(document)
 }
 
 function onUpdateStatus(_event: Electron.IpcRendererEvent, status: UpdateStatus): void {
@@ -615,7 +610,9 @@ function onKeydown(event: KeyboardEvent): void {
 }
 window.addEventListener('pointerdown', onOutsidePointer)
 window.addEventListener('keydown', onKeydown)
+const disposeIconTheme = mountAppIconTheme(document, () => [content, aboutShadow])
 window.addEventListener('unload', () => {
+  disposeIconTheme()
   window.removeEventListener('pointerdown', onOutsidePointer)
   window.removeEventListener('keydown', onKeydown)
   ipcRenderer.removeListener('updates:status-changed', onUpdateStatus)

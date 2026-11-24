@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 128 128" role="img" aria-labelledby="title description">
+  <title id="title">LUOKUI-AI 冷蓝逆光桌面应用图标</title>
+  <desc id="description">冰蓝逆光勾勒三件深色拉丝金属标志，底部有柔和倒影。</desc>
+
+  <defs>
+    <rect id="tile" x="1" y="1" width="126" height="126" rx="26"/>
+    <clipPath id="tile-clip">
+      <use xlink:href="#tile"/>
+    </clipPath>
+
+    <g id="mark">
+      <circle cx="16" cy="16" r="16"/>
+      <circle cx="16" cy="80" r="16"/>
+      <path d="M48 32 A16 16 0 0 0 64 16 A16 16 0 1 1 80 32 A16 16 0 0 0 80 64 A16 16 0 1 1 64 80 A16 16 0 0 0 48 64 A16 16 0 0 1 48 32 Z"/>
+    </g>
+
+    <linearGradient id="background" gradientUnits="userSpaceOnUse" x1="33" y1="1" x2="88" y2="127">
+      <stop stop-color="#060A12"/>
+      <stop offset=".57" stop-color="#0D1728"/>
+      <stop offset="1" stop-color="#080D17"/>
+    </linearGradient>
+    <radialGradient id="backlight" gradientUnits="userSpaceOnUse" cx="65" cy="104" r="85">
+      <stop stop-color="#CFE9FF"/>
+      <stop offset=".13" stop-color="#9AC9F7"/>
+      <stop offset=".35" stop-color="#5A8AC6" stop-opacity=".9"/>
+      <stop offset=".67" stop-color="#214776" stop-opacity=".52"/>
+      <stop offset="1" stop-color="#172F52" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="floor" gradientUnits="userSpaceOnUse" x1="0" y1="104" x2="0" y2="127">
+      <stop stop-color="#0C192B" stop-opacity=".06"/>
+      <stop offset=".54" stop-color="#0A1424" stop-opacity=".76"/>
+      <stop offset="1" stop-color="#080E19"/>
+    </linearGradient>
+    <radialGradient id="floor-light">
+      <stop stop-color="#B5DFFF" stop-opacity=".49"/>
+      <stop offset=".46" stop-color="#6AB7FF" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#378BFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="reflection-mask-fill" gradientUnits="userSpaceOnUse" x1="0" y1="107" x2="0" y2="125">
+      <stop stop-color="#FFFFFF" stop-opacity=".36"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="reflection-mask" maskUnits="userSpaceOnUse" x="1" y="107" width="126" height="20">
+      <rect x="1" y="107" width="126" height="20" fill="url(#reflection-mask-fill)"/>
+    </mask>
+    <radialGradient id="contact-shadow">
+      <stop stop-color="#050C16" stop-opacity=".8"/>
+      <stop offset=".62" stop-color="#050C16" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#050C16" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="metal-face" gradientUnits="userSpaceOnUse" x1="9" y1="2" x2="78" y2="95">
+      <stop stop-color="#3F5876"/>
+      <stop offset=".34" stop-color="#2A415E"/>
+      <stop offset=".67" stop-color="#172B44"/>
+      <stop offset="1" stop-color="#0B1423"/>
+    </linearGradient>
+    <linearGradient id="metal-side" gradientUnits="userSpaceOnUse" x1="11" y1="7" x2="92" y2="89">
+      <stop stop-color="#2D4E76"/>
+      <stop offset=".46" stop-color="#244269"/>
+      <stop offset=".73" stop-color="#487DBA"/>
+      <stop offset="1" stop-color="#0A1729"/>
+    </linearGradient>
+    <linearGradient id="rim" gradientUnits="userSpaceOnUse" x1="13" y1="12" x2="85" y2="89">
+      <stop stop-color="#D2ECFF"/>
+      <stop offset=".33" stop-color="#8CC9FF"/>
+      <stop offset=".62" stop-color="#68AEFC"/>
+      <stop offset="1" stop-color="#406999"/>
+    </linearGradient>
+    <linearGradient id="tile-edge" gradientUnits="userSpaceOnUse" x1="12" y1="1" x2="110" y2="127">
+      <stop stop-color="#7BA7DC" stop-opacity=".37"/>
+      <stop offset=".52" stop-color="#42658B" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#5C85B6" stop-opacity=".3"/>
+    </linearGradient>
+    <pattern id="brushing" patternUnits="userSpaceOnUse" width="13" height="3.15" patternTransform="rotate(-36)">
+      <path d="M0 .25H13 M0 1.22H5 M6 1.22H13 M2.5 2.42H10" stroke="#B8D7F7" stroke-width=".16" opacity=".12"/>
+      <path d="M0 .74H9 M10 .74H13 M0 1.7H13 M1 2.86H11" stroke="#030910" stroke-width=".17" opacity=".22"/>
+    </pattern>
+  </defs>
+
+  <g id="stage" clip-path="url(#tile-clip)">
+    <use xlink:href="#tile" fill="url(#background)"/>
+    <use xlink:href="#tile" fill="url(#backlight)"/>
+    <rect x="1" y="104" width="126" height="24" fill="url(#floor)"/>
+    <ellipse cx="65" cy="109" rx="54" ry="12" fill="url(#floor-light)"/>
+    <g mask="url(#reflection-mask)">
+      <use xlink:href="#mark" transform="translate(19.6 196.8) scale(.925 -.925)" fill="#101D30"/>
+    </g>
+    <ellipse cx="35.5" cy="107.1" rx="16.5" ry="2" fill="url(#contact-shadow)"/>
+    <ellipse cx="95.3" cy="107.1" rx="16.5" ry="2" fill="url(#contact-shadow)"/>
+  </g>
+
+  <g id="metal-mark">
+    <use xlink:href="#mark" transform="translate(21.1 18.45) scale(.925)" fill="url(#metal-side)"/>
+    <g transform="translate(19.6 17) scale(.925)">
+      <use xlink:href="#mark" fill="url(#metal-face)"/>
+      <use xlink:href="#mark" fill="url(#brushing)"/>
+      <use xlink:href="#mark" fill="none" stroke="url(#rim)" stroke-width="1.1"/>
+    </g>
+  </g>
+
+  <use xlink:href="#tile" fill="none" stroke="url(#tile-edge)" stroke-width=".8"/>
+</svg>
