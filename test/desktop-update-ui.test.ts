@@ -40,6 +40,7 @@ async function mount(initial: Promise<UpdateStatus>) {
   vi.stubGlobal('document', dom.window.document)
   vi.stubGlobal('HTMLElement', dom.window.HTMLElement)
   vi.stubGlobal('ShadowRoot', dom.window.ShadowRoot)
+  vi.stubGlobal('MutationObserver', dom.window.MutationObserver)
   const module = await import('../src/preload/desktop-update-ui')
   module.mountDesktopUpdateUi()
   await Promise.resolve()
@@ -215,5 +216,42 @@ describe('desktop update presentation at the IPC boundary', () => {
     expect(ui.aboutShadow.querySelector('style')?.textContent).toContain('button:focus-visible { outline:2px')
     confirm.click()
     expect(document.activeElement?.id).toBe('origin')
+  })
+
+  it('shows the supplied application artwork in About and update notifications', async () => {
+    const ui = await mount(Promise.resolve(status('idle', { manual: false })))
+    ui.showAbout()
+    ui.emit(status('available', { manual: false, availableVersion: '1.1.0' }))
+    for (const root of [ui.aboutShadow, ui.shadow]) {
+      const icon = required(root.querySelector('.app-icon svg'))
+      expect(icon.getAttribute('viewBox')).toBe('0 0 128 128')
+      expect(icon.querySelectorAll('circle')).toHaveLength(2)
+      expect(icon.querySelector('g')?.getAttribute('fill')).toBe('url(#product-blue)')
+      expect(icon.querySelector('stop')?.getAttribute('stop-color')).toBe('#3392FF')
+      expect(root.querySelector('style')?.textContent).not.toContain('.app-icon svg path { fill:currentColor; }')
+    }
+    document.documentElement.style.colorScheme = 'dark'
+    await Promise.resolve()
+    for (const root of [ui.aboutShadow, ui.shadow]) {
+      const icon = required(root.querySelector('.app-icon svg'))
+      expect(icon.querySelector('#metal-mark')).not.toBeNull()
+      expect(icon.querySelector('#backlight')).not.toBeNull()
+    }
+    document.documentElement.style.colorScheme = 'light'
+    await Promise.resolve()
+    for (const root of [ui.aboutShadow, ui.shadow]) {
+      expect(root.querySelector('.app-icon svg #metal-mark')).toBeNull()
+      expect(root.querySelector('.app-icon svg #product-blue')).not.toBeNull()
+    }
+    ui.emit(status('checking', { presentationId: 8 }))
+    const spinner = required(ui.shadow.querySelector('.spinner'))
+    document.documentElement.style.colorScheme = 'dark'
+    await Promise.resolve()
+    expect(ui.shadow.querySelector('.spinner')).toBe(spinner)
+    expect(ui.shadow.querySelector('.app-icon svg #metal-mark')).not.toBeNull()
+    window.dispatchEvent(new window.Event('unload'))
+    document.documentElement.style.colorScheme = 'light'
+    await Promise.resolve()
+    expect(ui.shadow.querySelector('.app-icon svg #metal-mark')).not.toBeNull()
   })
 })

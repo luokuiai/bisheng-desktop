@@ -1,4 +1,5 @@
 import { createAboutPresentation } from './about-presentation'
+import { APP_ICON_STYLES, createAppIcon, mountAppIconTheme } from './app-icon'
 import { renderSafeModeBannerLocale, type SafeModeBannerElements } from './safe-mode-locale'
 import type { EnterpriseChatPresentation, EnterpriseChatViewState } from '../shared/enterprise-chat-view'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
@@ -442,6 +443,8 @@ function initializeUi(): void {
   }
   mount()
   mountAbout()
+  const disposeIconTheme = mountAppIconTheme(document, () => [content, aboutShadow])
+  window.addEventListener('unload', disposeIconTheme, { once: true })
   mountMobileButton()
   checkBootFailureInDom()
   domObserver.observe(document.documentElement, {
@@ -769,10 +772,10 @@ function render(): void {
   card.setAttribute('aria-label', locale === 'zh' ? 'BISHENG 更新' : 'BISHENG update')
 
   const row = element('div', 'row')
-  const badge = element('span', status.phase === 'error' ? 'badge warning' : 'badge')
-  badge.setAttribute('aria-hidden', 'true')
+  const badge = createAppIcon(document)
+  badge.classList.add('badge')
+  if (status.phase === 'error') badge.classList.add('warning')
   if (isBusy(status)) badge.appendChild(element('span', 'spinner'))
-  else badge.innerHTML = updateIcon
   row.appendChild(badge)
 
   const headline = updateHeadline(status, locale)
@@ -934,6 +937,7 @@ function renderAbout(): void {
 
   // Header row with Title and Close '×'
   const header = element('div', 'about-header')
+  header.appendChild(createAppIcon(document))
   const title = element('h2', 'about-title')
   title.textContent = zh ? '关于 BISHENG' : 'About BISHENG'
   header.appendChild(title)
@@ -996,6 +1000,7 @@ function button(label: string, className: string): HTMLButtonElement {
 }
 
 const styles = `
+  ${APP_ICON_STYLES}
   :host { color-scheme: light dark; }
   * { box-sizing: border-box; }
   .card {
@@ -1033,6 +1038,8 @@ const styles = `
     background: rgba(46, 160, 67, 0.14);
   }
   .badge.warning { color: #d29922; background: rgba(210, 153, 34, 0.16); }
+  .badge.app-icon { background:transparent; border-radius:0; }
+  .app-icon .spinner { position:absolute; top:7px; left:7px; }
   .spinner {
     width: 16px;
     height: 16px;
@@ -1120,8 +1127,6 @@ const styles = `
   }
 `
 
-const updateIcon = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true"><path d="M4.6 12a7.4 7.4 0 0 1 12.6-5.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M19.4 12a7.4 7.4 0 0 1-12.6 5.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M17.6 3.5v3.4h-3.4M6.4 20.5v-3.4h3.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-
 const phoneIcon = `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true"><rect x="7" y="2.75" width="10" height="18.5" rx="2.25" stroke="currentColor" stroke-width="1.7"/><path d="M10.2 5.5h3.6M10.5 18.35h3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`
 
 /**
@@ -1147,6 +1152,7 @@ const mobileButtonStyles = `
 `
 
 const aboutStyles = `
+  ${APP_ICON_STYLES}
   :host { color-scheme: light dark; }
   * { box-sizing: border-box; }
   .about-overlay {
@@ -1176,9 +1182,11 @@ const aboutStyles = `
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap:12px;
     margin-bottom: 14px;
   }
   .about-title {
+    flex:1;
     margin: 0;
     font-size: 15px;
     font-weight: 650;
