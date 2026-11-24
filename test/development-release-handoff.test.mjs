@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import os from 'node:os'
@@ -6,7 +7,9 @@ import path from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { afterEach, expect, it } from 'vitest'
 import YAML from 'yaml'
+import { findFile, parseUpdateInfo, resolveFiles } from 'electron-updater/out/providers/Provider.js'
 import { developmentAssets } from '../scripts/stage-development-assets.mjs'
+import { prepareDevelopmentUpdateAssets } from '../scripts/prepare-development-update-assets.mjs'
 
 const temporaryDirectories = []
 async function temporaryDirectory() {
@@ -40,6 +43,56 @@ it('keeps release handoff on draft Releases', async () => {
 })
 
 it.each([
+  ['mac-arm64', ['bisheng-dev-mac-arm64.dmg', 'bisheng-dev-mac-arm64.zip'], 'latest-mac-arm64.yml', 'zip'],
+  ['mac-x64', ['bisheng-dev-mac-x64.dmg', 'bisheng-dev-mac-x64.zip'], 'latest-mac-x64.yml', 'zip'],
+  ['windows-x64', ['bisheng-dev-windows-x64-setup.exe'], 'latest.yml', 'exe']
+])('exports %s metadata matching the actual updater package', async (target, names, metadataName, extension) => {
+  const directory = await temporaryDirectory()
+  for (const name of names) await writeFile(path.join(directory, name), `package bytes for ${name}`)
+  const assets = await prepareDevelopmentUpdateAssets(directory, target, '1.2.3-dev.7')
+  const updatePackage = names.at(-1)
+  const bytes = await readFile(path.join(directory, updatePackage))
+  const digest = createHash('sha512').update(bytes).digest('base64')
+  expect(assets).toEqual({ metadata: path.join(directory, metadataName), updatePackage: path.join(directory, updatePackage) })
+  const contents = await readFile(assets.metadata, 'utf8')
+  const baseUrl = new URL('https://updates.example.test/development/')
+  const info = parseUpdateInfo(contents, metadataName, baseUrl)
+  expect(info).toMatchObject({
+    version: '1.2.3-dev.7',
+    files: [{ url: updatePackage, sha512: digest, size: bytes.length }],
+    path: updatePackage,
+    sha512: digest
+  })
+  expect(Number.isNaN(Date.parse(info.releaseDate))).toBe(false)
+  expect(findFile(resolveFiles(info, baseUrl), extension).url.href).toBe(new URL(updatePackage, baseUrl).href)
+  await prepareDevelopmentUpdateAssets(directory, target, '1.2.3-dev.7')
+  expect(await readFile(assets.metadata, 'utf8')).toBe(contents)
+})
+
+it('rejects missing or empty update packages and unsupported targets', async () => {
+  const directory = await temporaryDirectory()
+  await writeFile(path.join(directory, 'bisheng-dev-mac-arm64.dmg'), 'installer')
+  await expect(prepareDevelopmentUpdateAssets(directory, 'mac-arm64', '1.2.3')).rejects.toMatchObject({ code: 'ENOENT' })
+  await writeFile(path.join(directory, 'bisheng-dev-mac-arm64.zip'), '')
+  await expect(prepareDevelopmentUpdateAssets(directory, 'mac-arm64', '1.2.3')).rejects.toThrow('empty development installer')
+  await expect(prepareDevelopmentUpdateAssets(directory, 'linux-x64', '1.2.3')).rejects.toThrow('Unknown development target')
+  await expect(readFile(path.join(directory, 'latest-mac-arm64.yml'))).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('exports artifact step outputs and reads the application version in the CLI', async () => {
+  const directory = await temporaryDirectory()
+  await writeFile(path.join(directory, 'bisheng-dev-windows-x64-setup.exe'), 'installer')
+  const output = path.join(directory, 'step-output')
+  execFileSync(process.execPath, [
+    path.resolve(import.meta.dirname, '../scripts/prepare-development-update-assets.mjs'), 'windows-x64', directory
+  ], { env: { ...process.env, GITHUB_OUTPUT: output } })
+  expect(await readFile(output, 'utf8')).toBe('metadata=latest.yml\n')
+  const metadata = YAML.parse(await readFile(path.join(directory, 'latest.yml'), 'utf8'))
+  const application = JSON.parse(await readFile(path.resolve(import.meta.dirname, '../package.json'), 'utf8'))
+  expect(metadata.version).toBe(application.version)
+})
+
+it.each([
   [undefined, '-', 'false'],
   ['', '-', 'false'],
   ['  ', '-', 'false'],
@@ -62,7 +115,7 @@ it.each([
   expect(env.CSC_LINK).toBe(identity === '-' ? undefined : certificate)
 })
 
-it('packages PRs and develop pushes, and uploads the original installers only on develop pushes', async () => {
+it('packages PRs and develop pushes, and uploads original-format assets only on develop pushes', async () => {
   const source = await readFile(path.resolve(import.meta.dirname, '../.github/workflows/desktop-build.yml'), 'utf8')
   const workflow = YAML.parse(source)
   expect(workflow.on).toEqual({
@@ -98,6 +151,30 @@ it('packages PRs and develop pushes, and uploads the original installers only on
   expect(shouldUpload({ event_name: 'pull_request', ref: 'refs/pull/1/merge' })).toBe(false)
   expect(shouldUpload({ event_name: 'push', ref: 'refs/heads/develop' })).toBe(true)
   expect(shouldUpload({ event_name: 'push', ref: 'refs/heads/main' })).toBe(false)
+})
+
+it('only adds update YAML artifacts with the installer retention rules', async () => {
+  const { steps } = YAML.parse(await readFile(path.resolve(import.meta.dirname, '../.github/workflows/desktop-build.yml'), 'utf8')).jobs.build
+  const prepare = steps.find(step => step.id === 'updates')
+  expect(prepare.run).toBe('node scripts/prepare-development-update-assets.mjs ${{ matrix.target }}')
+  const shouldPrepare = new Function('github', `return (${prepare.if})`)
+  expect(shouldPrepare({ event_name: 'pull_request', ref: 'refs/pull/1/merge' })).toBe(false)
+  expect(shouldPrepare({ event_name: 'push', ref: 'refs/heads/develop' })).toBe(true)
+  expect(shouldPrepare({ event_name: 'push', ref: 'refs/heads/main' })).toBe(false)
+  expect(steps.indexOf(prepare)).toBeGreaterThan(steps.findIndex(step => step.name === 'Verify app signature inside the macOS installer'))
+  const uploads = steps.filter(step => step.uses === 'actions/upload-artifact@v7')
+  expect(uploads).toHaveLength(2)
+  for (const upload of uploads) {
+    expect(steps.indexOf(upload)).toBeGreaterThan(steps.indexOf(prepare))
+    expect(upload.with).toMatchObject({ archive: false, overwrite: true, 'retention-days': 1 })
+    const shouldUpload = new Function('github', `return (${upload.if})`)
+    expect(shouldUpload({ event_name: 'pull_request', ref: 'refs/pull/1/merge' })).toBe(false)
+    expect(shouldUpload({ event_name: 'push', ref: 'refs/heads/develop' })).toBe(true)
+    expect(shouldUpload({ event_name: 'push', ref: 'refs/heads/main' })).toBe(false)
+  }
+  const metadata = steps.find(step => step.name === 'Upload development update metadata')
+  expect(metadata.with).toMatchObject({ name: '${{ steps.updates.outputs.metadata }}', path: 'dist-dev/${{ steps.updates.outputs.metadata }}', 'if-no-files-found': 'error' })
+  expect(uploads.map(step => step.with.path)).toEqual(['dist-dev/${{ matrix.installer }}', 'dist-dev/${{ steps.updates.outputs.metadata }}'])
 })
 
 it('only supplies macOS certificate secrets to develop push packaging', async () => {

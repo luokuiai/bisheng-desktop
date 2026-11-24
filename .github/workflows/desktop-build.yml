@@ -59,12 +59,26 @@ jobs:
           hdiutil attach "$INSTALLER" -readonly -nobrowse -mountpoint "$mount_point"
           trap 'hdiutil detach "$mount_point" >/dev/null' EXIT
           codesign --verify --deep --strict --verbose=2 "$mount_point/BISHENG Dev.app"
+      - name: Prepare development update metadata
+        id: updates
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        run: node scripts/prepare-development-update-assets.mjs ${{ matrix.target }}
       - name: Upload development installer
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.installer }}
           path: dist-dev/${{ matrix.installer }}
+          if-no-files-found: error
+          retention-days: 1
+          archive: false
+          overwrite: true
+      - name: Upload development update metadata
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.updates.outputs.metadata }}
+          path: dist-dev/${{ steps.updates.outputs.metadata }}
           if-no-files-found: error
           retention-days: 1
           archive: false
