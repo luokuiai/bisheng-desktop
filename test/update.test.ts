@@ -40,7 +40,7 @@ describe('desktop update policy', () => {
 })
 
 describe('macOS update metadata', () => {
-  it('merges both architectures and keeps only ZIP update payloads', async () => {
+  it('merges both architectures with ZIP payloads and verified DMG installation entries', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'dsh-update-metadata-'))
     temporaryRoots.push(root)
     const armPath = path.join(root, 'latest-mac-arm64.yml')
@@ -70,7 +70,9 @@ describe('macOS update metadata', () => {
     }
     expect(merged.version).toBe('0.2.0')
     expect(merged.files.map((file) => file.url)).toEqual([
+      'bisheng-mac-arm64.dmg',
       'bisheng-mac-arm64.zip',
+      'bisheng-mac-x64.dmg',
       'bisheng-mac-x64.zip'
     ])
     expect(merged.path).toBe('bisheng-mac-arm64.zip')

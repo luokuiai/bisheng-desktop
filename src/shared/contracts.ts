@@ -32,6 +32,7 @@ export type UpdatePhase =
 
 export interface UpdateStatus {
   phase: UpdatePhase
+  installationMode?: 'automatic' | 'manual'
   currentVersion: string
   availableVersion?: string
   percent?: number

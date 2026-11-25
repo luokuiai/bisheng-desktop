@@ -2,6 +2,21 @@ import type { AvailableRelease, UpdateStatus } from '../shared/contracts'
 
 export type UpdateLocale = 'en' | 'zh'
 
+export function updateDownloadLabel(status: UpdateStatus, locale: UpdateLocale): string {
+  if (status.installationMode === 'manual') return locale === 'zh' ? '下载新版' : 'Download new version'
+  return locale === 'zh' ? '更新' : 'Update'
+}
+
+export function updateInstallLabel(status: UpdateStatus, locale: UpdateLocale, busy = false): string {
+  const zh = locale === 'zh'
+  if (status.installationMode === 'manual') {
+    if (busy) return zh ? '正在打开并退出…' : 'Opening and quitting…'
+    return zh ? '打开安装包并退出' : 'Open installer and quit'
+  }
+  if (busy) return zh ? '正在重启…' : 'Restarting…'
+  return zh ? '重新启动并安装' : 'Restart and install'
+}
+
 export function shouldShowUpdate(status: UpdateStatus, allowManualPresentation = true): boolean {
   if (['available', 'downloading', 'downloaded'].includes(status.phase)) return true
   return allowManualPresentation && status.manual && ['checking', 'up-to-date', 'error', 'unsupported'].includes(status.phase)
@@ -60,6 +75,14 @@ export function updateHeadline(status: UpdateStatus, locale: UpdateLocale): Upda
         description: zh ? `${version} · ${Math.round(status.percent ?? 0)}%` : `${version} · ${Math.round(status.percent ?? 0)}%`
       }
     case 'downloaded':
+      if (status.installationMode === 'manual') {
+        return {
+          title: zh ? '更新已就绪' : 'Update ready',
+          description: zh
+            ? `${version} 已下载完成，请先保存工作。点击“打开安装包并退出”后，BISHENG 将打开安装包并自动退出。然后将新版拖到“应用程序”并替换旧版本。`
+            : `${version} has downloaded. Save your work first. Click “Open installer and quit” to open the installer and automatically quit BISHENG. Then drag the new app to Applications and replace the old version.`
+        }
+      }
       return {
         title: zh ? '更新已就绪' : 'Update ready',
         description: zh

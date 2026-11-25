@@ -10,7 +10,7 @@ export function mergeMacUpdateMetadata(arm64, x64) {
   }
 
   const files = deduplicateFiles([...arm64.files, ...x64.files]).filter((file) =>
-    file.url.endsWith('.zip')
+    file.url.endsWith('.zip') || file.url.endsWith('.dmg')
   )
   const primary = files.find((file) => file.url.includes('arm64') && file.url.endsWith('.zip'))
   if (!primary) throw new Error('Merged macOS update metadata has no Apple Silicon ZIP')

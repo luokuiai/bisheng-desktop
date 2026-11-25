@@ -1,5 +1,9 @@
-import { app, BrowserWindow, ipcMain, powerMonitor } from 'electron'
+import { app, BrowserWindow, ipcMain, powerMonitor, type IpcMainInvokeEvent } from 'electron'
 import electronUpdater from 'electron-updater'
+import type { AppUpdater } from 'electron-updater'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { MacInstallerUpdater } from './mac-installer-updater'
 import type { UpdateStatus } from '../../shared/contracts'
 import {
   AUTO_INSTALL_ON_APP_QUIT,
@@ -22,12 +26,15 @@ import {
   writeSkippedVersion
 } from './skipped-version'
 
-const { autoUpdater } = electronUpdater
+let autoUpdater: AppUpdater
+let macInstallerUpdater: MacInstallerUpdater | undefined
+let updaterReady = Promise.resolve()
 const TRANSIENT_STATUS_MS = 8_000
 const UPDATES_UNAVAILABLE_MESSAGE = 'Online updates are unavailable in this build.'
 
 let status = initialUpdateStatus(app.getVersion())
-let prepareToInstall: (() => Promise<void>) | undefined
+type PrepareToInstall = (mode: 'manual' | 'automatic') => Promise<void>
+let prepareToInstall: PrepareToInstall | undefined
 let startupTimer: NodeJS.Timeout | undefined
 let intervalTimer: NodeJS.Timeout | undefined
 let checkPromise: Promise<unknown> | undefined
@@ -41,18 +48,23 @@ let skippedVersion: string | undefined
 let skipLoaded = false
 let manualCheck = false
 let manualCheckRequested = false
+let packagedFeedEnabled: boolean | undefined
 
 export function getUpdateStatus(): UpdateStatus {
-  return { ...status, locale: updateLocale?.() }
+  return { ...status, installationMode: process.platform === 'darwin' ? 'manual' : 'automatic', locale: updateLocale?.() }
 }
 
-export function registerUpdateHandlers(options: { locale?: () => 'en' | 'zh' } = {}): void {
+export function registerUpdateHandlers(options: { locale?: () => 'en' | 'zh'; assertTrusted?: (event: IpcMainInvokeEvent) => void } = {}): void {
   updateLocale = options.locale ?? updateLocale
   if (handlersRegistered) return
   handlersRegistered = true
   ipcMain.handle('updates:status', () => getUpdateStatus())
   ipcMain.handle('updates:check', () => checkForUpdates(true))
-  ipcMain.handle('updates:install', () => installDownloadedUpdate())
+  ipcMain.handle('updates:install', event => {
+    if (!options.assertTrusted) throw new Error('The update install handler requires a trusted main-window sender.')
+    options.assertTrusted(event)
+    return installDownloadedUpdate()
+  })
   ipcMain.handle('updates:skip', (_event, version: unknown) => skipUpdate(version))
   ipcMain.handle('updates:download', () => downloadAvailableUpdate())
 }
@@ -84,7 +96,7 @@ export function skipUpdate(version: unknown): UpdateStatus {
   return getUpdateStatus()
 }
 
-export function startUpdateManager(options: { prepareToInstall: () => Promise<void> }): void {
+export function startUpdateManager(options: { prepareToInstall: PrepareToInstall }): void {
   prepareToInstall = options.prepareToInstall
   if (started) return
   started = true
@@ -97,7 +109,16 @@ export function startUpdateManager(options: { prepareToInstall: () => Promise<vo
     return
   }
 
-  configureUpdater()
+  updaterReady = (async () => {
+    if (process.platform === 'darwin') {
+      const { MacInstallerUpdater } = await import('./mac-installer-updater')
+      macInstallerUpdater = new MacInstallerUpdater()
+      autoUpdater = macInstallerUpdater
+    } else {
+      autoUpdater = electronUpdater.autoUpdater
+    }
+    configureUpdater()
+  })().catch(error => transition({ type: 'error', message: errorMessage(error) }))
   startupTimer = setTimeout(
     () => void checkForUpdates(false, 'startup'),
     UPDATE_STARTUP_DELAY_MS + Math.random() * UPDATE_STARTUP_JITTER_MS
@@ -119,6 +140,9 @@ export async function checkForUpdates(manual = false, source: UpdateStatus['sour
     )
     return getUpdateStatus()
   }
+
+  await updaterReady
+  if (!autoUpdater) return getUpdateStatus()
 
   if (checkPromise) {
     if (manual) {
@@ -185,7 +209,14 @@ export async function installDownloadedUpdate(): Promise<void> {
   installing = true
 
   try {
-    await prepareToInstall?.()
+    if (macInstallerUpdater) {
+      await macInstallerUpdater.openInstaller()
+      await prepareToInstall?.('manual')
+      // Use the normal quit lifecycle to flush storage and dispose all bridges.
+      app.quit()
+      return
+    }
+    await prepareToInstall?.('automatic')
     autoUpdater.quitAndInstall(false, true)
   } catch (error) {
     installing = false
@@ -257,7 +288,18 @@ function checkAfterResume(): void {
 }
 
 function supportsUpdates(): boolean {
-  return supportsAutoUpdates(app.isPackaged, process.platform)
+  if (!supportsAutoUpdates(app.isPackaged, process.platform)) return false
+  if (packagedFeedEnabled === undefined) {
+    try {
+      const metadata: unknown = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8'))
+      packagedFeedEnabled = typeof metadata === 'object' && metadata !== null &&
+        'dshDesktopUpdatesEnabled' in metadata && metadata.dshDesktopUpdatesEnabled === true
+    } catch (error) {
+      console.warn('[updater] Could not read packaged update policy; online updates disabled.', error)
+      packagedFeedEnabled = false
+    }
+  }
+  return packagedFeedEnabled
 }
 
 function errorMessage(error: unknown): string {

@@ -10,6 +10,8 @@ import {
   isUpdateDismissed,
   shouldShowUpdate,
   updateHeadline,
+  updateDownloadLabel,
+  updateInstallLabel,
   type UpdateLocale
 } from './update-view'
 import { isPluginLoadError } from './plugin-error-view'
@@ -804,7 +806,7 @@ function render(): void {
 
   if (status.phase === 'available') {
     const actions = element('div', 'actions')
-    const accept = button(locale === 'zh' ? '同意更新' : 'Update now', 'primary')
+    const accept = button(status.installationMode === 'manual' ? updateDownloadLabel(status, locale) : locale === 'zh' ? '同意更新' : 'Update now', 'primary')
     accept.disabled = accepting
     accept.addEventListener('click', () => {
       accepting = true
@@ -827,16 +829,7 @@ function render(): void {
 
   if (status.phase === 'downloaded') {
     const actions = element('div', 'actions')
-    const install = button(
-      installing
-        ? locale === 'zh'
-          ? '正在重启…'
-          : 'Restarting…'
-        : locale === 'zh'
-          ? '重新启动并安装'
-          : 'Restart and install',
-      'primary'
-    )
+    const install = button(updateInstallLabel(status, locale, installing), 'primary')
     install.disabled = installing
     install.addEventListener('click', () => {
       installing = true

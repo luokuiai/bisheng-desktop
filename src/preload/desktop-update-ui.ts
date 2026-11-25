@@ -5,6 +5,8 @@ import {
   isNewManualPresentation,
   shouldShowUpdate,
   updateHeadline,
+  updateDownloadLabel,
+  updateInstallLabel,
   comparePreloadVersions,
   rollbackReleases,
   rollbackEmptyMessage,
@@ -174,7 +176,7 @@ function render(): void {
 
   if (status.phase === 'available') {
     const actions = element('div', 'actions')
-    const accept = button(locale === 'zh' ? '更新' : 'Update', 'primary')
+    const accept = button(updateDownloadLabel(status, locale), 'primary')
     accept.disabled = accepting
     accept.addEventListener('click', () => {
       accepting = true
@@ -201,16 +203,7 @@ function render(): void {
 
   if (status.phase === 'downloaded') {
     const actions = element('div', 'actions')
-    const install = button(
-      installing
-        ? locale === 'zh'
-          ? '正在重启…'
-          : 'Restarting…'
-        : locale === 'zh'
-          ? '重新启动并安装'
-          : 'Restart and install',
-      'primary'
-    )
+    const install = button(updateInstallLabel(status, locale, installing), 'primary')
     install.disabled = installing
     install.addEventListener('click', () => {
       installing = true

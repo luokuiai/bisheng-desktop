@@ -14,7 +14,8 @@ it('gates Windows builds on shared checks while retaining native coverage', asyn
   expect(jobs['windows-preflight'].needs).toBe('validate-dispatch')
   expect(jobs['windows-x64'].needs).toBe('windows-preflight')
   expect(jobs['windows-preflight'].if).toBe(jobs['windows-x64'].if)
-  expect(jobs['windows-preflight']['runs-on']).toEqual(['self-hosted', 'macOS', 'bisheng-windows'])
+  expect(jobs['windows-preflight']['runs-on']).toBe('ubuntu-24.04')
+  expect(jobs['windows-x64']['runs-on']).toBe('windows-2022')
   expect(jobs['windows-preflight'].steps.some(item => item.run === 'npm run typecheck')).toBe(true)
   expect(jobs['windows-x64'].steps.some(item => item.run === 'npm run typecheck')).toBe(false)
   const checks = step('windows-preflight', 'Check Windows release tooling').run
@@ -64,56 +65,71 @@ it('reuses checkout history and installs formal release note tooling once', () =
   expect(steps.some(item => item.run?.includes('git fetch --force --tags'))).toBe(false)
 })
 
-it('builds signed installers once on the signer and preserves development installers', async () => {
-  const { scripts } = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
-  expect(scripts['package:win:unpacked']).toBe('node scripts/verify-target.mjs win32 x64 && npm run build && node scripts/electron-builder-windows.mjs --win --x64 --dir --publish never')
+it('builds and stages unsigned Windows installers directly and preserves development installers', () => {
   const build = step('windows-x64', 'Build Windows application once').run
   expect(build).toBe('node scripts/verify-target.mjs win32 x64 && npm run build')
-  expect(step('windows-x64', 'Build Windows release package').run).toBe('node scripts/electron-builder-windows.mjs --win --x64 --dir --publish never')
+  expect(step('windows-x64', 'Build Windows release package').run).toBe('node scripts/electron-builder-windows.mjs --win --x64 --publish never')
   expect(step('windows-x64', 'Build isolated Windows development package').run).toBe('node scripts/electron-builder-windows.mjs --win --x64 --publish never --config electron-builder.dev.cjs')
-  expect(step('windows-x64', 'Archive unpacked Windows release for inner binary signing').run)
-    .toBe('node scripts/archive-windows-unpacked.mjs')
   const upload = step('windows-x64', 'Stage unsigned Windows assets in draft release').run
-  expect(upload).toContain('dist/win-unpacked.tar.gz')
-  expect(upload).not.toContain('setup.exe')
-  expect(upload).not.toContain('latest.yml')
-  const sign = step('sign-windows', 'Sign Windows installer with SafeNet UKey').run
-  expect(sign.indexOf('sign-windows-unpacked.mjs')).toBeLessThan(sign.indexOf('electron-builder-windows.mjs'))
-  expect(sign).toContain('--prepackaged "$WINDOWS_SIGNING_WORK_DIR/release/win-unpacked"')
-  expect(step('sign-windows', 'Rebuild Windows update metadata').run).toContain('finalize-windows-release.mjs')
+  for (const asset of ['bisheng-windows-x64-setup.exe', 'bisheng-windows-x64-setup.exe.blockmap', 'latest.yml']) {
+    expect(upload).toContain(`dist/${asset}`)
+  }
+  expect(upload).not.toContain('win-unpacked.tar.gz')
+  expect(jobs['windows-x64'].steps.some(item => item.run?.includes('archive-windows-unpacked.mjs'))).toBe(false)
+  expect(jobs['sign-windows']).toBeUndefined()
+  for (const name of ['publish', 'publish-prerelease', 'publish-signed']) {
+    expect(jobs[name].needs).toEqual(['macos', 'windows-x64'])
+    expect(jobs[name].if).toContain("needs.macos.result == 'success'")
+    expect(jobs[name].if).toContain("needs.windows-x64.result == 'success'")
+  }
 })
 
-it.skipIf(process.platform === 'win32')('downloads only the unpacked handoff and rejects corrupted content before signing', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'windows-signing-handoff-'))
+it.skipIf(process.platform === 'win32')('verifies downloaded platform assets and rejects corruption before publication', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'release-publish-handoff-'))
   try {
     await mkdir(path.join(directory, 'scripts'))
     await copyFile(path.join(root, 'scripts/verify-release-staging.mjs'), path.join(directory, 'scripts/verify-release-staging.mjs'))
-    const bytes = Buffer.from('unsigned Windows payload')
+    const bytes = Buffer.from('release platform payload')
     const digest = createHash('sha256').update(bytes).digest('hex')
+    const names = [
+      'bisheng-mac-arm64.dmg', 'bisheng-mac-arm64.zip',
+      'bisheng-mac-arm64.zip.blockmap', 'latest-mac-arm64.yml',
+      'bisheng-mac-x64.dmg', 'bisheng-mac-x64.zip',
+      'bisheng-mac-x64.zip.blockmap', 'latest-mac-x64.yml',
+      'bisheng-windows-x64-setup.exe',
+      'bisheng-windows-x64-setup.exe.blockmap', 'latest.yml'
+    ]
+    const assets = names.map(name => ({ name, size: bytes.length, digest: `sha256:${digest}` }))
     await writeFile(path.join(directory, 'payload'), bytes)
     await writeFile(path.join(directory, 'gh'), `#!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path')
 const args = process.argv.slice(2)
+const assets = ${JSON.stringify(assets)}
 if (args[1] === 'download') {
   const patterns = args.flatMap((arg, i) => arg === '--pattern' ? [args[i + 1]] : [])
-  if (JSON.stringify(patterns) !== JSON.stringify(['win-unpacked.tar.gz'])) process.exit(2)
+  if (JSON.stringify(patterns) !== JSON.stringify(['bisheng-*', 'latest*.yml'])) process.exit(2)
   const directory = args[args.indexOf('--dir') + 1]
   fs.mkdirSync(directory, { recursive: true })
-  fs.copyFileSync('payload', path.join(directory, 'win-unpacked.tar.gz'))
+  for (const { name } of assets) fs.copyFileSync('payload', path.join(directory, name))
 } else if (args[1] === 'view') {
-  process.stdout.write(JSON.stringify({isDraft:true,assets:[{name:'win-unpacked.tar.gz',size:${bytes.length},digest:'sha256:${digest}'}]}))
+  process.stdout.write(JSON.stringify({isDraft:true,assets}))
 } else process.exit(3)
 `, { mode: 0o755 })
     const env = {
       ...process.env,
       PATH: `${directory}${path.delimiter}${process.env.PATH}`,
-      RELEASE_TAG: '1.0.4-test.1', GITHUB_REPOSITORY: 'example/desktop',
-      WINDOWS_SIGNING_WORK_DIR: path.join(directory, 'staging')
+      GITHUB_REF_NAME: 'v1.0.4', GITHUB_REPOSITORY: 'example/desktop'
     }
-    const script = step('sign-windows', 'Download unsigned Windows assets from draft release').run
-    execFileSync('bash', ['-c', script], { cwd: directory, env, stdio: 'pipe' })
+    const download = step('publish', 'Download verified platform assets from draft release')
+    for (const name of ['Upload macOS ARM64 update ZIP', 'Publish verified GitHub release']) {
+      const publishIndex = jobs.publish.steps.findIndex(item => item.name === name)
+      expect(publishIndex).toBeGreaterThan(jobs.publish.steps.indexOf(download))
+    }
+    const script = download.run
+    expect(execFileSync('bash', ['-c', script], { cwd: directory, env, encoding: 'utf8', stdio: 'pipe' }))
+      .toContain(`Verified ${names.length} draft release assets for v1.0.4`)
     await writeFile(path.join(directory, 'payload'), Buffer.alloc(bytes.length, 'x'))
-    expect(() => execFileSync('bash', ['-c', script], { cwd: directory, env, stdio: 'pipe' })).toThrow()
+    expect(() => execFileSync('bash', ['-c', script], { cwd: directory, env, stdio: 'pipe' })).toThrow(/SHA-256 mismatch/)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

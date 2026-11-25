@@ -6,7 +6,9 @@ import {
   rollbackEmptyMessage,
   isNewManualPresentation,
   shouldShowUpdate,
+  updateDownloadLabel,
   updateHeadline,
+  updateInstallLabel,
   updateMessage
 } from '../src/preload/update-view'
 
@@ -24,6 +26,50 @@ const downloaded: UpdateStatus = {
   availableVersion: '1.1.0',
   manual: false
 }
+
+describe('update installation copy', () => {
+  it.each(['zh', 'en'] as const)('labels manual installation actions in %s', locale => {
+    const status: UpdateStatus = { ...downloaded, installationMode: 'manual' }
+    expect(updateDownloadLabel(status, locale)).toBe(locale === 'zh' ? '下载新版' : 'Download new version')
+    expect(updateInstallLabel(status, locale)).toBe(locale === 'zh' ? '打开安装包并退出' : 'Open installer and quit')
+    expect(updateInstallLabel(status, locale, true)).toBe(locale === 'zh' ? '正在打开并退出…' : 'Opening and quitting…')
+  })
+
+  it.each(['zh', 'en'] as const)('preserves automatic and legacy action labels in %s', locale => {
+    for (const installationMode of [undefined, 'automatic'] as const) {
+      const status: UpdateStatus = { ...downloaded, manual: true, installationMode }
+      expect(updateDownloadLabel(status, locale)).toBe(locale === 'zh' ? '更新' : 'Update')
+      expect(updateInstallLabel(status, locale)).toBe(locale === 'zh' ? '重新启动并安装' : 'Restart and install')
+      expect(updateInstallLabel(status, locale, true)).toBe(locale === 'zh' ? '正在重启…' : 'Restarting…')
+    }
+  })
+
+  it('explains how to replace the app after a manual download in both languages', () => {
+    const status: UpdateStatus = { ...downloaded, installationMode: 'manual' }
+    expect(updateHeadline(status, 'zh')).toEqual({
+      title: '更新已就绪',
+      description: 'v1.1.0 已下载完成，请先保存工作。点击“打开安装包并退出”后，BISHENG 将打开安装包并自动退出。然后将新版拖到“应用程序”并替换旧版本。'
+    })
+    expect(updateHeadline(status, 'en')).toEqual({
+      title: 'Update ready',
+      description: 'v1.1.0 has downloaded. Save your work first. Click “Open installer and quit” to open the installer and automatically quit BISHENG. Then drag the new app to Applications and replace the old version.'
+    })
+  })
+
+  it('preserves automatic and legacy downloaded headlines', () => {
+    for (const installationMode of [undefined, 'automatic'] as const) {
+      const status: UpdateStatus = { ...downloaded, installationMode }
+      expect(updateHeadline(status, 'zh')).toEqual({
+        title: '更新已就绪',
+        description: 'v1.1.0 将在重启后生效。'
+      })
+      expect(updateHeadline(status, 'en')).toEqual({
+        title: 'Update ready',
+        description: 'v1.1.0 will be applied on next launch.'
+      })
+    }
+  })
+})
 
 describe('desktop update card visibility', () => {
   it('shows automatic downloads but keeps automatic background checks quiet', () => {

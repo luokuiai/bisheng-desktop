@@ -63,6 +63,45 @@ afterEach(() => {
 const status = (phase: UpdateStatus['phase'], extra: Partial<UpdateStatus> = {}): UpdateStatus => ({ phase, currentVersion: '1.0.0', manual: true, presentationId: 7, ...extra })
 
 describe('desktop update presentation at the IPC boundary', () => {
+  it.each(['zh', 'en'] as const)('opens manual installers from an explicit %s quit action and stays busy until exit', async locale => {
+    const ui = await mount(Promise.resolve(status('idle', { manual: false, locale })))
+    const manual = { manual: false, installationMode: 'manual' as const, availableVersion: '1.1.0', locale }
+    ui.emit(status('available', manual))
+    const download = required(Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === (locale === 'zh' ? '下载新版' : 'Download new version')))
+    download.click()
+    expect(ipc.invoke).toHaveBeenCalledWith('updates:download')
+    ui.emit(status('downloaded', manual))
+    expect(ui.shadow.textContent).toContain(locale === 'zh' ? '请先保存工作' : 'Save your work first')
+    const label = locale === 'zh' ? '打开安装包并退出' : 'Open installer and quit'
+    const install = () => required(Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === label))
+    let finish: (() => void) | undefined
+    ipc.invoke.mockImplementation(() => new Promise<void>(resolve => { finish = resolve }))
+    install().click()
+    expect(ipc.invoke).toHaveBeenLastCalledWith('updates:install')
+    expect(ui.shadow.textContent).toContain(locale === 'zh' ? '正在打开并退出…' : 'Opening and quitting…')
+    finish?.()
+    await Promise.resolve()
+    const busy = required(ui.shadow.querySelector<HTMLButtonElement>('.primary'))
+    expect(busy.disabled).toBe(true)
+    busy.click()
+    expect(ipc.invoke.mock.calls.filter(([channel]) => channel === 'updates:install')).toHaveLength(1)
+  })
+
+  it.each(['zh', 'en'] as const)('reports an installer open failure in %s and permits a retry', async locale => {
+    const ui = await mount(Promise.resolve(status('idle', { manual: false, locale })))
+    const manual = { manual: false, installationMode: 'manual' as const, availableVersion: '1.1.0', locale }
+    ui.emit(status('downloaded', manual))
+    const label = locale === 'zh' ? '打开安装包并退出' : 'Open installer and quit'
+    const install = () => required(Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === label))
+    ipc.invoke.mockRejectedValueOnce(new Error('Installer could not be opened'))
+    install().click()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(ui.shadow.textContent).toContain('Installer could not be opened')
+    ui.emit(status('downloaded', manual))
+    expect(install().disabled).toBe(false)
+  })
+
   it.each(['up-to-date', 'error', 'unsupported', 'checking'] as const)('does not replay historical manual %s snapshots or same-request events', async phase => {
     const ui = await mount(Promise.resolve(status(phase)))
     expect(ui.host.style.display).toBe('none')

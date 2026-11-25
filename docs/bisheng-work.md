@@ -42,7 +42,7 @@ git merge upstream/main
 
 ## 当前状态与发布前工作
 
-正式版和开发通道的应用名称统一为 BISHENG，发布资产文件名统一使用 `bisheng` 前缀。开发通道继续使用独立的应用 ID `io.bisheng.dev`、userData 目录 `bisheng-dev` 和登录协议 `bisheng-dev://login`。更新地址、ModelScope 仓库和 GitHub 仓库地址仍使用 `bisheng-work`。名称修改的源码检查不代表新安装包已发布或完成安装验收。正式版网页唤起桌面使用 `bisheng://login`，网页端需要同步修改。
+正式版应用 ID 为 `com.luokuiai.bisheng`，开发通道为 `com.luokuiai.bisheng.dev`。两类构建均采用 macOS ad-hoc 签名和 Windows 未签名安装包。应用名称统一为 BISHENG，发布资产文件名统一使用 `bisheng` 前缀。开发通道继续使用独立的应用 ID `com.luokuiai.bisheng.dev`、userData 目录 `bisheng-dev` 和登录协议 `bisheng-dev://login`。生产包更新地址由打包环境变量 `BISHENG_UPDATE_URL` 指定，为空则关闭在线更新，无上游默认值；正式版更新资产导出至 Actions artifacts，由部署方上传到企业更新目录。继承的测试和预发布渠道仍使用 ModelScope。名称修改的源码检查不代表新安装包已发布或完成安装验收。正式版网页唤起桌面使用 `bisheng://login`，网页端需要同步修改。
 
 初始化时曾关闭 Actions；当前构建及发布配置以 `package.json` 和 `.github/workflows/release.yml` 为准。发布前核对以下隔离边界和组织级 secrets 的访问范围：
 

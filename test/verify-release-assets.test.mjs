@@ -21,18 +21,30 @@ async function createFixture(root) {
   const armZip = await writeFixture(root, 'bisheng-mac-arm64.zip', Buffer.from('PK-arm'))
   const x64Zip = await writeFixture(root, 'bisheng-mac-x64.zip', Buffer.from('PK-x64'))
   const windows = await writeFixture(root, 'bisheng-windows-x64-setup.exe', Buffer.from('MZ-win'))
+  const dmg = Buffer.concat([Buffer.alloc(512), Buffer.from('koly')])
+  const armDmg = await writeFixture(root, 'bisheng-mac-arm64.dmg', dmg)
+  const x64Dmg = await writeFixture(root, 'bisheng-mac-x64.dmg', dmg)
   await Promise.all([
-    writeFile(path.join(root, 'bisheng-mac-arm64.dmg'), Buffer.concat([Buffer.alloc(512), Buffer.from('koly')])),
-    writeFile(path.join(root, 'bisheng-mac-x64.dmg'), Buffer.concat([Buffer.alloc(512), Buffer.from('koly')])),
     writeFile(path.join(root, 'bisheng-mac-arm64.zip.blockmap'), 'blockmap'),
     writeFile(path.join(root, 'bisheng-mac-x64.zip.blockmap'), 'blockmap'),
     writeFile(path.join(root, 'bisheng-windows-x64-setup.exe.blockmap'), 'blockmap'),
-    writeFile(path.join(root, 'latest-mac.yml'), stringify({ version: '1.2.3', files: [armZip, x64Zip] })),
+    writeFile(path.join(root, 'latest-mac.yml'), stringify({ version: '1.2.3', files: [armZip, x64Zip, armDmg, x64Dmg] })),
     writeFile(path.join(root, 'latest.yml'), stringify({ version: '1.2.3', files: [windows] }))
   ])
 }
 
 describe('release asset verification', () => {
+  it.each(['arm64', 'x64'])('rejects a %s DMG that no longer matches the manual download metadata', async architecture => {
+    const root = await mkdtemp(path.join(tmpdir(), 'dsh-release-assets-'))
+    try {
+      await createFixture(root)
+      await writeFile(path.join(root, `bisheng-mac-${architecture}.dmg`), Buffer.concat([Buffer.alloc(512, 1), Buffer.from('koly')]))
+      await expect(verifyReleaseAssets(root, '1.2.3', { minimumBytes })).rejects.toThrow('latest-mac.yml checksum or size does not match')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('accepts complete assets whose update metadata matches', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'dsh-release-assets-'))
     try {

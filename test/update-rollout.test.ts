@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => ({
   listeners: new Map<string, (...args: unknown[]) => void>(),
   userData: '',
   supported: true,
+  openInstaller: vi.fn(async () => {}),
+  defaultUpdaterAccess: vi.fn(),
   prepareToInstall: vi.fn(async () => {}),
+  quit: vi.fn(),
   updater: {
     autoDownload: true,
     allowDowngrade: true,
@@ -21,12 +24,17 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('electron-updater', () => ({ default: { autoUpdater: mocks.updater } }))
+vi.mock('electron-updater', () => ({ default: { get autoUpdater() { mocks.defaultUpdaterAccess(); return mocks.updater } } }))
+vi.mock('../src/main/update/mac-installer-updater', () => ({
+  MacInstallerUpdater: class { constructor() { return { ...mocks.updater, openInstaller: mocks.openInstaller } } }
+}))
 vi.mock('electron', () => ({
   app: {
     isPackaged: true,
     getVersion: () => '1.0.1',
     getPath: () => mocks.userData,
+    getAppPath: () => mocks.userData,
+    quit: mocks.quit,
     isReady: () => true
   },
   BrowserWindow: { getAllWindows: () => [] },
@@ -43,6 +51,7 @@ vi.mock('../src/main/update/update-policy', async (importOriginal) => ({
 }))
 
 let manager: typeof import('../src/main/update/update-manager')
+const originalPlatform = process.platform
 
 function start() {
   manager.startUpdateManager({ prepareToInstall: mocks.prepareToInstall })
@@ -52,6 +61,7 @@ function emit(event: string, value?: unknown) {
 }
 
 beforeEach(async () => {
+  Object.defineProperty(process, 'platform', { value: 'win32' })
   vi.useFakeTimers()
   vi.resetModules()
   vi.resetAllMocks()
@@ -59,6 +69,7 @@ beforeEach(async () => {
   mocks.listeners.clear()
   mocks.supported = true
   mocks.userData = await mkdtemp(join(tmpdir(), 'bisheng-update-'))
+  await writeFile(join(mocks.userData, 'package.json'), JSON.stringify({ dshDesktopUpdatesEnabled: true }))
   mocks.updater.on.mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
     mocks.listeners.set(event, listener)
   })
@@ -72,7 +83,9 @@ beforeEach(async () => {
 afterEach(async () => {
   manager.stopUpdateManager()
   vi.useRealTimers()
+  vi.unstubAllEnvs()
   await rm(mocks.userData, { recursive: true, force: true })
+  Object.defineProperty(process, 'platform', { value: originalPlatform })
 })
 
 it('checks the stable feed on manual request and reports the current version', async () => {
@@ -112,6 +125,35 @@ it('keeps unsupported platforms and unpackaged builds disabled', async () => {
   expect(mocks.updater.checkForUpdates).not.toHaveBeenCalled()
 })
 
+it.each(['win32', 'darwin'])('does not initialize or check updates on %s when the packaged feed is disabled', async platform => {
+  Object.defineProperty(process, 'platform', { value: platform })
+  await writeFile(join(mocks.userData, 'package.json'), JSON.stringify({ dshDesktopUpdatesEnabled: false }))
+  vi.stubEnv('BISHENG_UPDATE_URL', 'https://updates.example.com/should-not-enable/')
+  start()
+  manager.registerUpdateHandlers()
+  await mocks.ipc.get('updates:check')?.()
+  await vi.advanceTimersByTimeAsync(7 * 60 * 60 * 1_000)
+  expect(manager.getUpdateStatus().phase).toBe('unsupported')
+  expect(vi.getTimerCount()).toBe(0)
+  expect(mocks.defaultUpdaterAccess).not.toHaveBeenCalled()
+  expect(mocks.updater.on).not.toHaveBeenCalled()
+  expect(mocks.updater.checkForUpdates).not.toHaveBeenCalled()
+  await manager.downloadAvailableUpdate()
+  await manager.installDownloadedUpdate()
+  expect(mocks.updater.downloadUpdate).not.toHaveBeenCalled()
+  expect(mocks.openInstaller).not.toHaveBeenCalled()
+  expect(mocks.updater.quitAndInstall).not.toHaveBeenCalled()
+})
+
+it('keeps packages without an explicit update policy disabled', async () => {
+  await writeFile(join(mocks.userData, 'package.json'), '{}')
+  start()
+  await manager.checkForUpdates(true)
+  expect(manager.getUpdateStatus().phase).toBe('unsupported')
+  expect(mocks.defaultUpdaterAccess).not.toHaveBeenCalled()
+  expect(mocks.updater.checkForUpdates).not.toHaveBeenCalled()
+})
+
 it('offers an update without downloading, then prepares shutdown only after download and install consent', async () => {
   start()
   mocks.updater.checkForUpdates.mockImplementation(async () => emit('update-available', { version: '1.0.2' }))
@@ -134,6 +176,63 @@ it('offers an update without downloading, then prepares shutdown only after down
   expect(mocks.prepareToInstall.mock.invocationCallOrder[0]).toBeLessThan(
     mocks.updater.quitAndInstall.mock.invocationCallOrder[0] ?? 0
   )
+})
+
+it('opens the macOS installer from trusted IPC before preparing and requesting a normal quit', async () => {
+  Object.defineProperty(process, 'platform', { value: 'darwin' })
+  start()
+  mocks.updater.checkForUpdates.mockImplementation(async () => emit('update-available', { version: '1.0.2' }))
+  await manager.checkForUpdates(true)
+  expect(manager.getUpdateStatus()).toMatchObject({ phase: 'available', installationMode: 'manual' })
+  expect(mocks.defaultUpdaterAccess).not.toHaveBeenCalled()
+  mocks.updater.downloadUpdate.mockImplementation(async () => {
+    emit('download-progress', { percent: 50 })
+    emit('update-downloaded', { version: '1.0.2' })
+  })
+  await manager.downloadAvailableUpdate()
+  const trusted: unknown = { sender: 'main', senderFrame: 'main-frame' }
+  manager.registerUpdateHandlers({ assertTrusted: event => {
+    if (event !== trusted) throw new Error('Untrusted update sender')
+  } })
+  const install = mocks.ipc.get('updates:install')
+  expect(() => install?.({ sender: 'foreign' })).toThrow('Untrusted update sender')
+  expect(mocks.openInstaller).not.toHaveBeenCalled()
+  let finishOpening: (() => void) | undefined
+  mocks.openInstaller.mockImplementationOnce(() => new Promise<void>(resolve => { finishOpening = resolve }))
+  const installation = install?.(trusted)
+  expect(mocks.openInstaller).toHaveBeenCalledOnce()
+  expect(mocks.prepareToInstall).not.toHaveBeenCalled()
+  expect(mocks.quit).not.toHaveBeenCalled()
+  await install?.(trusted)
+  expect(mocks.openInstaller).toHaveBeenCalledOnce()
+  finishOpening?.()
+  await installation
+  expect(mocks.prepareToInstall).toHaveBeenCalledWith('manual')
+  expect(mocks.quit).toHaveBeenCalledOnce()
+  expect(mocks.updater.quitAndInstall).not.toHaveBeenCalled()
+  expect(mocks.prepareToInstall.mock.invocationCallOrder[0]).toBeLessThan(mocks.quit.mock.invocationCallOrder[0] ?? 0)
+  await install?.(trusted)
+  expect(mocks.openInstaller).toHaveBeenCalledOnce()
+})
+
+it.each(['open', 'prepare'] as const)('keeps the client running when the macOS installer %s step fails', async stage => {
+  Object.defineProperty(process, 'platform', { value: 'darwin' })
+  start()
+  mocks.updater.checkForUpdates.mockImplementation(async () => emit('update-available', { version: '1.0.2' }))
+  await manager.checkForUpdates(true)
+  mocks.updater.downloadUpdate.mockImplementation(async () => emit('update-downloaded', { version: '1.0.2' }))
+  await manager.downloadAvailableUpdate()
+  const failed = stage === 'open' ? mocks.openInstaller : mocks.prepareToInstall
+  failed.mockRejectedValueOnce(new Error('Installer step failed'))
+  await manager.installDownloadedUpdate()
+  expect(mocks.quit).not.toHaveBeenCalled()
+  expect(mocks.updater.quitAndInstall).not.toHaveBeenCalled()
+  if (stage === 'open') expect(mocks.prepareToInstall).not.toHaveBeenCalled()
+  expect(manager.getUpdateStatus()).toMatchObject({ phase: 'error', message: 'Installer step failed' })
+  await manager.checkForUpdates(true)
+  await manager.downloadAvailableUpdate()
+  await manager.installDownloadedUpdate()
+  expect(mocks.quit).toHaveBeenCalledOnce()
 })
 
 it('preserves a failed check and allows a manual retry', async () => {

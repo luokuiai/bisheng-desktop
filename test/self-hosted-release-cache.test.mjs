@@ -3,43 +3,39 @@ import path from 'node:path'
 import { expect, it } from 'vitest'
 import YAML from 'yaml'
 
-it('uses local npm downloads and bounds Node setup on persistent release workers', async () => {
+it('bounds Node setup on hosted preparation workers and caches Windows npm downloads', async () => {
   const source = await readFile(path.resolve(import.meta.dirname, '../.github/workflows/release.yml'), 'utf8')
   const { jobs } = YAML.parse(source)
   const persistentJobs = Object.values(jobs).filter(job =>
     Array.isArray(job['runs-on']) && job['runs-on'].includes('self-hosted')
   )
-  expect(persistentJobs).toHaveLength(3)
-  for (const job of persistentJobs) {
-    const setup = job.steps.find(step => step.uses?.startsWith('actions/setup-node@'))
-    expect(setup).toBeDefined()
-    expect(setup.with?.cache).toBeUndefined()
-    expect(setup['timeout-minutes']).toBe(5)
+  expect(persistentJobs).toHaveLength(0)
+  for (const name of ['prepare-shared-runtime-assets', 'windows-preflight', 'macos']) {
+    const setups = jobs[name].steps.filter(step => step.uses?.startsWith('actions/setup-node@'))
+    expect(setups.length).toBeGreaterThan(0)
+    for (const setup of setups) {
+      expect(setup.with?.cache).toBeUndefined()
+      expect(setup['timeout-minutes']).toBe(5)
+    }
   }
-  const macSetup = jobs.macos.steps.find(step => step.if === "matrix.arch == 'arm64'" && step.uses?.startsWith('actions/setup-node@'))
-  expect(macSetup).toBeDefined()
-  expect(macSetup.with?.cache).toBeUndefined()
-  expect(macSetup['timeout-minutes']).toBe(5)
   const hostedSetup = jobs['windows-x64'].steps.find(step => step.uses?.startsWith('actions/setup-node@'))
   expect(hostedSetup.with.cache).toBe('npm')
   expect(hostedSetup.with['cache-dependency-path']).toBe('package-lock.json')
 })
 
-it('keeps portable preparation on Linux and macOS work on self-hosted runners', async () => {
+it('keeps portable checks on Linux and macOS preparation and builds on hosted native runners', async () => {
   const source = await readFile(path.resolve(import.meta.dirname, '../.github/workflows/release.yml'), 'utf8')
   const { jobs } = YAML.parse(source)
-  for (const name of ['validate-dispatch', 'publish', 'publish-prerelease', 'publish-signed']) {
+  for (const name of ['validate-dispatch', 'windows-preflight', 'publish', 'publish-prerelease', 'publish-signed']) {
     expect(jobs[name]['runs-on']).toBe('ubuntu-24.04')
   }
-  expect(jobs['prepare-shared-runtime-assets']['runs-on']).toEqual(['self-hosted', 'macOS', 'ARM64'])
+  expect(jobs['prepare-shared-runtime-assets']['runs-on']).toBe('macos-15')
   expect(jobs.macos['runs-on']).toBe('${{ matrix.runner }}')
-  for (const target of jobs.macos.strategy.matrix.include) {
-    expect(target.runner).toContain('self-hosted')
-    expect(target.runner).toContain('macOS')
-  }
-  for (const job of Object.values(jobs)) {
-    if (typeof job['runs-on'] === 'string') expect(job['runs-on']).not.toMatch(/^macos-/i)
-  }
+  expect(jobs.macos.strategy.matrix.include.map(({ arch, runner }) => ({ arch, runner }))).toEqual([
+    { arch: 'arm64', runner: 'macos-15' },
+    { arch: 'x64', runner: 'macos-15-intel' }
+  ])
+  expect(jobs['windows-x64']['runs-on']).toBe('windows-2022')
 })
 
 it('restores Windows download caches before installing dependencies', async () => {

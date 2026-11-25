@@ -3415,7 +3415,7 @@ async function bootstrap(): Promise<void> {
   installDesktopProtocol(desktopResourcePath)
   if (process.platform === 'darwin') app.dock?.setIcon(desktopIconPath())
   launchDirectory = await ensureLaunchRoot(app.getPath('userData'))
-  registerUpdateHandlers({ locale: harnessLocale })
+  registerUpdateHandlers({ locale: harnessLocale, assertTrusted: assertTrustedMainWindowEvent })
   nativeTheme.themeSource = harnessThemePreference()
   ensureTray()
   const dshHome = join(app.getPath('userData'), 'harness')
@@ -3802,10 +3802,13 @@ async function bootstrap(): Promise<void> {
   }
   if (!developmentBuild) {
     startUpdateManager({
-      prepareToInstall: async () => {
+      prepareToInstall: async (mode) => {
         await Promise.all([runtime.stop(), enterpriseDesktop?.stop()])
         const dshHome = join(app.getPath('userData'), 'harness')
         await quarantineInstalledLaunchAgentsForUpdate(dshHome)
+        // Manual macOS installation exits through before-quit, which flushes
+        // desktop state and disposes the tray, mobile bridge, and repair agent.
+        if (mode === 'manual') return
         quitting = true
         // NSIS may force-kill before will-quit; clear the marker so the next
         // launch does not treat this intentional update as an unclean-exit.

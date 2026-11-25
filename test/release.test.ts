@@ -345,7 +345,7 @@ describe('GitHub release contract', () => {
         productName: string
         protocols: Array<{ name: string; schemes: string[] }>
         publish: Array<{ provider: string; url?: string; owner?: string; repo?: string }>
-        win: { verifyUpdateCodeSignature: boolean; signtoolOptions: { publisherName: string } }
+        win: { signExecutable: boolean; verifyUpdateCodeSignature: boolean; signtoolOptions?: unknown }
       }
     }
     const workflow = await readFile(
@@ -354,7 +354,7 @@ describe('GitHub release contract', () => {
     )
 
     expect(packageJson.dependencies['electron-updater']).toBeTruthy()
-    expect(packageJson.build.appId).toBe('io.bisheng')
+    expect(packageJson.build.appId).toBe('com.luokuiai.bisheng')
     expect(packageJson.build.productName).toBe('BISHENG')
     expect(packageJson.build.protocols).toEqual([
       { name: 'BISHENG Enterprise Login', schemes: ['bisheng'] }
@@ -362,11 +362,12 @@ describe('GitHub release contract', () => {
     expect(packageJson.build.publish).toEqual([
       {
         provider: 'generic',
-        url: 'https://dshdesktop.com/work/updates/latest/'
+        url: '${env.BISHENG_UPDATE_URL}'
       }
     ])
-    expect(packageJson.build.win.verifyUpdateCodeSignature).toBe(true)
-    expect(packageJson.build.win.signtoolOptions.publisherName).toBe('Beijing Shuju Xiangsu Intelligence Technology Co., Ltd.')
+    expect(packageJson.build.win.verifyUpdateCodeSignature).toBe(false)
+    expect(packageJson.build.win.signExecutable).toBe(false)
+    expect(packageJson.build.win.signtoolOptions).toBeUndefined()
     for (const asset of [
       'latest-mac-arm64.yml',
       'latest-mac-x64.yml',
@@ -392,7 +393,6 @@ describe('GitHub release contract', () => {
     )
     expect(workflow).not.toContain('dist/${{ matrix.app-directory }}/BISHENG.app')
     expect(workflow).toContain('dist\\win-unpacked\\BISHENG.exe')
-    expect(workflow).toContain("--name 'BISHENG'")
     expect(workflow).toContain('--title "BISHENG $release_tag"')
   })
 
@@ -437,7 +437,7 @@ describe('GitHub release contract', () => {
     expect(packageJson.scripts['package:dev:win']).toContain('verify-target.mjs win32 x64')
     expect(packageJson.scripts['package:dev:win']).toContain('electron-builder.dev.cjs')
     expect(packageJson.scripts['package:dev:win']).toContain('--publish never')
-    expect(developmentConfig.appId).toBe('io.bisheng.dev')
+    expect(developmentConfig.appId).toBe('com.luokuiai.bisheng.dev')
     expect(developmentConfig.productName).toBe('BISHENG')
     expect(developmentConfig.extraMetadata.productName).toBe('BISHENG')
     expect(developmentConfig.protocols).toEqual([
@@ -455,10 +455,10 @@ describe('GitHub release contract', () => {
       'utf8'
     )
 
-    expect(workflow).toContain('runner: [self-hosted, macOS, ARM64]')
-    expect(workflow).toContain('runner: [self-hosted, macOS, bisheng-intel]')
+    expect(workflow).toContain('runner: macos-15')
+    expect(workflow).toContain('runner: macos-15-intel')
     expect(workflow).toContain('runs-on: ${' + '{ matrix.runner }}')
-    expect(workflow).toContain('runs-on: [self-hosted, macOS, bisheng-windows]')
+    expect(workflow).toContain('runs-on: ubuntu-24.04')
     expect(workflow).toContain('runs-on: windows-2022')
     expect(workflow).toContain('node scripts/electron-builder-windows.mjs --win --x64 --publish never --config electron-builder.dev.cjs')
     expect(workflow).toContain('Smoke test packaged Windows Harness')
@@ -491,128 +491,44 @@ describe('GitHub release contract', () => {
       workflow.match(
         /npm version --no-git-tag-version --allow-same-version "\$\{\{ github\.ref_name \}\}"/g
       )
-    ).toHaveLength(3)
+    ).toHaveLength(2)
   })
 
-  it('signs and notarizes both macOS architectures on tag releases', async () => {
-    const workflow = await readFile(
-      path.join(projectRoot, '.github', 'workflows', 'release.yml'),
-      'utf8'
-    )
-
-    for (const secret of [
-      'DESKTOP_CSC_LINK',
-      'DESKTOP_CSC_KEY_PASSWORD',
-      'DESKTOP_APPLE_API_KEY',
-      'DESKTOP_APPLE_API_KEY_ID',
-      'DESKTOP_APPLE_API_ISSUER',
-      'DESKTOP_APPLE_TEAM_ID'
-    ]) {
-      expect(workflow).toContain(`secrets.${secret}`)
+  it('uses ad-hoc macOS signing without Apple certificate or notarization jobs', async () => {
+    const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8')) as {
+      build: { mac: { identity: string; forceCodeSigning: boolean; notarize: boolean }; afterSign?: string }
     }
-    expect(workflow).toContain('bisheng-arm64-xcrun')
-    expect(workflow).toContain('if [ "${{ matrix.arch }}" = "x64" ]; then')
-    expect(workflow).toContain('exec /usr/bin/arch -arm64 /usr/bin/xcrun "$@"')
-    expect(workflow).toContain('"$xcrun_bridge/xcrun" --find notarytool')
-    expect(workflow).toContain('/usr/bin/xcrun --find notarytool')
-    expect(workflow.match(/Prepare macOS signing keychain/g)).toHaveLength(1)
-    expect(workflow.match(/xcrun stapler validate/g)).toHaveLength(2)
-    expect(workflow.match(/xcrun notarytool submit/g)).toHaveLength(1)
-    expect(workflow).not.toContain('CSC_IDENTITY_AUTO_DISCOVERY')
-    expect(workflow).not.toContain("CSC_LINK: ''")
-    expect(workflow).toContain("runs-on: ${{ matrix.runner }}")
-    expect(workflow).toContain("runner: [self-hosted, macOS, ARM64]")
-    expect(workflow).toContain("runner: [self-hosted, macOS, bisheng-intel]")
-    expect(workflow).toMatch(
-      /windows-x64:\r?\n\s+name: Windows x64\r?\n(?:[\s\S]*?)runs-on: windows-2022\r?\n\s+steps:/
-    )
+    expect(packageJson.build.mac).toMatchObject({ identity: '-', forceCodeSigning: true, notarize: false })
+    expect(packageJson.build.afterSign).toBeUndefined()
+    const workflow = await readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
+    expect(workflow).toContain('Build ad-hoc ${{ matrix.label }} release package')
+    expect(workflow).toContain('codesign --verify --deep --strict')
+    expect(workflow).toContain('Signature=adhoc')
+    expect(workflow).not.toMatch(/secrets\.DESKTOP_(CSC|APPLE)|notarytool|stapler|signing_keychain/)
   })
 
-  it('signs Windows installers on the local UKey runner before publishing', async () => {
-    const workflow = await readFile(
-      path.join(projectRoot, '.github', 'workflows', 'release.yml'),
-      'utf8'
-    )
-
+  it('stages unsigned Windows installers directly before publication', async () => {
+    const workflow = await readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
     expect(workflow).toContain('Stage unsigned Windows assets in draft release')
-    expect(workflow).toContain('Sign Windows package locally with UKey')
-    expect(workflow).toContain('runs-on: [self-hosted, macOS, bisheng-windows]')
-    expect(workflow).toContain('--storetype ETOKEN')
-    expect(workflow).toContain('--storepass "file:$pin_file"')
-    expect(workflow).toContain('--tsmode RFC3161')
-    expect(workflow).toContain('secrets.DESKTOP_WINDOWS_SIGNING_PIN')
-    expect(workflow).toContain(`printf '%s' "$WINDOWS_SIGNING_PIN" > "$pin_file"`)
-    expect(workflow).toContain('unset WINDOWS_SIGNING_PIN')
-    expect(workflow).not.toContain('security find-generic-password')
-    expect(workflow).not.toContain('WINDOWS_SIGNING_KEYCHAIN_SERVICE')
-    expect(workflow).toContain('finalize-windows-release.mjs')
-    expect(workflow).toContain('sign-windows-unpacked.mjs')
-    expect(workflow).toContain('node scripts/electron-builder-windows.mjs --win --x64 --publish never')
-    expect(workflow).toMatch(/JSIGN_JAR="\$JSIGN_JAR" JSIGN_PIN_FILE="\$pin_file" \\\r?\n\s+node scripts\/electron-builder-windows\.mjs/)
-    expect(workflow).not.toContain('Falling back to original installer')
-    expect(workflow).not.toContain('Restoring original Windows installer from backup')
-    expect(workflow).toContain('win-unpacked.tar.gz')
-    expect(workflow).toContain('--prepackaged')
-    expect(workflow).toContain('set -euo pipefail')
-    expect(workflow).not.toContain('Falling back to original installer')
-    expect(workflow).not.toContain('Restoring original Windows installer')
-    expect(workflow).toContain("if (Test-Path $packagedNode) { throw 'Standalone Windows node.exe must not be packaged.' }")
-    expect(workflow).toContain('version="${PRERELEASE_TAG#v}"')
-    expect(workflow).toContain('version="${SIGNED_VERSION#v}"')
-    expect(workflow).not.toContain('version="${PRERELEASE_TAG:-${GITHUB_REF_NAME#v}}"')
-    expect(workflow).toContain('Download verified pre-release assets from draft release')
+    expect(workflow).toContain('dist/bisheng-windows-x64-setup.exe')
+    expect(workflow).toContain('dist/bisheng-windows-x64-setup.exe.blockmap')
+    expect(workflow).toContain('dist/latest.yml')
+    expect(workflow).not.toMatch(/sign-windows:|DESKTOP_WINDOWS_SIGNING_PIN|JSIGN_JAR|win-unpacked\.tar\.gz/)
     expect(workflow).toContain('verify-release-staging.mjs')
-    expect(workflow).toMatch(
-      /publish:[\s\S]*?needs\.sign-windows\.result == 'success'[\s\S]*?- sign-windows/
-    )
+    expect(workflow).toContain("if (Test-Path $packagedNode) { throw 'Standalone Windows node.exe must not be packaged.' }")
   })
 
-  it('keeps Windows signing independent of macOS packaging and notarization', async () => {
+  it('gates publication on both native platform builds', async () => {
     const { jobs } = createRequire(import.meta.url)('js-yaml').load(await readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')) as {
       jobs: Record<string, { needs?: string | string[]; if?: string }>
     }
-    expect(jobs['sign-windows']?.needs).toEqual(['validate-dispatch', 'windows-x64'])
-    const ancestors = new Set<string>()
-    const pending = ['sign-windows']
-    while (pending.length > 0) {
-      const name = pending.pop()
-      if (!name || ancestors.has(name)) continue
-      ancestors.add(name)
-      expect(jobs[name]).toBeDefined()
-      const needs = jobs[name]?.needs ?? []
-      pending.push(...(Array.isArray(needs) ? needs : [needs]))
-    }
-    expect(ancestors.has('macos')).toBe(false)
-    for (const name of ancestors) {
-      expect(jobs[name]?.if ?? '').not.toContain('needs.macos')
-    }
+    expect(jobs['sign-windows']).toBeUndefined()
     for (const name of ['publish', 'publish-prerelease', 'publish-signed']) {
-      expect(jobs[name]?.needs).toContain('macos')
-      expect(jobs[name]?.needs).toContain('sign-windows')
+      expect(jobs[name]?.needs).toEqual(['macos', 'windows-x64'])
+      expect(jobs[name]?.if).toContain("needs.windows-x64.result == 'success'")
     }
-  })
-
-  it('uses local npm downloads and bounds Node setup on the persistent UKey signer', async () => {
-    const { jobs } = createRequire(import.meta.url)('js-yaml').load(await readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')) as {
-      jobs: Record<string, {
-        'runs-on'?: string | string[]
-        steps: Array<{ uses?: string; with?: { cache?: string }; 'timeout-minutes'?: number }>
-      }>
-    }
-    const persistentJobs = Object.values(jobs).filter(job =>
-      Array.isArray(job['runs-on']) && job['runs-on'].includes('self-hosted')
-    )
-    expect(persistentJobs).toHaveLength(3)
-    for (const job of persistentJobs) {
-      const setup = job.steps.find(step => step.uses?.startsWith('actions/setup-node@'))
-      expect(setup).toBeDefined()
-      expect(setup?.with?.cache).toBeUndefined()
-      expect(setup?.['timeout-minutes']).toBe(5)
-    }
-    expect(jobs['windows-x64']?.steps.find(step => step.uses?.startsWith('actions/setup-node@'))?.with?.cache).toBe('npm')
-    const macosSetup = jobs.macos?.steps.filter(step => step.uses?.startsWith('actions/setup-node@')) ?? []
-    expect(macosSetup.length).toBeGreaterThan(0)
-    expect(macosSetup.every(step => step.with?.cache === undefined)).toBe(true)
+    expect(jobs['windows-x64']?.needs).toBe('windows-preflight')
+    expect(jobs['windows-preflight']?.if).not.toContain('needs.macos')
   })
 
   it('does not change Windows security settings during installation', async () => {
@@ -653,15 +569,11 @@ describe('prerelease parity workflow', () => {
     expect(yml).not.toContain('Publish validated Windows development pre-release')
   })
 
-  it('gates signing and both publish jobs so prerelease and release never overlap', async () => {
+  it('gates both publish jobs so prerelease and release never overlap', async () => {
     const yml = await load()
     const windowsIf = yml.slice(
       yml.indexOf('\n  windows-x64:'),
       yml.indexOf('runs-on: windows-2022')
-    )
-    const signWindows = yml.slice(
-      yml.indexOf('\n  sign-windows:'),
-      yml.indexOf('\n  publish:')
     )
     const publishJob = yml.slice(
       yml.indexOf('\n  publish:'),
@@ -680,8 +592,7 @@ describe('prerelease parity workflow', () => {
     expect(yml).toContain('signed mode requires signed_version')
     expect(windowsIf).toContain("inputs.target == 'all' || inputs.target == 'windows'")
     expect(windowsIf).not.toContain('prerelease_tag')
-    expect(signWindows).toContain("inputs.mode == 'signed'")
-    expect(signWindows).toContain("inputs.mode == 'prerelease'")
+    expect(yml).not.toContain('  sign-windows:')
     expect(publishJob).toContain("startsWith(github.ref, 'refs/tags/v')")
     expect(publishJob).toContain("inputs.prerelease_tag == ''")
     expect(publishPrerelease).toContain("inputs.mode == 'prerelease'")
@@ -691,7 +602,7 @@ describe('prerelease parity workflow', () => {
       yml.match(
         /npm version --no-git-tag-version --allow-same-version "\$\{\{ inputs\.signed_version \}\}"/g
       )
-    ).toHaveLength(3)
+    ).toHaveLength(2)
   })
 
   it('publishes prereleases to their separate ModelScope path', async () => {
@@ -707,7 +618,7 @@ describe('prerelease parity workflow', () => {
     expect(prereleaseJob).not.toContain('releases/test/')
   })
 
-  it('keeps formal and pre-release ModelScope paths separate', async () => {
+  it('exports formal artifacts independently of the existing pre-release channels', async () => {
     const yml = await load()
     const publishJob = yml.slice(
       yml.indexOf('\n  publish:'),
@@ -719,13 +630,13 @@ describe('prerelease parity workflow', () => {
     )
     const signedJob = yml.slice(yml.indexOf('\n  publish-signed:'))
     expect(yml).toContain('Require ModelScope token for published releases')
-    expect(publishJob).toContain('Mirror formal release to ModelScope')
-    expect(publishJob).toContain('MODELSCOPE_REPO_ID: alexyaojin/bisheng-work')
-    expect(publishJob).toContain('releases/archive/{version}')
-    expect(publishJob).toContain('"releases/latest"')
+    expect(publishJob).toContain('actions/upload-artifact@v7')
+    expect(publishJob).toContain('release-assets/latest-mac.yml')
+    expect(publishJob).toContain('release-assets/latest.yml')
+    expect(publishJob).not.toMatch(/MODELSCOPE|ModelScope|modelscope|dshdesktop\.com/)
     expect(prereleaseJob).toContain('releases/prerelease/{tag}')
     expect(prereleaseJob).not.toContain('"releases/latest"')
-    expect(signedJob).toContain('Mirror signed test assets to ModelScope')
+    expect(signedJob).toContain('Mirror test assets to ModelScope')
     expect(signedJob).toContain('releases/test/{tag}')
     expect(signedJob).toContain('releases/test/latest')
     expect(signedJob).not.toContain('releases/prerelease/')

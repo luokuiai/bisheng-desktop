@@ -112,6 +112,8 @@ export async function verifyReleaseAssets(releaseDir, version, options = {}) {
   await assertUpdateEntry(root, 'latest.yml', version, 'bisheng-windows-x64-setup.exe')
   await assertUpdateEntry(root, 'latest-mac.yml', version, 'bisheng-mac-arm64.zip')
   await assertUpdateEntry(root, 'latest-mac.yml', version, 'bisheng-mac-x64.zip')
+  await assertUpdateEntry(root, 'latest-mac.yml', version, 'bisheng-mac-arm64.dmg')
+  await assertUpdateEntry(root, 'latest-mac.yml', version, 'bisheng-mac-x64.dmg')
 }
 
 async function main() {

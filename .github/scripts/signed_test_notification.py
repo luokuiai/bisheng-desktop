@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Notify Feishu after signed test installers are publicly downloadable."""
+"""Notify Feishu after test installers are publicly downloadable."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ from signed_test_build import TEST_SUGGESTIONS, build_test_changes
 
 def notify(directory: Path, target: str, version: str, repo_id: str, webhook: str) -> None:
     if not webhook:
-        raise ValueError("Feishu webhook is required for signed test builds")
+        raise ValueError("Feishu webhook is required for test builds")
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", version):
         raise ValueError("signed_version must be a non-v semver")
     if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo_id):
@@ -61,7 +61,7 @@ def notify(directory: Path, target: str, version: str, repo_id: str, webhook: st
         for label, name in INSTALLERS[platform]:
             file = directory / name
             if not file.is_file() or file.stat().st_size == 0:
-                raise ValueError(f"Missing or empty signed installer: {name}")
+                raise ValueError(f"Missing or empty test installer: {name}")
             url = f"https://modelscope.cn/models/{repo_id}/resolve/master/releases/test/{quote(version, safe='')}/{name}"
             verify_download(url, file.stat().st_size)
             links.append(f"- [{label}]({url})")
@@ -83,7 +83,7 @@ def notify(directory: Path, target: str, version: str, repo_id: str, webhook: st
             changes = changes[:8500].rsplit("\n", 1)[0] + "\n\n变更较多，已截断展示。"
         parts.append(changes)
     else:
-        parts.append("本次为签名测试安装包，用于安装和功能验收，请手动下载安装。在线更新未启用。")
+        parts.append("本次为测试安装包，macOS 使用 ad-hoc 签名，Windows 未签名，用于安装和功能验收，请手动下载安装。")
     parts.append(TEST_SUGGESTIONS)
     if run_url:
         parts.append(f"[查看 CI 构建详情]({run_url})")

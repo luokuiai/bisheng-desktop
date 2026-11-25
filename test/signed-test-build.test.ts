@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-describe('signed test packaging and notification', () => {
+describe('test channel packaging and notification', () => {
   it('builds prefixed upload destinations and notification links for each test target', () => {
     execFileSync('python3', ['-c', String.raw`
 import contextlib, os, sys, tempfile, types
@@ -104,13 +104,15 @@ print('signed test build behavior passed')
 `], { env: { ...process.env, PYTHONIOENCODING: 'utf-8' } })
   })
 
-  it('waits for the selected platform verification gates in signed mode', () => {
+  it('waits for the selected platform verification gates in legacy signed mode', () => {
     const yaml = require('js-yaml') as { load(source: string): { jobs: Record<string, { needs: string[]; if: string }> } }
     const workflow = yaml.load(readFileSync('.github/workflows/release.yml', 'utf8'))
     const job = workflow.jobs['publish-signed']
-    expect(job?.needs).toEqual(['macos', 'sign-windows'])
+    expect(job?.needs).toEqual(['macos', 'windows-x64'])
     expect(job?.if).toContain("inputs.mode == 'signed'")
-    expect(job?.if).toContain("inputs.target == 'windows' && needs.sign-windows.result == 'success'")
+    expect(job?.if).toContain("inputs.signed_version != ''")
+    expect(job?.if).toContain("inputs.target == 'all' && needs.macos.result == 'success' && needs.windows-x64.result == 'success'")
+    expect(job?.if).toContain("inputs.target == 'windows' && needs.windows-x64.result == 'success'")
     expect(job?.if).toContain("inputs.target == 'macos' && needs.macos.result == 'success'")
   })
 

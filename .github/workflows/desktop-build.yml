@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  BISHENG_UPDATE_URL: ${{ vars.BISHENG_UPDATE_URL }}
+
 jobs:
   build:
     name: Build ${{ matrix.target }}
@@ -46,8 +49,6 @@ jobs:
       - run: npm run typecheck
       - run: npm run ${{ matrix.script }}
         env:
-          CSC_LINK: ${{ runner.os == 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/develop' && secrets.DESKTOP_CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && github.event_name == 'push' && github.ref == 'refs/heads/develop' && secrets.DESKTOP_CSC_KEY_PASSWORD || '' }}
           CSC_FOR_PULL_REQUEST: ${{ runner.os == 'macOS' && github.event_name == 'pull_request' && 'true' || 'false' }}
       - name: Verify app signature inside the macOS installer
         if: runner.os == 'macOS'
