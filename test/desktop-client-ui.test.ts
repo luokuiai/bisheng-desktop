@@ -66,6 +66,11 @@ describe('BISHENG client slot occupants', () => {
             const dispose = effect()
             if (dispose) effectDisposers.push(dispose)
           },
+          useLayoutEffect: (effect: () => void | (() => void)) => {
+            const dispose = effect()
+            if (dispose) effectDisposers.push(dispose)
+          },
+          useMemo: (calculate: () => unknown) => calculate(),
           useState: (initial: unknown) => [typeof initial === 'function' ? initial() : typeof initial === 'boolean' ? menuOpen : initial, setMenuOpen],
           useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot()
         }

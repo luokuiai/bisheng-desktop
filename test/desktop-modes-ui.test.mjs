@@ -613,7 +613,7 @@ it('moves a compatible DS Bot return action into primary navigation and releases
     return current === 'agent' ? React.createElement('button', null, 'Back to DS Bot') : null
   }
   const uninstall = await ui.footerAction({ id: 'bot-return', order: -300, inject: () => ({ hooks: { surface }, actions: { setSurface } }) }, NativeBotReturn)
-  expect(rows()).toEqual(['new', 'bot-return', 'plugins'])
+  expect(rows()).toEqual(['new', 'plugins', 'bot-return', 'more'])
   expect(entry().textContent).toBe('多代理协作')
   expect(entry().getAttribute('aria-label')).toBe('多代理协作')
   expect(footer.textContent).toBe('Bot account')
@@ -631,6 +631,37 @@ it('moves a compatible DS Bot return action into primary navigation and releases
   const removeReplacement = await ui.footerAction({ id: 'bot-return', order: -300 }, () => React.createElement('button', null, 'Updated plugin'))
   expect(footer.textContent).toBe('Updated pluginBot account')
   await removeReplacement()
+})
+
+it('appends DS Bot to sortable navigation and restores its saved position', async () => {
+  const listeners = new Set()
+  const surface = {
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
+    getSnapshot: () => ({ mode: 'agent' })
+  }
+  const setSurface = vi.fn()
+  const install = ui => ui.footerAction({ id: 'bot-return', inject: () => ({ hooks: { surface }, actions: { setSurface } }) }, () => null)
+
+  let ui = await mount(true)
+  await install(ui)
+  await ui.navigation(navigationEntries(2))
+  expect(directNavigation()).toEqual(['plugins', 'web:page-1', 'web:page-2', 'bot-return', 'more'])
+  await navigationMenu('Reorder navigation')
+  expect(orderedNavigation()).toEqual(['web:page-1', 'web:page-2', 'bot-return'])
+  await act(async () => document.querySelector('[aria-label="Move up: Multi-Agent Collaboration"]').click())
+  expect(orderedNavigation()).toEqual(['web:page-1', 'bot-return', 'web:page-2'])
+  await dialogButton('Save')
+  expect(directNavigation()).toEqual(['plugins', 'web:page-1', 'bot-return', 'web:page-2', 'more'])
+
+  await act(async () => root.unmount())
+  container.remove()
+  disposers.splice(0).reverse().forEach(dispose => dispose())
+  ui = await mount(true)
+  const uninstall = await install(ui)
+  await ui.navigation(navigationEntries(2))
+  expect(directNavigation()).toEqual(['plugins', 'web:page-1', 'bot-return', 'web:page-2', 'more'])
+  await uninstall()
+  expect(directNavigation()).toEqual(['plugins', 'web:page-1', 'web:page-2', 'more'])
 })
 
 it('returns from the Bot header and removes only the recognized switch from keyboard navigation', async () => {
