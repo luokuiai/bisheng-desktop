@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-describe('test channel packaging and notification', () => {
-  it('builds prefixed upload destinations and notification links for each test target', () => {
+describe('test channel packaging and download verification', () => {
+  it('builds prefixed upload destinations and summary links for each test target', () => {
     execFileSync('python3', ['-c', String.raw`
 import contextlib, os, sys, tempfile, types
 from pathlib import Path
@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory() as work:
     for target, count in [('all', 3), ('macos', 2), ('windows', 1)]:
         files = build.installer_paths(directory, target)
         assert len(files) == count
-        notes = build.build_notification('1.0.0-test.1', files, 'example/desktop', 'test/1.0.0-test.1/42', 'https://github.com/example/desktop/actions/runs/42')
+        notes = build.build_summary('1.0.0-test.1', files, 'example/desktop', 'test/1.0.0-test.1/42', 'https://github.com/example/desktop/actions/runs/42')
         assert notes.count('/resolve/master/test/') == count
         assert '测试建议' in notes
         assert '本次为签名测试安装包' not in notes
@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory() as work:
 `], { env: { ...process.env, PYTHONIOENCODING: 'utf-8' } })
   })
 
-  it('uploads all target installers and notifies only after public download verification', () => {
+  it('uploads and verifies target installers before writing the CI summary', () => {
     execFileSync('python3', ['-c', String.raw`
 import contextlib, os, sys, tempfile, types
 from pathlib import Path
@@ -60,17 +60,17 @@ with tempfile.TemporaryDirectory() as work:
     api.upload_file.side_effect = lambda **kwargs: events.append(('upload', kwargs['path_in_repo']))
     sdk = types.ModuleType('modelscope.hub.api')
     sdk.HubApi = lambda: api
-    env = dict(MODELSCOPE_REPO_ID='example/desktop', MODELSCOPE_TOKEN='fixture', FEISHU_RELEASE_WEBHOOK='fixture', GITHUB_SERVER_URL='https://github.com', GITHUB_REPOSITORY='example/desktop', GITHUB_STEP_SUMMARY=str(directory / 'summary'))
+    env = dict(MODELSCOPE_REPO_ID='example/desktop', MODELSCOPE_TOKEN='fixture', GITHUB_SERVER_URL='https://github.com', GITHUB_REPOSITORY='example/desktop', GITHUB_STEP_SUMMARY=str(directory / 'summary'))
     argv = ['signed_test_build.py', '--directory', work, '--target', 'windows', '--version', '1.0.0-test.1', '--run-id', '42']
-    with patch.dict(sys.modules, {'modelscope': types.ModuleType('modelscope'), 'modelscope.hub': types.ModuleType('modelscope.hub'), 'modelscope.hub.api': sdk}), patch.dict(os.environ, env), patch.object(sys, 'argv', argv), patch.object(build, 'build_test_changes', return_value='feat: New Office preview\nDescription of preview') as changes, patch.object(build, 'verify_download', side_effect=lambda *args: events.append(('verify', args[0]))) as verify, patch.object(build, 'send_feishu_notification', side_effect=lambda *args, **kw: events.append(('notify', kw))) as notify:
+    with patch.dict(sys.modules, {'modelscope': types.ModuleType('modelscope'), 'modelscope.hub': types.ModuleType('modelscope.hub'), 'modelscope.hub.api': sdk}), patch.dict(os.environ, env, clear=True), patch.object(sys, 'argv', argv), patch.object(build, 'build_test_changes', return_value='feat: New Office preview\nDescription of preview') as changes, patch.object(build, 'verify_download', side_effect=lambda *args: events.append(('verify', args[0]))) as verify:
         build.main()
-        assert [e[0] for e in events] == ['upload', 'verify', 'upload', 'verify', 'notify']
+        assert [e[0] for e in events] == ['upload', 'verify', 'upload', 'verify']
         assert events[0][1] == 'test/1.0.0-test.1/42/luokui-ai-windows-x64-setup.exe'
         assert events[2][1] == 'test/1.0.0-test.1/42/test-changes.md'
-        assert events[4][1] == {'test_build': True}
-        assert 'Description of preview' in notify.call_args.args[2]
-        assert 'Windows x64' in (directory / 'summary').read_text(encoding='utf-8')
-        notify.reset_mock()
+        summary = directory / 'summary'
+        assert 'Description of preview' in summary.read_text(encoding='utf-8')
+        assert 'Windows x64' in summary.read_text(encoding='utf-8')
+        summary.unlink()
         api.upload_file.side_effect = RuntimeError('upload failed')
         try:
             build.main()
@@ -78,7 +78,7 @@ with tempfile.TemporaryDirectory() as work:
             pass
         else:
             raise AssertionError('upload failure swallowed')
-        notify.assert_not_called()
+        assert not summary.exists()
         verify.side_effect = None
         changes.side_effect = RuntimeError('git history unavailable')
         api.upload_file.reset_mock()
@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory() as work:
         else:
             raise AssertionError('missing change evidence accepted')
         api.upload_file.assert_not_called()
-        notify.assert_not_called()
+        assert not summary.exists()
         changes.side_effect = None
         api.upload_file.side_effect = None
         verify.side_effect = RuntimeError('public download failed')
@@ -99,7 +99,7 @@ with tempfile.TemporaryDirectory() as work:
             pass
         else:
             raise AssertionError('unverified installer published')
-        notify.assert_not_called()
+        assert not summary.exists()
 print('signed test build behavior passed')
 `], { env: { ...process.env, PYTHONIOENCODING: 'utf-8' } })
   })
@@ -118,6 +118,12 @@ print('signed test build behavior passed')
 
   it('summarizes Chinese test changes with validated output and real git ranges', () => {
     execFileSync('python3', ['test/test-change-summary.test.py'], {
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+    })
+  })
+
+  it('verifies public downloads for the selected test installers', () => {
+    execFileSync('python3', ['test/verify-test-downloads.test.py'], {
       env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
     })
   })

@@ -56,6 +56,7 @@ it.skipIf(process.platform === 'win32')('validates stable formal tags without re
 
 it('verifies draft handoff before exporting formal artifacts and publishing other channels', async () => {
   const source = await readFile(path.resolve(import.meta.dirname, '../.github/workflows/release.yml'), 'utf8')
+  expect(source).not.toMatch(/feishu/i)
   const jobs = YAML.parse(source).jobs
   const step = (job, name) => jobs[job].steps.find(item => item.name === name)
   const formal = "startsWith(github.ref, 'refs/tags/v')"
@@ -115,6 +116,7 @@ it('verifies draft handoff before exporting formal artifacts and publishing othe
     'Verify test assets before publication',
     'Mirror test assets to ModelScope',
     'Verify public ModelScope test metadata',
+    'Verify public test installers',
     'Record test downloads'
   ]))
   expect(signedNames.indexOf('Download verified test assets from draft release'))
@@ -124,7 +126,11 @@ it('verifies draft handoff before exporting formal artifacts and publishing othe
   expect(signedNames.indexOf('Mirror test assets to ModelScope'))
     .toBeLessThan(signedNames.indexOf('Verify public ModelScope test metadata'))
   expect(signedNames.indexOf('Verify public ModelScope test metadata'))
+    .toBeLessThan(signedNames.indexOf('Verify public test installers'))
+  expect(signedNames.indexOf('Verify public test installers'))
     .toBeLessThan(signedNames.indexOf('Record test downloads'))
+  expect(step('publish-signed', 'Verify public test installers').run)
+    .toContain('verify_test_downloads.py')
   expect(step('publish-signed', 'Mirror test assets to ModelScope').run)
     .toContain('releases/test/{tag}')
   expect(step('publish-signed', 'Mirror test assets to ModelScope').run)

@@ -56,7 +56,7 @@ it('reuses checkout history and installs formal release note tooling once', () =
   const installs = steps.filter(item => item.run?.includes('npm install -g @github/copilot'))
   expect(installs).toHaveLength(1)
   const notes = steps.filter(item => item.name?.startsWith('Generate '))
-  expect(notes).toHaveLength(2)
+  expect(notes.map(note => note.name)).toEqual(['Generate GitHub release note'])
   for (const note of notes) {
     expect(steps.indexOf(note)).toBeGreaterThanOrEqual(steps.indexOf(installs[0]))
     expect(note.run).toContain('validate --tag')

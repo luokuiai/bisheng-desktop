@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload signed test installers and notify only after public downloads exist."""
+"""Upload signed test installers and verify public downloads."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import quote
 
-from feishu_release_notes import bound_code_diff, send_feishu_notification
+from release_evidence import bound_code_diff
 from test_change_summary import summarize_changes
 
 INSTALLERS = {
@@ -42,7 +42,9 @@ def test_prefix(version: str, run_id: str) -> str:
 
 
 def download_url(repo_id: str, prefix: str, name: str) -> str:
-    if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo_id):
+    if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo_id) or any(
+        part in (".", "..") for part in repo_id.split("/")
+    ):
         raise ValueError("Invalid ModelScope repository ID")
     return f"https://modelscope.cn/models/{repo_id}/resolve/master/{quote(prefix + '/' + name, safe='/')}"
 
@@ -103,7 +105,7 @@ TEST_SUGGESTIONS = """\
 """
 
 
-def build_notification(version: str, installers: list[tuple[str, Path]], repo_id: str, prefix: str, run_url: str, changes: str = "") -> str:
+def build_summary(version: str, installers: list[tuple[str, Path]], repo_id: str, prefix: str, run_url: str, changes: str = "") -> str:
     links = "\n".join(f"- [{label}]({download_url(repo_id, prefix, file.name)})" for label, file in installers)
     if len(changes) > 9000:
         changes = changes[:8500].rsplit("\n", 1)[0] + "\n\n变更较多，已截断展示。"
@@ -126,15 +128,13 @@ def main() -> None:
     prefix = test_prefix(args.version, args.run_id)
     repo_id = os.environ.get("MODELSCOPE_REPO_ID", "alexyaojin/bisheng-work")
     token = os.environ["MODELSCOPE_TOKEN"]
-    webhook = os.environ["FEISHU_RELEASE_WEBHOOK"]
-    if not token or not webhook:
-        raise ValueError("ModelScope token and Feishu webhook are required for signed test builds")
+    if not token:
+        raise ValueError("ModelScope token is required for signed test builds")
     installers = installer_paths(args.directory, args.target)
     repository_url = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
     changes = build_test_changes(repository_url)
     changes_file = args.directory / "test-changes.md"
     changes_file.write_text(f"# BISHENG {args.version} 提测说明\n\n{changes}\n", encoding="utf-8")
-    # Import the SDK only for uploads; the notification and selection logic is independently testable.
     from modelscope.hub.api import HubApi
 
     api = HubApi()
@@ -150,12 +150,11 @@ def main() -> None:
         verify_download(url, file.stat().st_size)
         print(f"Verified signed test installer: {file.name}")
     run_url = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{args.run_id}"
-    notes = build_notification(args.version, installers, repo_id, prefix, run_url, changes)
+    notes = build_summary(args.version, installers, repo_id, prefix, run_url, changes)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as stream:
             stream.write(notes + "\n")
-    send_feishu_notification(webhook, args.version, notes, test_build=True)
 
 
 if __name__ == "__main__":

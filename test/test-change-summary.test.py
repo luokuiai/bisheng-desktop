@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".github/scripts"))
 import signed_test_build as build
-import signed_test_notification as notification
 import test_change_summary as summary
 
 VALID = {"功能": ["企业模型支持推理强度设置和原生响应接口。"], "问题修复": ["修复授权撤销后会话模型选择无法恢复的问题。"]}
@@ -123,19 +122,6 @@ class TestChangeSummary(unittest.TestCase):
             self.assertIn("Historical feature", commits)
             self.assertIn("+baseline", code)
             self.assertNotIn("Unrelated branch", commits)
-
-    def test_chinese_summary_reaches_notification_without_history(self):
-        text = summary.render_summary(json.dumps(VALID))
-        with tempfile.TemporaryDirectory() as work:
-            directory = Path(work)
-            (directory / "luokui-ai-windows-x64-setup.exe").write_bytes(b"installer")
-            with patch.object(notification, "build_test_changes", return_value=text), patch.object(notification, "verify_download"), patch.object(notification, "send_feishu_notification") as send:
-                notification.notify(directory, "windows", "1.1.0-test.1", "example/desktop", "fixture")
-            notes = send.call_args.args[2]
-            self.assertIn(text, notes)
-            self.assertNotIn("Co-authored-by", notes)
-            self.assertNotIn("其他变更", notes)
-            self.assertLess(len(notes), 1200)
 
 
 if __name__ == "__main__":
