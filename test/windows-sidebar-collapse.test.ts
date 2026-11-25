@@ -39,11 +39,9 @@ function createColumns(doc: Document): () => CollapsedLayout {
   const compute = new Function('document', `
     ${functionSource('clampWidth')}
     ${functionSource('computeColumns')}
-    ${functionSource('isMacosFullscreen')}
     const darwin = document.documentElement.dataset.platform === 'darwin'
     return () => {
       const sidebarCollapsed = true
-      const macosFullscreen = isMacosFullscreen()
       ${declarationSource('collapsedWidth')}
       ${declarationSource('leadingMounted')}
       return { ...computeColumns(1200, 0, 0, collapsedWidth), leadingMounted }
@@ -63,7 +61,7 @@ it('keeps the Windows collapsed column at zero even with a fullscreen marker', (
   expect(createColumns(webDoc)()).toMatchObject({ sidebar: 56, center: 1144 })
 })
 
-it('keeps the macOS rail while moving leading controls between the window and fullscreen', () => {
+it('collapses the macOS column completely and keeps the leading controls in both window modes', () => {
   const doc = document.implementation.createHTMLDocument()
   let fullscreen = (_value: boolean) => {}
   const dispose = mountMacosWindowChrome(doc, listener => {
@@ -71,10 +69,10 @@ it('keeps the macOS rail while moving leading controls between the window and fu
     return () => {}
   })
   const columns = createColumns(doc)
-  expect(columns()).toMatchObject({ sidebar: 56, center: 1144, leadingMounted: true })
+  expect(columns()).toMatchObject({ sidebar: 0, center: 1200, leadingMounted: true })
   fullscreen(true)
-  expect(columns()).toMatchObject({ sidebar: 56, center: 1144, leadingMounted: false })
+  expect(columns()).toMatchObject({ sidebar: 0, center: 1200, leadingMounted: true })
   fullscreen(false)
-  expect(columns()).toMatchObject({ sidebar: 56, center: 1144, leadingMounted: true })
+  expect(columns()).toMatchObject({ sidebar: 0, center: 1200, leadingMounted: true })
   dispose()
 })

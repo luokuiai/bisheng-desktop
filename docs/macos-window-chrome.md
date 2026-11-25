@@ -4,7 +4,7 @@
 
 - preload 在客户端挂载前声明 `html[data-platform=darwin]`。
 - 使用官方 16/18 原生按钮坐标；不再混用原来的 9px 高度和旧侧栏顶部 padding。
-- 普通窗口和全屏收起后都保留 56px 窄栏。普通窗口的折叠开关和新会话按钮由标题栏 `shell.leading` 提供；全屏时这两个控件留在侧栏。`dsh-client-ui-layout@0.2.1-rc.2` 补丁为外框保留列宽，并同步全屏状态决定 `shell.leading` 是否挂载。上游支持相同的两种收折布局后可移除该补丁片段。
+- 普通 Agent 在 macOS 收起时，左侧网格轨道宽度为零。展开和新会话按钮由 `shell.leading` 提供。悬停展开按钮时，`dsh-client-ui-layout@0.2.1-rc.2` 在同一侧栏插槽内显示浮动预览；点击展开则恢复停靠。原生企业聊天视图在预览期间为它留出可交互空间。DS Bot 自己的侧栏继续由插件管理。
 - main 在加载、进入/退出全屏时通知 preload，映射为 `data-fullscreen`，让官方 CSS 在全屏时回收按钮留白。
 
 平台标记同时影响 shortcuts 环境检测。DSH Desktop 没有官方 `keyboard`/快捷键设置原生桥，因此显式声明 `data-dsh-desktop-web-shortcuts=true`，通过 `dsh-client-shortcuts` 最小补丁继续使用已有 Web 键盘与存储适配器。没有该标记的官方宿主仍要求自己的原生桥；这不是通用的错误吞掉或自动降级。若未来接入完整原生快捷键桥，应同时删除标记与补丁。

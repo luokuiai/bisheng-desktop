@@ -1050,7 +1050,7 @@ it('switches DS Bot between its existing icon rail and expanded sidebar in both 
   const surface = { mode: 'bot' }
   const uninstall = await ui.footerAction({ id: 'bot-return', inject: () => ({ actions, hooks: { surface: { subscribe, getSnapshot: () => surface } } }) }, () => null)
   try {
-    expect(getComputedStyle(leading.querySelector('button:last-child')).display).toBe('none')
+    expect(getComputedStyle(leading.querySelector('button:last-child')).display).not.toBe('none')
     await ui.sidebarEntry({ actions, hooks: { sidebarPref: { subscribe, getSnapshot: () => preference }, frame: { subscribe, getSnapshot: () => frame }, ui: { subscribe, getSnapshot: () => ({ leftDrawer: drawer }) } } })
     const button = container.querySelector('[data-dsh-bot-sidebar-toggle]')
     expect(actions.setSidebarPref).toHaveBeenLastCalledWith('rail')
