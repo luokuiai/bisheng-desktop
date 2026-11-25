@@ -222,10 +222,12 @@ it('gives the Bisheng sections their own nav glyphs through the shell\'s native 
   expect(selected).toHaveBeenCalledWith('desktop-usage')
 })
 
-it.each(['zh', 'en'])('shows recovery with the other About actions without disclosure (%s)', async language => {
+it.each(['zh', 'en'])('shows the desktop brand, version, and About actions (%s)', async language => {
   const f = await fixture(language)
   const entry = f.registrations.find(row => row.options.id === 'desktop-about')
   await f.mount(entry.Component, entry.options.inject())
+  expect(document.querySelector('.dshSettingsVersions dt')?.textContent).toBe(language === 'zh' ? 'LUOKUI-AI 版本' : 'LUOKUI-AI version')
+  expect(document.querySelector('.dshSettingsVersions dd')?.textContent).toBe('1.0.1')
   expect(document.querySelector('details')).toBeNull()
   expect([...document.querySelectorAll('button')].map(node => node.textContent)).toEqual(language === 'zh' ? ['检查更新', '查看日志', '安全模式与插件恢复'] : ['Check for updates', 'Show logs', 'Safe Mode and plugin recovery'])
   await click(document.querySelectorAll('button')[2])

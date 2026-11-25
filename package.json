@@ -325,7 +325,7 @@
   },
   "build": {
     "appId": "com.luokuiai.bisheng",
-    "productName": "BISHENG",
+    "productName": "LUOKUI-AI",
     "asar": true,
     "asarUnpack": [
       "**/*.{node,dylib,dll,so,exe}",
@@ -503,6 +503,7 @@
       "format": "UDZO"
     },
     "win": {
+      "executableName": "BISHENG",
       "icon": "build/icon.ico",
       "signExecutable": false,
       "verifyUpdateCodeSignature": false,
@@ -528,7 +529,7 @@
     "afterPack": "scripts/after-pack.cjs",
     "protocols": [
       {
-        "name": "BISHENG Enterprise Login",
+        "name": "LUOKUI-AI Enterprise Login",
         "schemes": [
           "bisheng"
         ]

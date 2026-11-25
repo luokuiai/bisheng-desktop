@@ -555,7 +555,7 @@ function applyWindowChromeTheme(window: BrowserWindow, isDark: boolean): void {
 
 function configureAppIdentity(): void {
   configureNotificationIdentity(app, process.platform, developmentBuild)
-  app.setName('BISHENG')
+  app.setName('LUOKUI-AI')
   if (developmentBuild) {
     app.setPath('userData', process.env.BISHENG_DEV_USER_DATA || join(app.getPath('appData'), 'bisheng-dev'))
     return
@@ -985,10 +985,10 @@ function ensureTray(): void {
 
   const locale = harnessLocale()
   tray = new Tray(desktopIconPath())
-  tray.setToolTip('BISHENG')
+  tray.setToolTip('LUOKUI-AI')
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: locale === 'zh' ? '显示 BISHENG' : 'Show BISHENG', click: restoreMainWindow },
+      { label: locale === 'zh' ? '显示 LUOKUI-AI' : 'Show LUOKUI-AI', click: restoreMainWindow },
       { type: 'separator' },
       { label: locale === 'zh' ? '退出' : 'Exit', click: () => app.quit() }
     ])
@@ -1008,7 +1008,7 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 640,
     show: false,
-    title: '',
+    title: app.name,
     icon: desktopIconPath(),
     ...(process.platform === 'darwin' ? {
       titleBarStyle: 'hiddenInset' as const,
@@ -1069,7 +1069,7 @@ function createWindow(): BrowserWindow {
   })
   window.on('page-title-updated', (event) => {
     event.preventDefault()
-    window.setTitle('')
+    window.setTitle(app.name)
   })
   window.webContents.on('console-message', (details) => {
     if (details.level !== 'error') return
@@ -1868,8 +1868,8 @@ async function showAbout(window: BrowserWindow): Promise<void> {
   const checkForUpdatesLabel = locale === 'zh' ? '检查更新' : 'Check for Updates'
   const result = await dialog.showMessageBox(window, {
     type: 'info',
-    title: 'BISHENG',
-    message: locale === 'zh' ? '关于 BISHENG' : 'About BISHENG',
+    title: 'LUOKUI-AI',
+    message: locale === 'zh' ? '关于 LUOKUI-AI' : 'About LUOKUI-AI',
     detail: aboutDetail(
       app.getVersion(),
       bundledHarnessVersion(bundledRuntimeRoot()),
@@ -2021,7 +2021,7 @@ function showUnexpectedError(error: unknown): void {
   void (async () => {
     while (!quitting && !gpuFallbackRelaunching) {
       const { response } = await dialog.showMessageBox({
-        type: 'error', title: 'BISHENG',
+        type: 'error', title: 'LUOKUI-AI',
         message: zh ? '应用窗口无法继续加载' : 'The application window could not load',
         detail: message, buttons: zh ? ['退出', '重新启动', '恢复配置'] : ['Quit', 'Restart', 'Recover Configuration'],
         defaultId: 0, cancelId: 0, noLink: true
@@ -2036,7 +2036,7 @@ function showUnexpectedError(error: unknown): void {
     }
   })().catch((failure: unknown) => {
     console.error('[desktop] native recovery failed', failure)
-    dialog.showErrorBox('BISHENG', message)
+    dialog.showErrorBox('LUOKUI-AI', message)
   }).finally(() => { nativeRecoveryActive = false })
 }
 
@@ -3220,7 +3220,7 @@ function installMenu(): void {
           label: app.name,
           submenu: [
             {
-              label: isChinese ? '关于 BISHENG' : 'About BISHENG',
+              label: isChinese ? '关于 LUOKUI-AI' : 'About LUOKUI-AI',
               click: () => {
                 if (mainWindow && !mainWindow.isDestroyed()) {
                   void showAbout(mainWindow).catch(showUnexpectedError)
@@ -3329,7 +3329,7 @@ async function showMobilePairing(): Promise<void> {
     const options: MessageBoxOptions = {
       type: 'info',
       message: zh ? 'Harness 仍在启动。' : 'Harness is still starting.',
-      detail: zh ? '请等待 BISHENG 就绪后再连接手机。' : 'Wait until BISHENG is ready, then connect your phone again.',
+      detail: zh ? '请等待 LUOKUI-AI 就绪后再连接手机。' : 'Wait until LUOKUI-AI is ready, then connect your phone again.',
       buttons: [zh ? '确定' : 'OK']
     }
     await (mainWindow ? dialog.showMessageBox(mainWindow, options) : dialog.showMessageBox(options))

@@ -64,8 +64,8 @@ export function updateHeadline(status: UpdateStatus, locale: UpdateLocale): Upda
       return {
         title: zh ? '已打开浏览器下载' : 'Download opened in browser',
         description: zh
-          ? '请在浏览器中查看下载进度。下载完成后保存工作并退出 BISHENG，再打开安装包安装新版。'
-          : 'Check the download in your browser. When it finishes, save your work and quit BISHENG, then run the installer to update.'
+          ? '请在浏览器中查看下载进度。下载完成后保存工作并退出 LUOKUI-AI，再打开安装包安装新版。'
+          : 'Check the download in your browser. When it finishes, save your work and quit LUOKUI-AI, then run the installer to update.'
       }
     case 'up-to-date':
       return {
@@ -99,11 +99,11 @@ export function updateMessage(status: UpdateStatus, locale: UpdateLocale): strin
     case 'available':
       return zh
         ? `发现新版本${version}，是否更新？`
-        : `BISHENG${version} is available. Update now?`
+        : `LUOKUI-AI${version} is available. Update now?`
     case 'external-download':
       return zh ? '已在浏览器中打开下载' : 'Download opened in your browser'
     case 'up-to-date':
-      return zh ? 'BISHENG 已是最新版本' : 'BISHENG is up to date'
+      return zh ? 'LUOKUI-AI 已是最新版本' : 'LUOKUI-AI is up to date'
     case 'unsupported':
       return zh ? '当前构建不支持在线更新。' : 'Online updates are unavailable in this build.'
     case 'error':
