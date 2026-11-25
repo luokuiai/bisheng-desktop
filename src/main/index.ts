@@ -556,13 +556,12 @@ function applyWindowChromeTheme(window: BrowserWindow, isDark: boolean): void {
 
 function configureAppIdentity(): void {
   configureNotificationIdentity(app, process.platform, developmentBuild)
+  app.setName('BISHENG')
   if (developmentBuild) {
-    app.setName('BISHENG Dev')
     app.setPath('userData', process.env.BISHENG_DEV_USER_DATA || join(app.getPath('appData'), 'bisheng-dev'))
     return
   }
 
-  app.setName('BISHENG')
   // Keep this directory explicit. Harness stores workspaces, sessions,
   // credentials, and custom presets below userData, so deriving the path from
   // app.getName() would make a later display-name change look like a fresh install.

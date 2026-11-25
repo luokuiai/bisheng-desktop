@@ -22,15 +22,15 @@ afterEach(async () => {
 })
 
 it.each([
-  ['arm64', ['bisheng-dev-mac-arm64.dmg', 'bisheng-dev-mac-arm64.zip']],
-  ['x64', ['bisheng-dev-mac-x64.dmg', 'bisheng-dev-mac-x64.zip']],
-  ['windows', ['bisheng-dev-windows-x64-setup.exe']]
+  ['arm64', ['bisheng-mac-arm64.dmg', 'bisheng-mac-arm64.zip']],
+  ['x64', ['bisheng-mac-x64.dmg', 'bisheng-mac-x64.zip']],
+  ['windows', ['bisheng-windows-x64-setup.exe']]
 ])('requires the %s installers while allowing absent updater metadata', async (platform, names) => {
   const directory = await temporaryDirectory()
   await expect(developmentAssets(directory, platform)).rejects.toThrow()
   for (const name of names) await writeFile(path.join(directory, name), 'installer')
   expect(await developmentAssets(directory, platform)).toEqual(names.map(name => path.join(directory, name)))
-  const metadata = platform === 'windows' ? 'latest.yml' : `bisheng-dev-mac-${platform}.zip.blockmap`
+  const metadata = platform === 'windows' ? 'latest.yml' : `bisheng-mac-${platform}.zip.blockmap`
   await writeFile(path.join(directory, metadata), 'metadata')
   expect(await developmentAssets(directory, platform)).toContain(path.join(directory, metadata))
   await writeFile(path.join(directory, names[0]), '')
@@ -43,9 +43,9 @@ it('keeps release handoff on draft Releases', async () => {
 })
 
 it.each([
-  ['mac-arm64', ['bisheng-dev-mac-arm64.dmg', 'bisheng-dev-mac-arm64.zip'], 'latest-mac-arm64.yml', 'zip'],
-  ['mac-x64', ['bisheng-dev-mac-x64.dmg', 'bisheng-dev-mac-x64.zip'], 'latest-mac-x64.yml', 'zip'],
-  ['windows-x64', ['bisheng-dev-windows-x64-setup.exe'], 'latest.yml', 'exe']
+  ['mac-arm64', ['bisheng-mac-arm64.dmg', 'bisheng-mac-arm64.zip'], 'latest-mac-arm64.yml', 'zip'],
+  ['mac-x64', ['bisheng-mac-x64.dmg', 'bisheng-mac-x64.zip'], 'latest-mac-x64.yml', 'zip'],
+  ['windows-x64', ['bisheng-windows-x64-setup.exe'], 'latest.yml', 'exe']
 ])('exports %s metadata matching the actual updater package', async (target, names, metadataName, extension) => {
   const directory = await temporaryDirectory()
   for (const name of names) await writeFile(path.join(directory, name), `package bytes for ${name}`)
@@ -71,9 +71,9 @@ it.each([
 
 it('rejects missing or empty update packages and unsupported targets', async () => {
   const directory = await temporaryDirectory()
-  await writeFile(path.join(directory, 'bisheng-dev-mac-arm64.dmg'), 'installer')
+  await writeFile(path.join(directory, 'bisheng-mac-arm64.dmg'), 'installer')
   await expect(prepareDevelopmentUpdateAssets(directory, 'mac-arm64', '1.2.3')).rejects.toMatchObject({ code: 'ENOENT' })
-  await writeFile(path.join(directory, 'bisheng-dev-mac-arm64.zip'), '')
+  await writeFile(path.join(directory, 'bisheng-mac-arm64.zip'), '')
   await expect(prepareDevelopmentUpdateAssets(directory, 'mac-arm64', '1.2.3')).rejects.toThrow('empty development installer')
   await expect(prepareDevelopmentUpdateAssets(directory, 'linux-x64', '1.2.3')).rejects.toThrow('Unknown development target')
   await expect(readFile(path.join(directory, 'latest-mac-arm64.yml'))).rejects.toMatchObject({ code: 'ENOENT' })
@@ -81,7 +81,7 @@ it('rejects missing or empty update packages and unsupported targets', async () 
 
 it('exports artifact step outputs and reads the application version in the CLI', async () => {
   const directory = await temporaryDirectory()
-  await writeFile(path.join(directory, 'bisheng-dev-windows-x64-setup.exe'), 'installer')
+  await writeFile(path.join(directory, 'bisheng-windows-x64-setup.exe'), 'installer')
   const output = path.join(directory, 'step-output')
   execFileSync(process.execPath, [
     path.resolve(import.meta.dirname, '../scripts/prepare-development-update-assets.mjs'), 'windows-x64', directory
@@ -124,9 +124,9 @@ it('packages PRs and develop pushes, and uploads original-format assets only on 
   })
   const build = workflow.jobs.build
   expect(build.strategy.matrix.include.map(({ script, installer }) => [script, installer])).toEqual([
-    ['package:dev:mac:arm64', 'bisheng-dev-mac-arm64.dmg'],
-    ['package:dev:mac:x64', 'bisheng-dev-mac-x64.dmg'],
-    ['package:dev:win', 'bisheng-dev-windows-x64-setup.exe']
+    ['package:dev:mac:arm64', 'bisheng-mac-arm64.dmg'],
+    ['package:dev:mac:x64', 'bisheng-mac-x64.dmg'],
+    ['package:dev:win', 'bisheng-windows-x64-setup.exe']
   ])
   const packageStep = build.steps.findIndex(step => step.run === 'npm run ${{ matrix.script }}')
   const verifyStep = build.steps.findIndex(step => step.name === 'Verify app signature inside the macOS installer')
@@ -136,6 +136,7 @@ it('packages PRs and develop pushes, and uploads original-format assets only on 
   expect(verifyStep).toBeGreaterThan(packageStep)
   expect(build.steps[verifyStep].if).toBe("runner.os == 'macOS'")
   expect(build.steps[verifyStep].run).toContain('codesign --verify --deep --strict')
+  expect(build.steps[verifyStep].run).toContain('"$mount_point/BISHENG.app"')
   expect(artifactStep).toBeGreaterThan(verifyStep)
   const upload = build.steps[artifactStep]
   expect(upload.uses).toBe('actions/upload-artifact@v7')
@@ -278,7 +279,7 @@ it('stages every signed and prerelease target before Windows signing', async () 
 
 it.skipIf(process.platform === 'win32')('uploads validated development files and propagates upload failures', async () => {
   const directory = await temporaryDirectory()
-  const installer = path.join(directory, 'bisheng-dev-windows-x64-setup.exe')
+  const installer = path.join(directory, 'bisheng-windows-x64-setup.exe')
   await writeFile(installer, 'installer')
   await writeFile(path.join(directory, 'gh'), `#!/usr/bin/env node
 require('node:fs').writeFileSync(process.env.CALLS, JSON.stringify(process.argv.slice(2)))
