@@ -1,4 +1,5 @@
 import { EnterpriseChatView } from './enterprise/chat-view'
+import { popupSidebarMenu } from './sidebar-menu'
 import { desktopFileUrl, navigateDesktopWindow } from './desktop-navigation'
 import { recoverStartupConfiguration } from './startup-config-recovery'
 import { initializeDesktopService, desktopDiagnostics } from './desktop-service'
@@ -1765,6 +1766,12 @@ function registerHarnessHandlers(): void {
     await setHostPluginEnabled(dshHome, BUILTIN_IMAGE_GENERATION, enabled)
     runtime.note(`[desktop] built-in image generation ${enabled ? 'enabled' : 'disabled'}; Harness restart required`)
     return { ok: true, enabled, restartRequired: true }
+  })
+
+  ipcMain.removeHandler('desktop-sidebar:popup-menu')
+  ipcMain.handle('desktop-sidebar:popup-menu', (event, request: unknown) => {
+    assertTrustedMainWindowEvent(event)
+    return mainWindow ? popupSidebarMenu(mainWindow, request) : null
   })
 
   ipcMain.removeHandler('desktop-titlebar:popup-menu')

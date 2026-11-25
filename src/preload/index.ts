@@ -641,6 +641,8 @@ ipcRenderer.on('enterprise-chat:settings-focus', (_event, detail) => {
 })
 
 contextBridge.exposeInMainWorld('dshEnterpriseChat', Object.freeze({
+  popupSidebarMenu: (request: import('../shared/sidebar-menu').SidebarMenuRequest): Promise<number | null> =>
+    ipcRenderer.invoke('desktop-sidebar:popup-menu', request),
   onToolsChanged: (listener: () => void): (() => void) => {
     if (typeof listener !== 'function') throw new TypeError('Tool change listener must be a function.')
     const receive = (): void => listener()

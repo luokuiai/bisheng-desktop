@@ -721,6 +721,43 @@ it('opens More beside the collapsed rail and keeps native Chat visible', async (
   expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, bounds: { x: 80, y: 80, width: 880, height: 640 } }))
 })
 
+it('floats the native More menu over Chat without changing its presentation', async () => {
+  const ui = await mount(true, {}, false, undefined, false, { wide: false })
+  await ui.navigation(navigationEntries(6))
+  const sidebar = container.querySelector('aside')
+  const trigger = sidebar.querySelector('[data-navigation-id=more]')
+  sidebar.getBoundingClientRect = () => new DOMRect(12, 12, 56, 700)
+  trigger.getBoundingClientRect = () => new DOMRect(20, 120, 40, 30)
+  const panel = container.querySelector('#dsh-panel-chat')
+  panel.getBoundingClientRect = () => new DOMRect(80, 80, 880, 640)
+  await ui.resize(panel)
+  const bridge = window.dshEnterpriseChat
+  const initial = bridge.present.mock.lastCall[0]
+  let closeMenu
+  bridge.popupSidebarMenu = vi.fn(() => new Promise(resolve => { closeMenu = resolve }))
+  await ui.navigation(navigationEntries(6))
+  bridge.present.mockClear()
+
+  await navigationMenu()
+  expect(bridge.popupSidebarMenu).toHaveBeenCalledWith({ x: 72, y: 120, labels: ['Page 6', 'Reorder navigation'] })
+  expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  expect(document.querySelector('[role=menu]')).toBeNull()
+  await ui.resize(panel)
+  expect(bridge.present).toHaveBeenLastCalledWith(initial)
+
+  await act(async () => closeMenu(null))
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  expect(bridge.openPage).not.toHaveBeenCalled()
+  await navigationMenu()
+  await act(async () => closeMenu(0))
+  expect(bridge.openPage).toHaveBeenLastCalledWith('page-6')
+  expect(bridge.present.mock.calls.every(([presentation]) => presentation.visible && presentation.bounds.x === 80 && presentation.bounds.width === 880)).toBe(true)
+
+  await navigationMenu()
+  await act(async () => closeMenu(1))
+  expect(document.querySelector('[role=dialog]').getAttribute('aria-label')).toBe('Reorder navigation')
+})
+
 it('moves a compatible DS Bot return action into primary navigation and releases it with the plugin', async () => {
   const ui = await mount()
   const rows = () => [...container.querySelectorAll('[data-navigation-id]')].map(node => node.dataset.navigationId)
@@ -1473,6 +1510,36 @@ it('fits sidebar tooltips and conversation menus beside Chat without hiding it',
   expect(menu.style.getPropertyValue(offset)).toBe('')
   expect(present).toHaveBeenLastCalledWith(expect.objectContaining(base))
   expect(present.mock.calls.every(([value]) => value.visible)).toBe(true)
+})
+
+it('fits the bundled workspace hover card inside the sidebar without resizing Chat', async () => {
+  const view = await mount(true)
+  await view.click('chat')
+  const sidebar = container.querySelector('aside')
+  sidebar.setAttribute('data-dsh-sidebar-root', '')
+  sidebar.dataset.dshSidebarWide = 'true'
+  sidebar.getBoundingClientRect = () => new DOMRect(13, 59, 280, 800)
+  const panel = container.querySelector('#dsh-panel-chat')
+  panel.getBoundingClientRect = () => new DOMRect(305, 115, 900, 740)
+  await view.resize(panel)
+  const present = window.dshEnterpriseChat.present
+  present.mockClear()
+  const card = document.createElement('div')
+  card.setAttribute('role', 'button')
+  card.style.setProperty('--dsh-hover-preview-fade', '120ms')
+  const offset = axis => Number.parseFloat(card.style.getPropertyValue(`--dsh-sidebar-overlay-offset${axis}`)) || 0
+  card.getBoundingClientRect = () => new DOMRect(294 + offset(''), 445 + offset('-y'), 244, 108)
+  try {
+    await act(async () => document.body.append(card))
+    expect(card.hasAttribute('data-dsh-hover-card')).toBe(false)
+    expect(card.getBoundingClientRect().right).toBe(285)
+    expect(card.getBoundingClientRect().top).toBe(477)
+    expect(present).not.toHaveBeenCalled()
+  } finally {
+    await act(async () => card.remove())
+  }
+  expect(offset('')).toBe(0)
+  expect(offset('-y')).toBe(0)
 })
 
 it('passes the right panel width to its resize handle without changing the work grid tracks', async () => {

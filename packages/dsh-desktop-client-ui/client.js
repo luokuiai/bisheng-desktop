@@ -682,8 +682,11 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       // enterprise view, even though the plugin doesn't set aria-modal.
       const botDialog = '.bt-pane > :is(.bt-newchat, .bt-create)[role="dialog"]'
       const dialogSelector = `[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], dialog[open], ${botDialog}`
-      const floatingSelector = 'body > :is([role="menu"], [role="tooltip"][data-portal], [data-dsh-hover-card]), :is([data-dsh-sidebar-root], .bt-leftcol) [role="tooltip"]'
+      // Some Harness builds bundle HoverCard before the marker patch is applied.
+      const hoverCard = ':is([data-dsh-hover-card], [style*="--dsh-hover-preview-fade:"])'
+      const floatingSelector = `body > :is([role="menu"], [role="tooltip"][data-portal], ${hoverCard}), :is([data-dsh-sidebar-root], .bt-leftcol) [role="tooltip"]`
       const offsetProperty = '--dsh-sidebar-overlay-offset'
+      const verticalOffsetProperty = '--dsh-sidebar-overlay-offset-y'
       const offsets = new Map()
       let bounds
       let modalOpen = false
@@ -699,21 +702,24 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         for (const element of offsets.keys()) {
           if (floating.includes(element)) continue
           element.style.removeProperty(offsetProperty)
+          element.style.removeProperty(verticalOffsetProperty)
           offsets.delete(element)
           sizes.unobserve(element)
         }
         for (const element of floating) {
           if (!offsets.has(element)) sizes.observe(element)
-          const previousOffset = offsets.get(element) ?? 0
+          const previous = offsets.get(element) ?? { x: 0, y: 0 }
           let offset = 0
+          let offsetY = 0
           if (element.checkVisibility({ checkVisibilityCSS: true })) {
             const rect = element.getBoundingClientRect()
-            if (rect.width > 0 && rect.bottom > bounds.y && rect.top < bounds.y + bounds.height) {
+            const top = rect.top - previous.y
+            if (rect.width > 0 && rect.bottom - previous.y > bounds.y && top < bounds.y + bounds.height) {
               const submenus = [...element.querySelectorAll('[role="menu"]')].map(menu => menu.getBoundingClientRect())
               // Use CSS pixels so reading back a translated rectangle at fractional
               // zoom cannot repeatedly change the offset by a fraction of a pixel.
-              const left = Math.round(Math.min(rect.left, ...submenus.map(menu => menu.left)) - previousOffset)
-              const end = Math.round(Math.max(rect.right, ...submenus.map(menu => menu.right)) - previousOffset)
+              const left = Math.round(Math.min(rect.left, ...submenus.map(menu => menu.left)) - previous.x)
+              const end = Math.round(Math.max(rect.right, ...submenus.map(menu => menu.right)) - previous.x)
               // Leave room for the floating surface's shadow along the native edge.
               const availableRight = bounds.x - 8
               if (end > availableRight) {
@@ -721,15 +727,26 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
                 if (!element.classList.contains('dshNavigationFlyout')) {
                   offset = Math.min(0, Math.max(12 - left, Math.floor(availableRight - end)))
                 }
+                const wideSidebar = bounds.wideSidebar
+                if (wideSidebar && element.matches(hoverCard) && left >= wideSidebar.right - 8 &&
+                    left <= wideSidebar.right + 32 && rect.width <= wideSidebar.width - 16) {
+                  offset = Math.floor(wideSidebar.right - 8 - end)
+                  // Moving a row preview below the anchor keeps the hovered row hittable.
+                  offsetY = top + 32 + rect.height <= window.innerHeight - 12 ? 32 : -Math.ceil(rect.height + 8)
+                }
                 right = Math.max(right, Math.ceil(end + offset + 8))
               }
             }
           }
-          if (offset !== previousOffset) {
+          if (offset !== previous.x) {
             if (offset) element.style.setProperty(offsetProperty, `${offset}px`)
             else element.style.removeProperty(offsetProperty)
           }
-          offsets.set(element, offset)
+          if (offsetY !== previous.y) {
+            if (offsetY) element.style.setProperty(verticalOffsetProperty, `${offsetY}px`)
+            else element.style.removeProperty(verticalOffsetProperty)
+          }
+          offsets.set(element, { x: offset, y: offsetY })
         }
         return right
       }
@@ -771,7 +788,10 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           disposed = true
           body.disconnect()
           sizes.disconnect()
-          for (const element of offsets.keys()) element.style.removeProperty(offsetProperty)
+          for (const element of offsets.keys()) {
+            element.style.removeProperty(offsetProperty)
+            element.style.removeProperty(verticalOffsetProperty)
+          }
           document.removeEventListener('visibilitychange', schedule)
         }
       }
@@ -963,7 +983,8 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
             : 0
           const chatVisible = mode === 'chat' && !surfaceOpen && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
           const settingsVisible = remote && !hostOverlayOpen && state.connected && remote.bounds.width > 0 && remote.bounds.height > 0
-          const overlayBounds = settingsVisible ? remote.bounds : chatVisible ? { x: baseX, y, height: rect.height } : undefined
+          const wideSidebar = chatVisible && document.querySelector('[data-dsh-sidebar-root][data-dsh-sidebar-wide="true"]')?.getBoundingClientRect()
+          const overlayBounds = settingsVisible ? remote.bounds : chatVisible ? { x: baseX, y, height: rect.height, wideSidebar } : undefined
           const floatingRight = overlays.fitBeside(overlayBounds)
           const x = Math.max(baseX, floatingRight)
           const remoteBounds = remote && { ...remote.bounds, x: Math.max(remote.bounds.x, floatingRight),
@@ -1377,6 +1398,8 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       const botMode = React.useSyncExternalStore(botSurface.subscribe, botSurface.snapshot)
       const botVisible = Boolean(botEntry && botAction && botMode === 'agent')
       const [menuOpen, setMenuOpen] = React.useState(false)
+      const [nativeMenuOpen, setNativeMenuOpen] = React.useState(false)
+      const pendingMenu = React.useRef(null)
       const [order, setOrder] = React.useState(readNavigationOrder)
       const [sorting, setSorting] = React.useState(null)
       React.useLayoutEffect(() => {
@@ -1384,6 +1407,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       }, [botNavigation, botEntry, botVisible])
       React.useEffect(() => { setMenuOpen(false); setSorting(null) }, [state.epoch, state.connected])
       React.useEffect(() => { setMenuOpen(false) }, [wide])
+      React.useEffect(() => () => { pendingMenu.current = null }, [])
       React.useEffect(() => {
         if (!menuOpen) return
         // Electron's embedded Chat view takes focus without an iframe in this document.
@@ -1410,16 +1434,44 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         else if (id.startsWith('web:')) void navigation.openPage(id.slice(4))
         else { navigation.select('work'); selectPanel(id.slice(6)) }
       }
+      const menuItems = [...overflow, { id: 'reorder', label: t('reorderNavigation'), icon: React.createElement(NavigationIcon, { id: 'reorder' }) }]
+      const selectMenuItem = id => {
+        if (id === 'reorder') { setMenuOpen(false); setSorting({}) } else openItem(id)
+      }
+      const popupSidebarMenu = !wide && state.mode === 'chat' && state.connected && window.dshEnterpriseChat?.popupSidebarMenu
+      const toggleMore = async () => {
+        if (!popupSidebarMenu) { setMenuOpen(open => !open); return }
+        const anchor = collapsedNavigationAnchor()
+        if (!anchor || pendingMenu.current) return
+        const request = { x: anchor.right + 4, y: anchor.top, labels: menuItems.map(item => item.label) }
+        pendingMenu.current = request
+        setNativeMenuOpen(true)
+        try {
+          const index = await popupSidebarMenu(request)
+          const current = navigation.snapshot()
+          if (pendingMenu.current === request && current.epoch === state.epoch && current.mode === 'chat' && current.connected && index !== null) {
+            const item = menuItems[index]
+            if (item) selectMenuItem(item.id)
+          }
+        } catch (error) {
+          console.warn('[desktop-navigation] Could not open the sidebar menu', error)
+        } finally {
+          if (pendingMenu.current === request) {
+            pendingMenu.current = null
+            setNativeMenuOpen(false)
+          }
+        }
+      }
       return React.createElement('nav', { className: 'dshPrimaryNavigation', 'data-wide': wide, 'aria-label': t('navigation') },
         plugins && renderAction({ id: plugins.id, label: plugins.label, icon: renderPanelIcon(plugins.id), active: state.mode === 'work' && state.activePanelId === plugins.id, onClick: () => { setMenuOpen(false); navigation.select('work'); selectPanel(plugins.id) } }),
         visible.map(item => React.createElement(React.Fragment, { key: item.id }, renderAction({ ...item, active: item.id === selectedId, onClick: () => openItem(item.id) }))),
         items.length > 0 && React.createElement(Menu, {
-          open: menuOpen, onClose: () => setMenuOpen(false), items: [...overflow, { id: 'reorder', label: t('reorderNavigation'), icon: React.createElement(NavigationIcon, { id: 'reorder' }) }], autoFocus: true, dense: true,
+          open: !popupSidebarMenu && menuOpen, onClose: () => setMenuOpen(false), items: menuItems, autoFocus: true, dense: true,
           portal: !wide, side: wide ? 'bottom' : 'right', getAnchorRect: wide ? undefined : collapsedNavigationAnchor,
           className: 'dshNavigationMenu', listClassName: wide ? 'dshNavigationMenuList' : 'dshNavigationFlyout',
           selectedId,
-          onSelect: id => { if (id === 'reorder') { setMenuOpen(false); setSorting({}) } else openItem(id) },
-          anchor: renderAction({ id: 'more', label: t('moreNavigation'), icon: React.createElement(NavigationIcon, { id: 'more' }), active: overflow.some(item => item.id === selectedId), expanded: menuOpen, onClick: () => setMenuOpen(open => !open) })
+          onSelect: selectMenuItem,
+          anchor: renderAction({ id: 'more', label: t('moreNavigation'), icon: React.createElement(NavigationIcon, { id: 'more' }), active: overflow.some(item => item.id === selectedId), expanded: menuOpen || nativeMenuOpen, onClick: toggleMore })
         }),
         sorting && React.createElement(NavigationOrderDialog, { items, order, t, onClose: () => setSorting(null), onSave: next => { setOrder(next); setSorting(null) } }))
     }
@@ -1470,7 +1522,27 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           .dshModesTabs button[aria-selected=true]{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}
           .dshModes button:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
           .dshModeBody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}.dshModeBody[hidden]{display:none}
-          [style*="--dsh-sidebar-overlay-offset:"] { translate: var(--dsh-sidebar-overlay-offset); }
+          [style*="--dsh-sidebar-overlay-offset:"] { translate: var(--dsh-sidebar-overlay-offset) var(--dsh-sidebar-overlay-offset-y, 0px); }
+          body[data-dsh-desktop-ui="dsh"] [role="tooltip"][data-side] {
+            --dsw-alias-tooltip-bg: var(--dsw-alias-bg-layer-1);
+            --dsw-alias-tooltip-key-bg: var(--dsw-alias-bg-layer-2);
+            color: var(--dsw-alias-label-primary);
+            box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2), var(--dsw-elevation-panel);
+          }
+          /* Harness compact row previews default to white text on a fixed dark surface.
+             Include the bundled variant, which may not carry the patched marker. */
+          body[data-dsh-desktop-ui="dsh"] > :is([data-dsh-hover-card], [style*="--dsh-hover-preview-fade:"]):is([role="button"], :has(> .YDXeBa_hoverContent)) {
+            --dsw-hovercard-bg: var(--dsw-alias-bg-layer-1);
+            box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2), var(--dsw-elevation-panel);
+            color: var(--dsw-alias-label-primary);
+          }
+          body[data-dsh-desktop-ui="dsh"] > :is([data-dsh-hover-card], [style*="--dsh-hover-preview-fade:"]) .YDXeBa_hoverTitle,
+          body[data-dsh-desktop-ui="dsh"] > :is([data-dsh-hover-card], [style*="--dsh-hover-preview-fade:"])[role="button"] > span:only-child {
+            color: var(--dsw-alias-label-primary);
+          }
+          body[data-dsh-desktop-ui="dsh"] > :is([data-dsh-hover-card], [style*="--dsh-hover-preview-fade:"]) :is(.YDXeBa_hoverPath, .YDXeBa_hoverTime, .YDXeBa_hoverStatus) {
+            color: var(--dsw-alias-label-secondary);
+          }
           .dshWorkContent{display:grid;grid-template:minmax(0,1fr) / minmax(0,1fr) 0px;isolation:isolate}.dshWorkContent[hidden]{display:none}
           .dshWorkContent>.pI_x6G_handle[data-side=rightbar]{grid-area:auto;right:calc(var(--dsh-work-rightbar-width) - 4px);margin-left:0}
           .dshWorkContent[data-reveal-controls=true]:not([hidden]) [data-dsh-hero-controls]{clip-path:inset(-8px -8px -8px -8px);transition:clip-path 180ms cubic-bezier(.23,1,.32,1)}

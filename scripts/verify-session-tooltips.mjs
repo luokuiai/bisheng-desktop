@@ -24,13 +24,15 @@ try {
     assert.ok(end > start)
     return primitiveSource.slice(start + marker.length, end)
   }
-  const tooltipSource = ['input-modality', 'useDismissOnOutsidePointer', 'Tooltip'].map(region).join('\n')
+  const tooltipSource = ['input-modality', 'useDismissOnOutsidePointer', 'ShortcutKeys', 'Tooltip'].map(region).join('\n')
   await build({ stdin: { resolveDir: root, loader: 'jsx', contents: `
     import React, { cloneElement, createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
     import { jsx, jsxs } from 'react/jsx-runtime'
     import { createRoot } from 'react-dom/client'
     import { flushSync, createPortal } from 'react-dom'
     import css$23 from './node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/Tooltip.module.css'
+    import css$13 from './node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/ShortcutKeys.module.css'
+    const clsx = (...names) => names.filter(Boolean).join(' ')
     ${tooltipSource}
     const root = createRoot(document.getElementById('root'))
     const frame = () => new Promise(resolve => requestAnimationFrame(resolve))
@@ -44,7 +46,7 @@ try {
               <article className="conversation">
                 <div style={{ height: 180 }} />
                 <div className="actions">
-                  <Tooltip label="Copy" side={side}><button id="copy" aria-label="Copy">Copy</button></Tooltip>
+                  <Tooltip label="Copy" shortcutKeys={keyboard ? ['Ctrl', '+', 'C'] : ['⌘', 'C']} side={side} portal={side === 'bottom'}><button id="copy" aria-label="Copy">Copy</button></Tooltip>
                   <Tooltip label="Branch" side={side}><button id="branch">Branch</button></Tooltip>
                 </div>
                 <div style={{ height: 1200 }} />
@@ -76,6 +78,14 @@ try {
         withinViewport: b.left >= 0 && b.right <= innerWidth && b.top >= 0 && b.bottom <= innerHeight,
         inspectorWidth: document.querySelector('.inspector').getBoundingClientRect().width,
       }
+      const colors = () => {
+        const keycap = keyboard ? bubble.querySelector('span:has(> kbd)') : bubble.querySelector('kbd')
+        return [getComputedStyle(bubble).backgroundColor, getComputedStyle(keycap).backgroundColor, getComputedStyle(keycap).color]
+      }
+      result.light = colors()
+      document.body.setAttribute('data-ds-dark-theme', '')
+      result.dark = colors()
+      document.body.removeAttribute('data-ds-dark-theme')
       button.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
       button.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }))
       await frame()
@@ -85,11 +95,13 @@ try {
   ` }, bundle: true, outfile: join(temporary, 'renderer.js'), loader: { '.css': 'local-css' }, define: { 'process.env.NODE_ENV': '"production"' } })
   await writeFile(join(temporary, 'index.html'), `<!doctype html><html><head><link rel="stylesheet" href="renderer.css"><style>
     html,body,#root{margin:0;width:100%;height:100%}body{font-family:sans-serif}
+    body{--dsw-alias-bg-layer-1:#fff;--dsw-alias-bg-layer-2:#eee;--dsw-alias-label-primary:#222}
+    body[data-ds-dark-theme]{--dsw-alias-bg-layer-1:#222;--dsw-alias-bg-layer-2:#444;--dsw-alias-label-primary:#fff}
     .fixture{display:grid;position:absolute;inset:48px 0 0}
     .conversation{min-width:0;min-height:0;overflow:auto}.actions{display:flex;justify-content:flex-end;gap:8px;padding:0 32px}
     button{width:48px;height:30px}.inspector{overflow:hidden}
     ${styles[1]}
-  </style></head><body><div id="root"></div><script src="renderer.js"></script></body></html>`)
+  </style></head><body data-dsh-desktop-ui="dsh"><div id="root"></div><script src="renderer.js"></script></body></html>`)
   const entry = join(temporary, 'main.cjs')
   await writeFile(entry, `
     const assert = require('node:assert/strict')
@@ -114,6 +126,8 @@ try {
               assert.equal(result.withinViewport, true)
               assert.equal(result.dismissed, true)
               assert.ok(Math.abs(result.inspectorWidth - inspector) < 1.5)
+              assert.deepEqual(result.light, ['rgb(255, 255, 255)', 'rgb(238, 238, 238)', 'rgb(34, 34, 34)'])
+              assert.deepEqual(result.dark, ['rgb(34, 34, 34)', 'rgb(68, 68, 68)', 'rgb(255, 255, 255)'])
               count++
             }
           }
