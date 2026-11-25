@@ -139,7 +139,7 @@ describe('BISHENG client slot occupants', () => {
     expect(uiStyle?.textContent).toMatch(/\.dig-root \.dig-btn-primary:hover:not\(:disabled\)\s*\{\s*background: var\(--dsw-alias-button-primary-hover\);/u)
     expect(uiStyle?.textContent).toContain('html, body {')
     expect(uiStyle?.textContent).toMatch(/html\[data-platform="darwin"\] body\[data-dsh-desktop-ui="dsh"\] \.pI_x6G_frame\s*\{\s*box-sizing: border-box;/u)
-    expect(uiStyle?.textContent).toMatch(/html\[data-platform="darwin"\]:not\(\[data-fullscreen="true"\]\)[^{]*\.pI_x6G_frame::before\s*\{[^}]*inset: 0 0 auto 88px;[^}]*-webkit-app-region: drag;/u)
+    expect(uiStyle?.textContent).toMatch(/html\[data-platform="darwin"\]:not\(\[data-fullscreen="true"\]\)[^{]*\.pI_x6G_frame:not\(:has\(\.dshModes > \.dshModesHeader\)\)::before\s*\{[^}]*inset: 0 0 auto 88px;[^}]*-webkit-app-region: drag;/u)
     expect(uiStyle?.textContent).toMatch(/html\[data-platform="darwin"\] [^{]*\.pI_x6G_frame:not\(\[data-sidebar-collapsed\]\) \.hHd-Xa_topStrip\s*\{[^}]*position: fixed;[^}]*top: 11px;\s*left: 88px;[^}]*-webkit-app-region: no-drag;/u)
     expect(uiStyle?.textContent).toMatch(/html\[data-platform="darwin"\] [^{]*\.pI_x6G_frame\[data-sidebar-collapsed\] \.hHd-Xa_topStrip\s*\{\s*display: none;/u)
     expect(uiStyle?.textContent).toMatch(/html\[data-platform="darwin"\]:not\(\[data-fullscreen="true"\]\)[^{]*\[data-sidebar-collapsed\][^{]*> \.hHd-Xa_newSession\s*\{\s*display: none;/u)

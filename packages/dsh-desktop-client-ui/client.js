@@ -938,13 +938,14 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
             // Both tabs follow the outer rail's visual edge, including its
             // slide animation (which does not trigger ResizeObserver).
             const baseLeft = modes.getBoundingClientRect().left - railInset
+            const railGap = Number.parseFloat(getComputedStyle(modes).getPropertyValue('--dsk-shell-column-gap'))
             let nextInset = 0
             for (const rail of rails) {
               // A DS Bot drawer overlays the card, rather than moving it.
               if (rail === botSidebar && !botSidebarDocked) continue
               const bounds = rail.getBoundingClientRect()
               if (!bounds.width || !bounds.height) continue
-              nextInset = Math.max(nextInset, bounds.right + 12 - baseLeft)
+              nextInset = Math.max(nextInset, bounds.right + (Number.isFinite(railGap) ? railGap : 12) - baseLeft)
             }
             if (nextInset !== railInset) {
               railInset = nextInset
@@ -954,7 +955,13 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           }
           const rect = panel.current?.getBoundingClientRect()
           if (!rect) return
-          const sidebarRight = document.querySelector('[data-dsh-sidebar-root]')?.getBoundingClientRect().right || 0
+          const sidebar = document.querySelector('[data-dsh-sidebar-root]')
+          // The preview is outside the grid. Give only the native view room for it.
+          const preview = shellFrame?.hasAttribute('data-dsh-sidebar-preview') && sidebar?.closest('.pI_x6G_sidebarCol')
+          // Reserve the final width while the compositor animates the preview.
+          const sidebarRight = preview
+            ? shellFrame.getBoundingClientRect().left + preview.offsetLeft + preview.offsetWidth
+            : sidebar?.checkVisibility({ checkVisibilityCSS: true }) ? sidebar.getBoundingClientRect().right : 0
           // DS Bot folds the shell sidebar and portals its fixed-left replacement
           // to body. Its layout width stays stable during the slide-in animation.
           const botSidebarRight = botSidebarDocked ? botSidebar.getBoundingClientRect().width : 0
@@ -1069,7 +1076,8 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
               document.body.querySelector(BOT_SIDEBAR_SELECTOR) !== observedBotSidebar) present()
         })
         const frame = panel.current?.closest('.dshModes')?.parentElement
-        if (frame) chromeLayout.observe(frame, { childList: true, attributes: true, attributeFilter: ['data-sidebar-collapsed'] })
+        const shellFrame = frame?.closest('.pI_x6G_frame') ?? frame
+        if (shellFrame) chromeLayout.observe(shellFrame, { childList: true, attributes: true, attributeFilter: ['data-sidebar-collapsed', 'data-dsh-sidebar-preview'] })
         chromeLayout.observe(document.body, { childList: true })
         const theme = new MutationObserver(present)
         theme.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
@@ -1518,7 +1526,15 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           .dshModesHeader{height:56px;flex:none;display:flex;align-items:center;justify-content:center}
           html[data-platform=darwin] .dshModesHeader{-webkit-app-region:drag}
           .dshModesTabs{display:flex;padding:3px;border-radius:24px;background:var(--dsw-alias-bg-layer-2);-webkit-app-region:no-drag}
-          .dshModesTabs button{font:inherit;font-size:13px;min-width:96px;height:30px;padding:0 20px;border:0;border-radius:20px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+          html[data-platform=darwin] body[data-dsh-desktop-ui=dsh] .dshModesHeader + .dshWorkContent [data-sidebar-right-expand] {
+            position: fixed;
+            inset-block-start: 14px;
+            inset-inline-end: 12px;
+            z-index: 2;
+            min-block-size: 24px;
+            -webkit-app-region: no-drag;
+          }
+          .dshModesTabs button{font:inherit;font-size:13px;min-width:96px;height:30px;padding:0 20px;border:0;border-radius:20px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;-webkit-app-region:no-drag}
           .dshModesTabs button[aria-selected=true]{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}
           .dshModes button:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
           .dshModeBody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}.dshModeBody[hidden]{display:none}
@@ -2056,6 +2072,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       }
       body[data-dsh-desktop-ui="dsh"] {
         --dsk-shell-top: calc(var(--dsh-windows-titlebar-height, 0px) + 10px);
+        --dsk-shell-column-gap: 12px;
         --dsk-card-radius: 24px;
         --dsk-card-border: 1px solid var(--dsw-alias-border-l2);
         --dsk-card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -24px rgb(0 0 0 / 0.30);
@@ -2064,7 +2081,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         --dsk-content-surface: color-mix(in srgb, var(--dsk-card-surface) 25%, var(--dsk-page-surface));
         background: var(--dsk-page-surface);
       }
-      /* macOS traffic lights sit over the content; clear them on both cards. */
+      /* Keep space for the macOS caption inside the sidebar, not outside the panels. */
       html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] {
         --dsk-shell-top: calc(var(--dsh-frame-top-clearance, 48px) + 10px);
       }
@@ -2073,16 +2090,29 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
         background: var(--dsk-page-surface);
         padding: var(--dsk-shell-top) 12px 12px;
-        column-gap: 12px;
+        column-gap: var(--dsk-shell-column-gap);
       }
-      /* Harness budgets the titlebar padding on Windows only. On macOS,
-         keep the new top and bottom insets inside the viewport too. */
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] {
+        --dsk-shell-column-gap: 0px;
+      }
       html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
         box-sizing: border-box;
+        padding: 0;
+      }
+      /* With the sidebar collapsed, reserve the caption vertically rather than
+         pushing a whole native conversation to the right of its opener. */
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:has(> [data-shell-leading])
+      .dshModes:not(:has(> .dshModesHeader, > [data-dsh-bot-sidebar-toggle])) > #dsh-panel-chat {
+        margin-block-start: var(--dsh-frame-top-clearance, 48px);
+      }
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
+      .pI_x6G_frame [data-dsh-sidebar-root] {
+        padding-block-start: var(--dsk-shell-top);
       }
       /* Reserve the traffic lights on the left and leave higher native
          controls (e.g. the collapsed sidebar opener) clickable. */
-      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame::before {
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
+      .pI_x6G_frame:not(:has(.dshModes > .dshModesHeader))::before {
         content: "";
         position: absolute;
         inset: 0 0 auto 88px;
@@ -2113,6 +2143,10 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         inline-size: 100%;
         padding: 8px 9px 6px;
       }
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
+      .pI_x6G_frame[data-sidebar-collapsed] [data-dsh-sidebar-wide="false"] {
+        padding-block-start: var(--dsk-shell-top);
+      }
       /* In full screen the sidebar owns its toggle in both widths. */
       html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] {
         position: relative;
@@ -2125,7 +2159,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         margin-right: 38px;
       }
       html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] {
-        --dsh-frame-leading-clearance: 0px;
+        --dsh-frame-leading-clearance: 84px;
       }
       html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] .hHd-Xa_topStrip {
         display: flex;
@@ -2149,14 +2183,53 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         box-shadow: var(--dsk-card-shadow);
         overflow: hidden;
       }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol {
+        border: 0;
+        border-start-end-radius: 0;
+        border-end-end-radius: 0;
+        box-shadow: none;
+      }
       /* DS Bot replaces the collapsed Harness rail with its own docked card. */
       body[data-dsh-desktop-ui="dsh"]:has(> .bt-leftcol:is([data-left="open"], [data-left="rail"]):not([data-leaving], [aria-hidden="true"], [hidden]))
       .pI_x6G_frame[data-sidebar-collapsed] > .pI_x6G_sidebarCol {
         visibility: hidden;
       }
-      /* The native caption only contains the sidebar toggle in a regular window. */
-      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
-      [data-shell-leading] > .IW6AQa_controls > button:nth-of-type(2),
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+      .pI_x6G_frame[data-sidebar-collapsed]:not([data-dsh-sidebar-preview]) > .pI_x6G_sidebarCol {
+        visibility: hidden;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+      .pI_x6G_frame[data-dsh-sidebar-preview] > .pI_x6G_sidebarCol {
+        position: relative;
+        margin-block: 46px 10px;
+        margin-inline-start: 8px;
+        z-index: 14;
+        box-sizing: border-box;
+        max-inline-size: calc(100vw - 16px);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: var(--dsw-elevation-panel);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+        .pI_x6G_frame[data-dsh-sidebar-preview] > .pI_x6G_sidebarCol {
+          translate: 0 0;
+          transition: translate 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+        }
+        html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+        .pI_x6G_frame[data-sidebar-collapsed]:is(:not([data-dsh-sidebar-preview]), [data-dsh-sidebar-preview-closing]) > .pI_x6G_sidebarCol {
+          translate: calc(-100% - 8px) 0;
+        }
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+      .pI_x6G_frame[data-dsh-sidebar-preview] [data-dsh-sidebar-root] {
+        max-inline-size: 100%;
+        padding-block-start: 8px;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+      .pI_x6G_frame[data-dsh-sidebar-preview] [data-dsh-sidebar-root] > .hHd-Xa_newSession {
+        display: none;
+      }
       body[data-dsh-desktop-ui="dsh"]:has([data-dsh-bot-sidebar-toggle])
       :is([data-shell-leading], .bt-leftcol .bt-side-collapse, .bt-title-toggle) {
         display: none;
@@ -2340,6 +2413,15 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         border: 0;
         border-radius: var(--dsk-card-radius);
         box-shadow: var(--dsk-card-shadow);
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] > .bt-leftcol[data-left] {
+        inset-block: 0;
+        left: 0;
+        border-start-end-radius: 0;
+        border-end-end-radius: 0;
+      }
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] > .bt-leftcol[data-left] {
+        --bt-lc-clear: var(--dsk-shell-top);
       }
       body[data-dsh-desktop-ui="dsh"] > .bt-leftcol[data-left]::after {
         content: "";

@@ -1,41 +1,108 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js
-index a5096f4..fe19d7f 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js
-@@ -204,6 +204,17 @@ window.__ModuleLoader__.load({
- 				onLostPointerCapture: onPointerCancel
- 			});
- 		}
-+		function isMacosFullscreen() {
-+			const { dataset } = document.documentElement;
-+			return dataset.platform === "darwin" && dataset.fullscreen === "true";
-+		}
-+		function subscribeMacosFullscreen(onChange) {
-+			const root = document.documentElement;
-+			if (root.dataset.platform !== "darwin") return () => {};
-+			const observer = new MutationObserver(onChange);
-+			observer.observe(root, { attributes: true, attributeFilter: ["data-fullscreen"] });
-+			return () => observer.disconnect();
-+		}
- 		/** The three-column frame (see module doc). */
- 		function AppFrame({ useStore, useSessions, usePanelInfo, actions, renderSlot, t }) {
- 			const layoutInfo = useStore((state) => state.layoutInfo);
-@@ -239,7 +250,8 @@ window.__ModuleLoader__.load({
- 			const sidebarPreference = sidebarCollapsed ? 0 : layoutInfo.sidebar === 0 ? 280 : layoutInfo.sidebar;
- 			const rightbarPreference = layoutInfo.rightbar ?? viewport * .45;
- 			const darwin = document.documentElement.dataset.platform === "darwin";
--			const collapsedWidth = darwin || document.documentElement.hasAttribute("data-windows-titlebar") ? 0 : 56;
-+			const macosFullscreen = (0, react.useSyncExternalStore)(subscribeMacosFullscreen, isMacosFullscreen);
-+			const collapsedWidth = document.documentElement.hasAttribute("data-windows-titlebar") ? 0 : 56;
- 			const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, collapsedWidth);
- 			const cols = computeColumns(viewport, sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth);
- 			const colsRef = (0, react.useRef)(cols);
-@@ -312,7 +324,25 @@ window.__ModuleLoader__.load({
- 			}), [usePanelInfo, renderSlot]);
+@@ -298,13 +298,94 @@
+ 			}, [actions]);
+ 			const productTitle = "DeepSeek Harness";
+ 			const rightbarMax = cols.rightbar === 0 ? 0 : clampWidth(rightbarPreference, 300, viewport * RIGHTBAR_MAX_RATIO);
++			const [sidebarPreview, setSidebarPreview] = (0, react.useState)("closed");
++			const sidebarPreviewTimer = (0, react.useRef)(0);
++			const suppressSidebarHover = (0, react.useRef)(false);
++			const sidebarPreviewCol = (0, react.useRef)(null);
++			const sidebarLeading = (0, react.useRef)(null);
++			const previewVisible = darwin && sidebarCollapsed && sidebarPreview !== "closed";
++			const clearPreviewTimer = () => {
++				window.clearTimeout(sidebarPreviewTimer.current);
++				sidebarPreviewTimer.current = 0;
++			};
++			const closePreview = () => {
++				clearPreviewTimer();
++				setSidebarPreview(current => current === "open" ? "closing" : current);
++			};
++			const keepPreviewOpen = () => {
++				clearPreviewTimer();
++				setSidebarPreview(current => current === "closing" ? "open" : current);
++			};
++			const showPreview = (event) => {
++				if (suppressSidebarHover.current || event.pointerType === "touch" || document.querySelector("[data-dsh-bot-sidebar-toggle]")) return;
++				if (previewVisible) { keepPreviewOpen(); return; }
++				if (sidebarPreviewTimer.current) return;
++				sidebarPreviewTimer.current = window.setTimeout(() => { clearPreviewTimer(); setSidebarPreview("open"); }, 160);
++			};
++			const accountMenuFor = (target) => target instanceof Element &&
++				target.closest('[role="menu"]')?.querySelector('[data-dsh-sidebar-account-menu]') &&
++				sidebarPreviewCol.current?.querySelector('[data-dsh-account-launcher] [aria-expanded="true"]');
++			const isInSidebar = (target) => target instanceof Node &&
++				(sidebarPreviewCol.current?.contains(target) || sidebarLeading.current?.contains(target) || accountMenuFor(target));
++			const leavePreview = (event) => {
++				if (isInSidebar(event.relatedTarget)) return;
++				clearPreviewTimer();
++				sidebarPreviewTimer.current = window.setTimeout(closePreview, 220);
++			};
++			(0, react.useEffect)(() => {
++				if (!sidebarCollapsed) setSidebarPreview("closed");
++				return clearPreviewTimer;
++			}, [sidebarCollapsed]);
++			(0, react.useEffect)(() => {
++				if (!darwin || !sidebarCollapsed) return;
++				const releaseHover = (event) => {
++					if (!sidebarLeading.current?.querySelector("button")?.contains(event.target)) suppressSidebarHover.current = false;
++				};
++				document.addEventListener("pointermove", releaseHover, true);
++				return () => document.removeEventListener("pointermove", releaseHover, true);
++			}, [darwin, sidebarCollapsed]);
++			(0, react.useLayoutEffect)(() => {
++				if (!previewVisible || sidebarPreview !== "closing") return;
++				const transition = sidebarPreviewCol.current?.getAnimations?.().find(item => item.transitionProperty === "translate");
++				if (!transition) { setSidebarPreview("closed"); return; }
++				let active = true;
++				const finish = () => { if (active) setSidebarPreview(current => current === "closing" ? "closed" : current); };
++				void transition.finished.then(finish, finish);
++				return () => { active = false; };
++			}, [previewVisible, sidebarPreview]);
++			(0, react.useEffect)(() => {
++				if (!previewVisible) return;
++				const dismissOutside = (event) => { if (!isInSidebar(event.target)) closePreview(); };
++				const enterAccountMenu = (event) => { if (accountMenuFor(event.target)) keepPreviewOpen(); };
++				const leaveAccountMenu = (event) => { if (accountMenuFor(event.target)) leavePreview(event); };
++				const dismissOnEscape = (event) => {
++					if (event.key !== "Escape" || event.defaultPrevented) return;
++					if (sidebarPreviewCol.current?.contains(document.activeElement)) sidebarLeading.current?.querySelector("button")?.focus();
++					closePreview();
++				};
++				document.addEventListener("pointerdown", dismissOutside);
++				document.addEventListener("pointerover", enterAccountMenu);
++				document.addEventListener("pointerout", leaveAccountMenu);
++				document.addEventListener("keydown", dismissOnEscape);
++				window.addEventListener("blur", closePreview);
++				return () => {
++					document.removeEventListener("pointerdown", dismissOutside);
++					document.removeEventListener("pointerover", enterAccountMenu);
++					document.removeEventListener("pointerout", leaveAccountMenu);
++					document.removeEventListener("keydown", dismissOnEscape);
++					window.removeEventListener("blur", closePreview);
++				};
++			}, [previewVisible]);
++			const previewWidth = clampWidth(layoutInfo.sidebar || 280, 264, 420);
+ 			const sidebar = (0, react.useMemo)(() => renderSlot("sidebar", {
+-				collapsed: sidebarCollapsed,
+-				width: cols.sidebar
++				collapsed: sidebarCollapsed && !previewVisible,
++				width: previewVisible ? previewWidth : cols.sidebar
+ 			}), [
+ 				renderSlot,
+ 				sidebarCollapsed,
+-				cols.sidebar
++				cols.sidebar,
++				previewVisible,
++				previewWidth
+ 			]);
+ 			const main = (0, react.useMemo)(() => (0, react_jsx_runtime.jsx)(MainPanel, {
+ 				usePanelInfo,
+@@ -313,6 +394,24 @@
  			const overlays = (0, react.useMemo)(() => renderSlot("shell.overlay", {}), [renderSlot]);
  			const leading = (0, react.useMemo)(() => renderSlot("shell.leading", {}), [renderSlot]);
--			const leadingMounted = darwin && sidebarCollapsed;
-+			const leadingMounted = darwin && !macosFullscreen && sidebarCollapsed;
+ 			const leadingMounted = darwin && sidebarCollapsed;
 +			const work = (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)(CenterColumn, { children: main }), (0, react_jsx_runtime.jsx)(RightbarColumn, { children: renderSlot("rightbar", {
 +						width: normal.rightbar,
 +						viewportWidth: viewport,
@@ -57,8 +124,29 @@ index a5096f4..fe19d7f 100644
  			return (0, react_jsx_runtime.jsxs)("div", {
  				ref: frameRef,
  				className: AppFrame_module_css_default.frame,
-@@ -336,11 +366,7 @@ window.__ModuleLoader__.load({
+@@ -321,6 +420,13 @@
+ 					gridTemplateColumns: `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : 400}px, 1fr) minmax(0px, ${rightbarMax}px)`
+ 				},
+ 				"data-sidebar-collapsed": sidebarCollapsed || void 0,
++				"data-dsh-sidebar-preview": previewVisible || void 0,
++				"data-dsh-sidebar-preview-closing": previewVisible && sidebarPreview === "closing" || void 0,
++				onClickCapture: (event) => {
++					if (darwin && !sidebarCollapsed && event.detail > 0 && event.target.closest?.(".hHd-Xa_toggle")) {
++						suppressSidebarHover.current = true;
++					}
++				},
+ 				"data-rightbar-collapsed": cols.rightbar === 0 || void 0,
+ 				"data-rightbar-fullscreen": layoutInfo.rightbarFullscreen || void 0,
+ 				"data-rightbar-instant": layoutInfo.rightbarInstant || void 0,
+@@ -333,14 +439,14 @@
+ 						usePanelInfo
+ 					}),
+ 					(0, react_jsx_runtime.jsx)("div", {
++						ref: sidebarPreviewCol,
  						className: AppFrame_module_css_default.sidebarCol,
++						style: previewVisible ? { width: `${previewWidth}px` } : void 0,
++						onPointerEnter: previewVisible ? keepPreviewOpen : void 0,
++						onPointerLeave: previewVisible ? leavePreview : void 0,
  						children: sidebar
  					}),
 -					(0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)(CenterColumn, { children: main }), (0, react_jsx_runtime.jsx)(RightbarColumn, { children: renderSlot("rightbar", {
@@ -70,7 +158,26 @@ index a5096f4..fe19d7f 100644
  					(0, react_jsx_runtime.jsx)("div", {
  						className: AppFrame_module_css_default.bottomRow,
  						"data-shell-bottom": true,
-@@ -362,13 +388,6 @@ window.__ModuleLoader__.load({
+@@ -352,8 +458,18 @@
+ 						children: overlays
+ 					}),
+ 					leadingMounted && (0, react_jsx_runtime.jsx)("div", {
++						ref: sidebarLeading,
+ 						className: AppFrame_module_css_default.leadingSeat,
+ 						"data-shell-leading": true,
++						onPointerEnter: previewVisible ? clearPreviewTimer : void 0,
++						onPointerMove: (event) => {
++							if (event.target.closest("button") === sidebarLeading.current?.querySelector("button")) showPreview(event);
++						},
++						onPointerLeave: (event) => {
++							suppressSidebarHover.current = false;
++							if (previewVisible) leavePreview(event);
++							else clearPreviewTimer();
++						},
+ 						children: leading
+ 					}),
+ 					!sidebarCollapsed && (0, react_jsx_runtime.jsx)(DragHandle, {
+@@ -362,13 +478,6 @@
  						onStart: onSidebarStart,
  						onDrag: onSidebarDrag,
  						onEnd: onDragEnd
@@ -84,7 +191,7 @@ index a5096f4..fe19d7f 100644
  					})
  				]
  			});
-@@ -624,6 +643,7 @@ window.__ModuleLoader__.load({
+@@ -624,6 +733,7 @@
  					name: "root",
  					locale: "common",
  					children: {
