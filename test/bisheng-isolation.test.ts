@@ -22,8 +22,9 @@ describe('BISHENG installation identity', () => {
     expect(main).toContain("join(app.getPath('appData'), 'bisheng')")
     expect(main).toContain("join(app.getPath('appData'), 'bisheng-dev')")
     expect(main).not.toContain("join(app.getPath('appData'), 'dsh-desktop')")
-    expect(main).toContain("app.setName('BISHENG')")
-    expect(main).not.toContain("app.setName('BISHENG Dev')")
+    expect(main).toContain("app.setName('LUOKUI-AI')")
+    expect(main).toContain('title: app.name')
+    expect(main).toContain('window.setTitle(app.name)')
   })
 
   it('uses a user-data directory the Windows smoke test can find', async () => {

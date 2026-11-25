@@ -106,7 +106,7 @@ export function windowsMenuTemplate(
     },
     { type: 'separator' },
     command('check-for-updates', '检查更新…', 'Check for Updates…', 'Ctrl+U'),
-    command('about', '关于 BISHENG', 'About BISHENG'),
+    command('about', '关于 LUOKUI-AI', 'About LUOKUI-AI'),
     { type: 'separator' },
     command('quit', '退出', 'Exit')
   ]

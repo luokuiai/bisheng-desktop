@@ -49,7 +49,7 @@ describe('sign-windows-unpacked', () => {
       '--tsretrywait',
       '10',
       '--name',
-      'BISHENG',
+      'LUOKUI-AI',
       '--url',
       'https://www.dshdesktop.com',
       'C:\\test\\app.exe'

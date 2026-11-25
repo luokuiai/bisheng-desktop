@@ -345,7 +345,7 @@ describe('GitHub release contract', () => {
         productName: string
         protocols: Array<{ name: string; schemes: string[] }>
         publish: Array<{ provider: string; url?: string; owner?: string; repo?: string }>
-        win: { signExecutable: boolean; verifyUpdateCodeSignature: boolean; signtoolOptions?: unknown }
+        win: { executableName: string; signExecutable: boolean; verifyUpdateCodeSignature: boolean; signtoolOptions?: unknown }
       }
     }
     const workflow = await readFile(
@@ -355,9 +355,10 @@ describe('GitHub release contract', () => {
 
     expect(packageJson.dependencies['electron-updater']).toBeTruthy()
     expect(packageJson.build.appId).toBe('com.luokuiai.bisheng')
-    expect(packageJson.build.productName).toBe('BISHENG')
+    expect(packageJson.build.productName).toBe('LUOKUI-AI')
+    expect(packageJson.build.win.executableName).toBe('BISHENG')
     expect(packageJson.build.protocols).toEqual([
-      { name: 'BISHENG Enterprise Login', schemes: ['bisheng'] }
+      { name: 'LUOKUI-AI Enterprise Login', schemes: ['bisheng'] }
     ])
     expect(packageJson.build.publish).toEqual([
       {
@@ -437,10 +438,10 @@ describe('GitHub release contract', () => {
     expect(packageJson.scripts['package:dev:win']).toContain('electron-builder.dev.cjs')
     expect(packageJson.scripts['package:dev:win']).toContain('--publish never')
     expect(developmentConfig.appId).toBe('com.luokuiai.bisheng.dev')
-    expect(developmentConfig.productName).toBe('BISHENG')
-    expect(developmentConfig.extraMetadata.productName).toBe('BISHENG')
+    expect(developmentConfig.productName).toBe('LUOKUI-AI')
+    expect(developmentConfig.extraMetadata.productName).toBe('LUOKUI-AI')
     expect(developmentConfig.protocols).toEqual([
-      { name: 'BISHENG Enterprise Login', schemes: ['bisheng-dev'] }
+      { name: 'LUOKUI-AI Enterprise Login', schemes: ['bisheng-dev'] }
     ])
     expect(developmentConfig.directories.output).toBe('dist-dev')
     expect(developmentConfig.extraMetadata.dshDesktopChannel).toBe('development')

@@ -22,7 +22,7 @@ describe('startup splash language', () => {
     const dom = page('en', 'zh-CN', theme)
     try {
       const doc = dom.window.document
-      expect(doc.getElementById('title').textContent).toBe('Starting BISHENG')
+      expect(doc.getElementById('title').textContent).toBe('Starting LUOKUI-AI')
       expect(doc.getElementById('status').textContent).toBe('First launch may take a moment.')
       expect(doc.documentElement.lang).toBe('en')
       expect(doc.documentElement.dataset.theme).toBe(theme)
@@ -34,7 +34,7 @@ describe('startup splash language', () => {
     const dom = page('zh', 'en-US')
     try {
       const doc = dom.window.document
-      expect(doc.getElementById('title').textContent).toBe('正在启动 BISHENG')
+      expect(doc.getElementById('title').textContent).toBe('正在启动 LUOKUI-AI')
       expect(doc.getElementById('status').textContent).toBe('首次启动可能需要一点时间。')
       expect(doc.documentElement.lang).toBe('zh-CN')
     } finally { dom.window.close() }
@@ -50,7 +50,7 @@ describe('startup splash language', () => {
     try {
       const doc = dom.window.document
       expect(doc.documentElement.lang).toBe(expected)
-      expect(doc.getElementById('title').textContent).toBe(expected === 'en' ? 'Starting BISHENG' : '正在启动 BISHENG')
+      expect(doc.getElementById('title').textContent).toBe(expected === 'en' ? 'Starting LUOKUI-AI' : '正在启动 LUOKUI-AI')
     } finally { dom.window.close() }
   })
 

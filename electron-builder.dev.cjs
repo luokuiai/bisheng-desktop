@@ -5,7 +5,7 @@ module.exports = {
   appId: 'com.luokuiai.bisheng.dev',
   protocols: [
     {
-      name: 'BISHENG Enterprise Login',
+      name: packageJson.build.protocols[0].name,
       schemes: ['bisheng-dev']
     }
   ],

@@ -44,7 +44,7 @@ describe('Safe Mode live language', () => {
       expect(f.doc.getElementById('notice-details').hidden).toBe(false)
       expect(f.doc.getElementById('notice-details').open).toBe(false)
       expect(f.doc.getElementById('restart').textContent).toBe('退出安全模式并重启')
-      expect(f.doc.getElementById('quit').textContent).toBe('退出 BISHENG')
+      expect(f.doc.getElementById('quit').textContent).toBe('退出 LUOKUI-AI')
       expect(f.doc.getElementById('recovery-open').textContent).toBe('打开恢复材料目录')
       expect(f.doc.getElementById('repair-agent').textContent).toBe('让智能修复助手分析日志 →')
       f.update('en', { recoveryLocked: true })

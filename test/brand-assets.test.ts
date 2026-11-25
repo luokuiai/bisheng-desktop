@@ -48,7 +48,7 @@ async function icnsPngFrames(file: string) {
   return frames
 }
 
-describe('BISHENG brand assets', () => {
+describe('LUOKUI-AI brand assets', () => {
   it('keeps the downloaded SVG artwork as the authoritative source', async () => {
     const mark = await readFile(build('bisheng-logo-mark.svg'), 'utf8')
     const horizontal = await readFile(build('bisheng-logo-horizontal.svg'), 'utf8')
@@ -166,9 +166,9 @@ describe('BISHENG brand assets', () => {
   it('keeps the startup splash text-only and bilingual', async () => {
     const splash = await readFile(build('splash.html'), 'utf8')
 
-    expect(splash).toContain('Starting BISHENG')
+    expect(splash).toContain('Starting LUOKUI-AI')
     expect(splash).toContain('First launch may take a moment.')
-    expect(splash).toContain('正在启动 BISHENG')
+    expect(splash).toContain('正在启动 LUOKUI-AI')
     expect(splash).toContain('首次启动可能需要一点时间。')
     expect(splash).toContain('data-platform="windows"')
     expect(splash).toContain("data-theme='dark'")
