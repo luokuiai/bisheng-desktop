@@ -22,17 +22,17 @@ jobs:
             runner: macos-15
             arch: arm64
             script: package:dev:mac:arm64
-            installer: bisheng-dev-mac-arm64.dmg
+            installer: bisheng-mac-arm64.dmg
           - target: mac-x64
             runner: macos-15-intel
             arch: x64
             script: package:dev:mac:x64
-            installer: bisheng-dev-mac-x64.dmg
+            installer: bisheng-mac-x64.dmg
           - target: windows-x64
             runner: windows-2022
             arch: x64
             script: package:dev:win
-            installer: bisheng-dev-windows-x64-setup.exe
+            installer: bisheng-windows-x64-setup.exe
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,7 +58,7 @@ jobs:
           mount_point="$(mktemp -d)"
           hdiutil attach "$INSTALLER" -readonly -nobrowse -mountpoint "$mount_point"
           trap 'hdiutil detach "$mount_point" >/dev/null' EXIT
-          codesign --verify --deep --strict --verbose=2 "$mount_point/BISHENG Dev.app"
+          codesign --verify --deep --strict --verbose=2 "$mount_point/BISHENG.app"
       - name: Prepare development update metadata
         id: updates
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'

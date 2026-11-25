@@ -9,10 +9,9 @@ if (process.platform === 'darwin') {
 module.exports = {
   ...packageJson.build,
   appId: 'io.bisheng.dev',
-  productName: 'BISHENG Dev',
   protocols: [
     {
-      name: 'BISHENG Dev Enterprise Login',
+      name: 'BISHENG Enterprise Login',
       schemes: ['bisheng-dev']
     }
   ],
@@ -22,18 +21,13 @@ module.exports = {
   },
   extraMetadata: {
     name: 'dsh-desktop-dev',
-    productName: 'BISHENG Dev',
+    productName: packageJson.build.productName,
     dshDesktopChannel: 'development'
   },
-  artifactName: 'bisheng-dev-${os}-${arch}.${ext}',
   mac: {
     ...packageJson.build.mac,
     identity: hasMacCertificate ? undefined : '-',
     forceCodeSigning: true
-  },
-  nsis: {
-    ...packageJson.build.nsis,
-    artifactName: 'bisheng-dev-windows-${arch}-setup.${ext}'
   },
   publish: null
 }

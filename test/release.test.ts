@@ -423,7 +423,7 @@ describe('GitHub release contract', () => {
       productName: string
       protocols: Array<{ name: string; schemes: string[] }>
       directories: { output: string }
-      extraMetadata: { dshDesktopChannel: string }
+      extraMetadata: { productName: string; dshDesktopChannel: string }
       artifactName: string
       nsis: { artifactName: string }
     }
@@ -438,14 +438,15 @@ describe('GitHub release contract', () => {
     expect(packageJson.scripts['package:dev:win']).toContain('electron-builder.dev.cjs')
     expect(packageJson.scripts['package:dev:win']).toContain('--publish never')
     expect(developmentConfig.appId).toBe('io.bisheng.dev')
-    expect(developmentConfig.productName).toBe('BISHENG Dev')
+    expect(developmentConfig.productName).toBe('BISHENG')
+    expect(developmentConfig.extraMetadata.productName).toBe('BISHENG')
     expect(developmentConfig.protocols).toEqual([
-      { name: 'BISHENG Dev Enterprise Login', schemes: ['bisheng-dev'] }
+      { name: 'BISHENG Enterprise Login', schemes: ['bisheng-dev'] }
     ])
     expect(developmentConfig.directories.output).toBe('dist-dev')
     expect(developmentConfig.extraMetadata.dshDesktopChannel).toBe('development')
-    expect(developmentConfig.artifactName).toBe('bisheng-dev-${os}-${arch}.${ext}')
-    expect(developmentConfig.nsis.artifactName).toBe('bisheng-dev-windows-${arch}-setup.${ext}')
+    expect(developmentConfig.artifactName).toBe('bisheng-${os}-${arch}.${ext}')
+    expect(developmentConfig.nsis.artifactName).toBe('bisheng-windows-${arch}-setup.${ext}')
   })
 
   it('builds and publishes every supported platform', async () => {
@@ -466,7 +467,7 @@ describe('GitHub release contract', () => {
     expect(workflow).toContain('$executable = Join-Path $isolatedApp $sourceExecutable.Name')
     expect(workflow).toContain('-WorkingDirectory $isolatedApp')
     expect(workflow).toContain('Packaged koffi native binding failed (exit code')
-    expect(workflow).toContain("'dist-dev\\win-unpacked\\BISHENG Dev.exe'")
+    expect(workflow).toContain("'dist-dev\\win-unpacked\\BISHENG.exe'")
     expect(workflow).toContain('if (-not [string]::IsNullOrEmpty($log))')
     expect(workflow).toContain("dsh web: (http://127\\.0\\.0\\.1:\\d+/\\?token=[^\\s]+)")
     expect(workflow).toContain('-SessionVariable harnessSession')
