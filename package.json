@@ -24,10 +24,10 @@
   ],
   "scripts": {
     "postinstall": "patch-package && node scripts/prepare-reference-icons.mjs && node scripts/install-brand-assets.mjs && install-electron --no",
-    "dev": "npm run reference-icons:prepare && npm run office:prepare && npm run ppt:build && electron-vite dev",
+    "dev": "npm run reference-icons:prepare && npm run office:prepare && npm run ppt:build && node scripts/run-desktop-development.mjs dev",
     "build": "npm run reference-icons:prepare && npm run office:prepare && npm run ppt:build && electron-vite build",
     "icons:generate": "node scripts/generate-app-icons.mjs",
-    "preview": "electron-vite preview",
+    "preview": "node scripts/run-desktop-development.mjs preview",
     "mock:enterprise": "node scripts/mock-bisheng-enterprise.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
