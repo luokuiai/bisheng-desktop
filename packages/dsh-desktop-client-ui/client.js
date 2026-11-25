@@ -295,8 +295,10 @@ window.__ModuleLoader__.load({
     const MODES_NS = 'desktop.chatWork'
     const MODES_COPY = {
       zh: { welcomeMessage: '来一起创造', welcome: '欢迎来到', newConversation: '新建对话', navigation: '导航', moreNavigation: '更多', recent: '对话', projects: '工作区', all: '所有会话', results: '搜索结果', cloud: '云端聊天', local: '本地工作', recentEmpty: '暂无最近会话', recentSearchEmpty: '当前列表没有匹配的会话', chat: '聊天', work: '工作', label: '聊天与工作', loading: '正在连接企业聊天…', error: '企业聊天连接失败，请重试', retry: '重新连接', refresh: '刷新聊天记录', historyLoading: '正在加载聊天记录…', historyError: '加载失败，点击重试', empty: '暂无聊天记录', more: '加载更多', newChat: '新聊天', signIn: '登录企业账号', signInTitle: '登录后使用聊天', signInDescription: '聊天由企业平台提供。登录后，即可使用平台中的模型和对话记录。', continueWork: '继续使用工作', close: '关闭', justNow: '刚刚',
+        reorderNavigation: '调整顺序', navigationOrderDescription: '拖动调整顺序，前 5 个显示在侧栏，其余放入“更多”。也可以使用上移、下移按钮。', navigationMoveUp: '上移', navigationMoveDown: '下移', navigationDirect: '侧栏', navigationOverflow: '更多', navigationOrderSave: '保存', navigationOrderCancel: '取消', navigationOrderError: '保存顺序失败，请重试。',
         multiAgentCollaboration: '多代理协作', botBack: '返回', botBackToAgent: '返回经典 Agent 界面', hostedAppBack: '返回应用中心', hostedAppBackToSquare: '返回应用广场', hostedAppLoading: '正在打开应用…', hostedAppError: '应用加载失败。', hostedAppActionError: '操作失败，请重试。', hostedAppRetry: '重试' },
       en: { welcomeMessage: "Let's Create Together", welcome: 'Welcome', newConversation: 'New conversation', navigation: 'Navigation', moreNavigation: 'More', recent: 'Conversations', projects: 'Workspaces', all: 'All conversations', results: 'Search results', cloud: 'Cloud chat', local: 'Local work', recentEmpty: 'No recent conversations', recentSearchEmpty: 'No matches in the current list', chat: 'Chat', work: 'Work', label: 'Chat and Work', loading: 'Connecting to enterprise Chat…', error: 'Could not connect to enterprise Chat. Try again.', retry: 'Reconnect', refresh: 'Refresh Chat history', historyLoading: 'Loading history…', historyError: 'Loading failed. Retry', empty: 'No chats yet', more: 'Load more', newChat: 'New chat', signIn: 'Sign in to your enterprise account', signInTitle: 'Sign in to use Chat', signInDescription: 'Chat is provided by your enterprise platform. Sign in to use its models and conversations.', continueWork: 'Continue in Work', close: 'Close', justNow: 'Now',
+        reorderNavigation: 'Reorder navigation', navigationOrderDescription: 'Drag to reorder. The first 5 appear in the sidebar; the rest appear under More. You can also use the Move up and Move down buttons.', navigationMoveUp: 'Move up', navigationMoveDown: 'Move down', navigationDirect: 'Sidebar', navigationOverflow: 'More', navigationOrderSave: 'Save', navigationOrderCancel: 'Cancel', navigationOrderError: 'Could not save the order. Try again.',
         multiAgentCollaboration: 'Multi-Agent Collaboration', botBack: 'Back', botBackToAgent: 'Back to classic Agent', hostedAppBack: 'Back to App Center', hostedAppBackToSquare: 'Back to Discover', hostedAppLoading: 'Opening app…', hostedAppError: 'Could not load the app.', hostedAppActionError: 'The action failed. Try again.', hostedAppRetry: 'Retry' }
     }
     /**
@@ -846,6 +848,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       tools: 'M14.7 6.3a5.5 5.5 0 0 0-7 7L3 18a2.1 2.1 0 0 0 3 3l4.7-4.7a5.5 5.5 0 0 0 7-7l-3.5 3.5-3-3 3.5-3.5Z',
       skills: 'M5 3h14v18H5V3Zm3 4h8M8 11h8M8 15h5',
       square: 'M3 4h6v6H3V4Zm12 0h6v6h-6V4ZM3 14h6v6H3v-6Zm12 0h6v6h-6v-6',
+      reorder: 'M8 4v16m-3-3 3 3 3-3M16 20V4m-3 3 3-3 3 3',
       more: 'M5 12h.01M12 12h.01M19 12h.01'
     }
     function ResourceIcon({ id, size = 16 }) {
@@ -1047,10 +1050,83 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       return action ? React.createElement(BotSidebarBackButton, { action, t, botText }) : null
     }
 
+    const NAVIGATION_ORDER_KEY = 'dsh-desktop-navigation-order'
+    const VISIBLE_NAVIGATION_COUNT = 5
+
+    function readNavigationOrder() {
+      try {
+        const value = JSON.parse(window.localStorage.getItem(NAVIGATION_ORDER_KEY) || '[]')
+        return Array.isArray(value) ? [...new Set(value.filter(id => typeof id === 'string' && /^(web|local):.+/.test(id)))] : []
+      } catch {
+        console.warn('[desktop-navigation] Could not read saved order; using the default order')
+        return []
+      }
+    }
+
+    function orderNavigationItems(items, order) {
+      const remaining = new Map(items.map(item => [item.id, item]))
+      const sorted = []
+      for (const id of order) {
+        if (!remaining.has(id)) continue
+        sorted.push(remaining.get(id))
+        remaining.delete(id)
+      }
+      return [...sorted, ...remaining.values()]
+    }
+
+    function NavigationOrderDialog({ items, order, onSave, onClose, t }) {
+      const [draft, setDraft] = React.useState(() => items.map(item => item.id))
+      const [error, setError] = React.useState(null)
+      const [dropTarget, setDropTarget] = React.useState(null)
+      const dragged = React.useRef(null)
+      const sorted = orderNavigationItems(items, draft)
+      const move = (id, target) => {
+        const ids = sorted.map(item => item.id)
+        const from = ids.indexOf(id)
+        if (from < 0 || target < 0 || target >= ids.length || from === target) return
+        ids.splice(from, 1)
+        ids.splice(target, 0, id)
+        setDraft(ids)
+      }
+      const save = () => {
+        const ids = sorted.map(item => item.id)
+        const next = [...ids, ...order.filter(id => !ids.includes(id))]
+        try {
+          window.localStorage.setItem(NAVIGATION_ORDER_KEY, JSON.stringify(next))
+          onSave(next)
+        } catch {
+          setError(t('navigationOrderError'))
+        }
+      }
+      return React.createElement(Modal, {
+        open: true, title: t('reorderNavigation'), description: t('navigationOrderDescription'), closeLabel: t('close'), onClose,
+        className: 'dshNavigationOrderDialog',
+        footer: React.createElement('div', { className: 'dshChatSignInActions' },
+          React.createElement(Button, { variant: 'outline', onClick: onClose }, t('navigationOrderCancel')),
+          React.createElement(Button, { variant: 'primary', onClick: save }, t('navigationOrderSave')))
+      },
+      React.createElement('ol', { className: 'dshNavigationOrderList', 'aria-label': t('reorderNavigation'), 'aria-live': 'polite' },
+        sorted.map((item, index) => React.createElement('li', {
+          key: item.id, draggable: true, 'data-navigation-order-id': item.id, 'data-drop-target': dropTarget === item.id,
+          onDragStart: event => { dragged.current = item.id; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.id) },
+          onDragEnd: () => { dragged.current = null; setDropTarget(null) },
+          onDragOver: event => { if (!sorted.some(entry => entry.id === dragged.current)) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTarget(item.id) },
+          onDrop: event => { event.preventDefault(); move(dragged.current, index); dragged.current = null; setDropTarget(null) }
+        },
+        React.createElement('span', { className: 'dshNavigationOrderGrip', 'aria-hidden': true }, '⠿'),
+        React.createElement('span', { className: 'dshNavigationOrderLabel' }, item.label),
+        React.createElement('span', { className: 'dshNavigationOrderPlacement' }, t(index < VISIBLE_NAVIGATION_COUNT ? 'navigationDirect' : 'navigationOverflow')),
+        React.createElement(Button, { variant: 'ghost', size: 'sm', disabled: index === 0, 'aria-label': `${t('navigationMoveUp')}: ${item.label}`, onClick: () => move(item.id, index - 1) }, '↑'),
+        React.createElement(Button, { variant: 'ghost', size: 'sm', disabled: index === sorted.length - 1, 'data-modal-autofocus': index === 0 && sorted.length > 1 ? '' : undefined, 'aria-label': `${t('navigationMoveDown')}: ${item.label}`, onClick: () => move(item.id, index + 1) }, '↓')))),
+      error && React.createElement('p', { role: 'alert' }, error))
+    }
+
     function PrimaryNavigation({ wide, renderAction, expandSidebar, panels, selectPanel, renderPanelIcon, navigation, botNavigation, t }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const [menuOpen, setMenuOpen] = React.useState(false)
-      React.useEffect(() => { setMenuOpen(false) }, [state.epoch])
+      const [order, setOrder] = React.useState(readNavigationOrder)
+      const [sorting, setSorting] = React.useState(null)
+      React.useEffect(() => { setMenuOpen(false); setSorting(null) }, [state.epoch, state.connected])
       React.useEffect(() => { if (!wide) setMenuOpen(false) }, [wide])
       React.useEffect(() => {
         if (!menuOpen) return
@@ -1064,20 +1140,30 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       const activeId = state.mode === 'chat' ? entries.find(entry => entry.active)?.id : undefined
       const plugins = panels.find(panel => panel.id === 'plugins')
       const morePanels = panels.filter(panel => panel.id !== 'plugins')
-      const items = [
+      const items = orderNavigationItems([
         ...entries.map(entry => ({ id: `web:${entry.id}`, label: entry.label, icon: React.createElement(NavigationIcon, { id: entry.id }) })),
         ...morePanels.map(panel => ({ id: `local:${panel.id}`, label: panel.label, icon: renderPanelIcon(panel.id) }))
-      ]
+      ], order)
+      const visible = items.slice(0, VISIBLE_NAVIGATION_COUNT)
+      const overflow = items.slice(VISIBLE_NAVIGATION_COUNT)
+      const selectedId = activeId ? `web:${activeId}` : state.mode === 'work' && state.activePanelId ? `local:${state.activePanelId}` : undefined
+      const openItem = id => {
+        setMenuOpen(false)
+        if (id.startsWith('web:')) void navigation.openPage(id.slice(4))
+        else { navigation.select('work'); selectPanel(id.slice(6)) }
+      }
       return React.createElement('nav', { className: 'dshPrimaryNavigation', 'data-wide': wide, 'aria-label': t('navigation') },
         React.createElement(BotNavigationEntry, { botNavigation, wide, renderAction, t }),
         plugins && renderAction({ id: plugins.id, label: plugins.label, icon: renderPanelIcon(plugins.id), active: state.mode === 'work' && state.activePanelId === plugins.id, onClick: () => { setMenuOpen(false); navigation.select('work'); selectPanel(plugins.id) } }),
+        visible.map(item => React.createElement(React.Fragment, { key: item.id }, renderAction({ ...item, active: item.id === selectedId, onClick: () => openItem(item.id) }))),
         items.length > 0 && React.createElement(Menu, {
-          open: menuOpen, onClose: () => setMenuOpen(false), items, autoFocus: true, dense: true,
+          open: menuOpen, onClose: () => setMenuOpen(false), items: [...overflow, { id: 'reorder', label: t('reorderNavigation'), icon: React.createElement(NavigationIcon, { id: 'reorder' }) }], autoFocus: true, dense: true,
           className: 'dshNavigationMenu', listClassName: 'dshNavigationMenuList',
-          selectedId: activeId ? `web:${activeId}` : undefined,
-          onSelect: id => { setMenuOpen(false); if (id.startsWith('web:')) void navigation.openPage(id.slice(4)); else { navigation.select('work'); selectPanel(id.slice(6)) } },
-          anchor: renderAction({ id: 'more', label: t('moreNavigation'), icon: React.createElement(NavigationIcon, { id: 'more' }), active: Boolean(activeId) || (state.mode === 'work' && morePanels.some(panel => panel.id === state.activePanelId)), expanded: menuOpen, onClick: () => { if (!wide) expandSidebar(); setMenuOpen(open => !open) } })
-        }))
+          selectedId,
+          onSelect: id => { if (id === 'reorder') { setMenuOpen(false); setSorting({}) } else openItem(id) },
+          anchor: renderAction({ id: 'more', label: t('moreNavigation'), icon: React.createElement(NavigationIcon, { id: 'more' }), active: overflow.some(item => item.id === selectedId), expanded: menuOpen, onClick: () => { if (!wide) expandSidebar(); setMenuOpen(open => !open) } })
+        }),
+        sorting && React.createElement(NavigationOrderDialog, { items, order, t, onClose: () => setSorting(null), onSave: next => { setOrder(next); setSorting(null) } }))
     }
     // Work overlays use viewport coordinates. Isolate stacking while keeping
     // their fixed-position containing block attached to the viewport.
@@ -1110,6 +1196,12 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
           .dshBotSidebarTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:14px}
           .bt-account-menu>[data-dsh-bot-menu-hidden]{display:none!important}
           .dshNavigationMenu{display:flex;flex-direction:column;position:relative;width:100%}.dshNavigationMenu .dshNavigationMenuList{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+          .dshNavigationOrderList{list-style:none;margin:0;padding:0;max-height:55vh;overflow:auto}
+          .dshNavigationOrderList li{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid transparent;border-radius:8px;cursor:grab;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2)}
+          .dshNavigationOrderList li+li{margin-top:4px}
+          .dshNavigationOrderList li[data-drop-target=true]{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-interactive-bg-hover)}
+          .dshNavigationOrderLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .dshNavigationOrderGrip,.dshNavigationOrderPlacement{color:var(--dsw-alias-label-secondary);font-size:12px;flex:none}
           .dshModes{grid-column:2 / -1;min-width:0;min-height:0;width:100%;height:100%;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
           .dshModesHeader{height:56px;flex:none;display:flex;align-items:center;justify-content:center}
           html[data-platform=darwin] .dshModesHeader{-webkit-app-region:drag}

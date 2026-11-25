@@ -10,6 +10,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root, container
 const disposers = []
 beforeEach(() => {
+  vi.stubGlobal('localStorage', globalThis.jsdom.window.localStorage)
+  window.localStorage.removeItem('dsh-desktop-navigation-order')
   // jsdom supplies DOM state; the Electron fixture verifies native visibility/layout.
   const original = Element.prototype.checkVisibility
   Element.prototype.checkVisibility = function () {
@@ -33,8 +35,9 @@ afterEach(async () => {
   delete window.dshDesktop
   delete window.__ModuleLoader__
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
-async function mount(connected = false, collection = {}, inert = false, workbench, desktop = false) {
+async function mount(connected = false, collection = {}, inert = false, workbench, desktop = false, navigationOptions = {}) {
   if (desktop) window.dshDesktop = { restartHarness: vi.fn() }
   let workbenchSnapshot = workbench
   let bindWorkbench, disposeWorkbench
@@ -107,7 +110,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     plugin = factory(name => {
       if (name === 'react') return React
       if (name === 'react-dom') return { createPortal }
-      if (name === '@deepseek-ai/dsh-client-ui-primitives') return { IconUsersOutlineRegular: () => null, IconChevronLeftOutlineRegular: () => null, Button: ({ variant, size, ...props }) => React.createElement('button', props), Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body), Menu: ({ anchor, open, items, onSelect }) => React.createElement('div', null, anchor, open && items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.label))) }
+      if (name === '@deepseek-ai/dsh-client-ui-primitives') return { IconUsersOutlineRegular: () => null, IconChevronLeftOutlineRegular: () => null, Button: ({ variant, size, ...props }) => React.createElement('button', props), Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body), Menu: ({ anchor, open, items, onSelect }) => React.createElement('div', null, anchor, open && items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.icon, item.label))) }
       throw new Error(name)
     })
   } }
@@ -122,7 +125,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     uiWorkspace: { registerNavigationHandler: (fn) => { navigate = fn; return () => {} }, startSession: () => { navigate('new'); setSessions({ phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }); setPanel(null) } },
     sessions: { binding: id => id === 'draft' ? { session: liveSession } : undefined, list: { getSnapshot: () => sessionList, subscribe: fn => { sessionListeners.add(fn); return () => sessionListeners.delete(fn) } } },
     layout: { selectPanel: setPanel, panelInfo: { getSnapshot: () => panelState, subscribe: fn => { panelListeners.add(fn); return () => panelListeners.delete(fn) } } },
-    remote: {}, locale: { register: (ns, copy) => dictionaries.set(ns, copy), bind: ns => key => key.startsWith('hostedApp') || key === 'multiAgentCollaboration' ? dictionaries.get(ns)?.[activeLocale]?.[key] : key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) } },
+    remote: {}, locale: { register: (ns, copy) => dictionaries.set(ns, copy), bind: ns => key => key.startsWith('hostedApp') || key.startsWith('navigation') || key === 'reorderNavigation' || key === 'multiAgentCollaboration' ? dictionaries.get(ns)?.[activeLocale]?.[key] : key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) } },
     effect(fn) { const dispose = fn(); if (typeof dispose === 'function') disposers.push(dispose) },
     slots: {
       inject(name, fn) { if ([footerSlot, 'shell.overlay', 'desktop.mode.content', 'sidebar.workspaces.collection', 'sidebar.primaryNavigation'].includes(name)) return fn() },
@@ -146,7 +149,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   const botBack = registrations.get('desktop-bot-sidebar-back')
   await act(async () => root.render(React.createElement(React.Fragment, null,
     botBack && React.createElement(botBack.component, { ...botBack.props, t: key => dictionaries.get('desktop.chatWork')[activeLocale][key] }),
-    React.createElement('aside', null, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: true, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection }), React.createElement(SidebarFooter)),
+    React.createElement('aside', null, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: navigationOptions.wide ?? true, expandSidebar: navigationOptions.expandSidebar, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }, ...(navigationOptions.panels || [])], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection }), React.createElement(SidebarFooter)),
     React.createElement(content.component, { ...content.props, columns: '1fr 0px', work: React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }) })
   )))
   return {
@@ -442,25 +445,144 @@ it('shares account navigation across Chat and Work and keeps Plugins directly ac
   expect(ui.picker()).toBeNull()
   const sidebar = container.querySelector('aside')
   expect(sidebar.textContent).not.toContain('Welcome')
-  expect(sidebar.querySelector('[data-navigation-id=knowledge]')).toBeNull()
+  expect(sidebar.querySelector('[data-navigation-id="web:knowledge"]')).not.toBeNull()
+  expect(sidebar.querySelector('[data-navigation-id="web:skills"]').getAttribute('aria-current')).toBe('page')
   const openMore = () => act(async () => sidebar.querySelector('[data-navigation-id=more]').click())
-  const choose = label => act(async () => [...sidebar.querySelectorAll('[role=menuitem]')].find(node => node.textContent === label).click())
   await openMore()
-  expect([...sidebar.querySelectorAll('[role=menuitem]')].map(node => node.textContent)).toEqual(['Knowledge', 'Skills'])
-  await choose('Knowledge')
+  expect([...sidebar.querySelectorAll('[role=menuitem]')].map(node => node.textContent)).toEqual(['Reorder navigation'])
+  expect(sidebar.querySelector('[role=menuitem] svg[aria-hidden=true]')).not.toBeNull()
+  await act(async () => sidebar.querySelector('[data-navigation-id="web:knowledge"]').click())
   expect(window.dshEnterpriseChat.openPage).toHaveBeenLastCalledWith('knowledge')
   await act(async () => sidebar.querySelector('[data-navigation-id=plugins]').click())
   expect(sidebar.querySelector('[data-navigation-id=plugins]').getAttribute('aria-current')).toBe('page')
   expect(sidebar.querySelector('[data-navigation-id=more]').getAttribute('aria-current')).toBeNull()
   expect(ui.selected()).toBe('work')
   expect(ui.picker()).toBeNull()
-  await openMore()
-  await choose('Skills')
+  await act(async () => sidebar.querySelector('[data-navigation-id="web:skills"]').click())
   expect(window.dshEnterpriseChat.openPage).toHaveBeenLastCalledWith('skills')
   expect(ui.selected()).toBe('chat')
   await ui.account(false)
   expect(sidebar.querySelector('[data-navigation-id=plugins]')).not.toBeNull()
   expect(sidebar.querySelector('[data-navigation-id=more]')).toBeNull()
+})
+
+const navigationEntries = count => Array.from({ length: count }, (_, index) => ({ id: `page-${index + 1}`, label: `Page ${index + 1}`, active: false }))
+const directNavigation = () => [...container.querySelectorAll('nav [data-navigation-id]')].map(node => node.dataset.navigationId)
+const orderedNavigation = () => [...document.querySelectorAll('[data-navigation-order-id]')].map(node => node.dataset.navigationOrderId)
+async function navigationMenu(label) {
+  await act(async () => container.querySelector('[data-navigation-id=more]').click())
+  if (label) await act(async () => [...container.querySelectorAll('[role=menuitem]')].find(node => node.textContent === label).click())
+}
+async function dialogButton(label) {
+  await act(async () => [...document.querySelectorAll('[role=dialog] button')].find(node => node.textContent === label).click())
+}
+async function dragNavigation(from, to) {
+  const row = id => document.querySelector(`[data-navigation-order-id="${id}"]`)
+  const dataTransfer = { setData: vi.fn() }
+  const fire = async (node, type) => act(async () => {
+    const event = new Event(type, { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
+    node.dispatchEvent(event)
+  })
+  await fire(row(from), 'dragstart')
+  await fire(row(to), 'dragover')
+  expect(row(to).dataset.dropTarget).toBe('true')
+  await fire(row(to), 'drop')
+  await fire(row(from), 'dragend')
+  expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', from)
+}
+
+it('shows five mixed entries directly and highlights More only for an overflow entry', async () => {
+  const ui = await mount(true, {}, false, undefined, false, { panels: [{ id: 'files', label: 'Files' }, { id: 'tasks', label: 'Tasks' }] })
+  const pages = navigationEntries(4)
+  await ui.navigation(pages)
+  expect(directNavigation()).toEqual(['plugins', 'web:page-1', 'web:page-2', 'web:page-3', 'web:page-4', 'local:files', 'more'])
+  await act(async () => container.querySelector('[data-navigation-id="local:files"]').click())
+  expect(ui.selected()).toBe('work')
+  expect(container.querySelector('[data-navigation-id="local:files"]').getAttribute('aria-current')).toBe('page')
+  expect(container.querySelector('[data-navigation-id=more]').getAttribute('aria-current')).toBeNull()
+  await navigationMenu('Tasks')
+  expect(container.querySelector('[data-navigation-id=more]').getAttribute('aria-current')).toBe('page')
+  await ui.navigation([...pages, { id: 'extra', label: 'Extra', active: true }])
+  await act(async () => container.querySelector('[data-navigation-id="web:extra"]').click())
+  expect(container.querySelector('[data-navigation-id="web:extra"]').getAttribute('aria-current')).toBe('page')
+  expect(container.querySelector('[data-navigation-id=more]').getAttribute('aria-current')).toBeNull()
+  await ui.navigation([...pages, { id: 'extra', label: 'Extra' }, { id: 'hidden', label: 'Hidden', active: true }])
+  expect(container.querySelector('[data-navigation-id=more]').getAttribute('aria-current')).toBe('page')
+  await navigationMenu()
+  expect([...container.querySelectorAll('[role=menuitem]')].map(node => node.textContent)).toEqual(['Hidden', 'Files', 'Tasks', 'Reorder navigation'])
+  await act(async () => [...container.querySelectorAll('[role=menuitem]')].find(node => node.textContent === 'Hidden').click())
+  expect(window.dshEnterpriseChat.openPage).toHaveBeenLastCalledWith('hidden')
+})
+
+it('saves drag ordering, promotes a hidden item and restores the order after remount', async () => {
+  let ui = await mount(true)
+  const pages = navigationEntries(6)
+  await ui.navigation(pages)
+  await navigationMenu('Reorder navigation')
+  await dragNavigation('web:page-6', 'web:page-1')
+  expect(orderedNavigation()).toEqual(['web:page-6', 'web:page-1', 'web:page-2', 'web:page-3', 'web:page-4', 'web:page-5'])
+  expect(directNavigation()).toContain('web:page-5')
+  await dialogButton('Save')
+  expect(document.querySelector('[role=dialog]')).toBeNull()
+  expect(directNavigation()).toEqual(['plugins', 'web:page-6', 'web:page-1', 'web:page-2', 'web:page-3', 'web:page-4', 'more'])
+  await act(async () => root.unmount())
+  container.remove()
+  disposers.splice(0).reverse().forEach(dispose => dispose())
+  ui = await mount(true)
+  await ui.navigation([...pages.slice(1), { id: 'new', label: 'New' }])
+  expect(directNavigation()).toEqual(['plugins', 'web:page-6', 'web:page-2', 'web:page-3', 'web:page-4', 'web:page-5', 'more'])
+  await navigationMenu()
+  expect([...container.querySelectorAll('[role=menuitem]')].map(node => node.textContent)).toEqual(['New', 'Reorder navigation'])
+  await ui.account(false, 2)
+  expect(directNavigation()).toEqual(['plugins'])
+  await ui.account(true, 3)
+  await ui.navigation(pages)
+  expect(directNavigation()[1]).toBe('web:page-6')
+})
+
+it('supports keyboard movement and cancel, and keeps unsaved changes available after a storage failure', async () => {
+  const ui = await mount(true)
+  await ui.navigation(navigationEntries(2))
+  await navigationMenu('Reorder navigation')
+  expect(document.querySelector('[aria-label="Move up: Page 1"]').disabled).toBe(true)
+  expect(document.querySelector('[aria-label="Move down: Page 2"]').disabled).toBe(true)
+  await act(async () => document.querySelector('[aria-label="Move down: Page 1"]').click())
+  expect(orderedNavigation()).toEqual(['web:page-2', 'web:page-1'])
+  await dialogButton('Cancel')
+  expect(directNavigation()).toEqual(['plugins', 'web:page-1', 'web:page-2', 'more'])
+  expect(window.localStorage.getItem('dsh-desktop-navigation-order')).toBeNull()
+  await navigationMenu('Reorder navigation')
+  await act(async () => document.querySelector('[aria-label="Move up: Page 2"]').click())
+  const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage unavailable') })
+  await dialogButton('Save')
+  expect(document.querySelector('[role=alert]').textContent).toBe('Could not save the order. Try again.')
+  expect(orderedNavigation()).toEqual(['web:page-2', 'web:page-1'])
+  expect(directNavigation()[1]).toBe('web:page-1')
+  storage.mockRestore()
+  await dialogButton('Save')
+  expect(directNavigation()[1]).toBe('web:page-2')
+  await navigationMenu('Reorder navigation')
+  await ui.account(false, 2)
+  expect(document.querySelector('[role=dialog]')).toBeNull()
+})
+
+it.each(['invalid json', '{}', '[null, 5, "web:page-2", "web:page-2", "local:missing"]'])('handles stored order %s and keeps the collapsed navigation usable', async stored => {
+  window.localStorage.setItem('dsh-desktop-navigation-order', stored)
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const expandSidebar = vi.fn()
+  const ui = await mount(true, {}, false, undefined, false, { wide: false, expandSidebar })
+  await ui.navigation(navigationEntries(2))
+  expect(directNavigation()).toEqual(stored.startsWith('[') ? ['plugins', 'web:page-2', 'web:page-1', 'more'] : ['plugins', 'web:page-1', 'web:page-2', 'more'])
+  await ui.locale('zh')
+  await navigationMenu('调整顺序')
+  expect(expandSidebar).toHaveBeenCalledTimes(1)
+  expect(document.querySelector('[role=dialog]').getAttribute('aria-label')).toBe('调整顺序')
+  await ui.navigation([{ id: 'new', label: 'New' }])
+  expect(orderedNavigation()).toEqual(['web:new'])
+  await dialogButton('保存')
+  expect(directNavigation()).toEqual(['plugins', 'web:new', 'more'])
+  if (stored === 'invalid json') expect(warning).toHaveBeenCalled()
 })
 
 it('moves a compatible DS Bot return action into primary navigation and releases it with the plugin', async () => {
@@ -758,8 +880,7 @@ it('retries a hosted app and routes closing through the destination owner', asyn
   expect(bridge.retryHostedApp).toHaveBeenCalledOnce()
   expect(chat.querySelector('[role=status]').textContent).toBe('正在打开应用…')
   const choose = async label => {
-    await act(async () => container.querySelector('[data-navigation-id=more]').click())
-    await act(async () => [...container.querySelectorAll('[role=menuitem]')].find(item => item.textContent === label).click())
+    await act(async () => [...container.querySelectorAll('nav [data-navigation-id]')].find(item => item.textContent === label).click())
   }
   await choose('Apps')
   expect(bridge.closeHostedApp).toHaveBeenCalledOnce()
