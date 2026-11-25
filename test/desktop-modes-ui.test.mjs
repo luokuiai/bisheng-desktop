@@ -28,6 +28,8 @@ afterEach(async () => {
   container?.remove()
   document.documentElement.removeAttribute('data-dsh-safe-mode-page')
   document.documentElement.removeAttribute('data-dsh-about-open')
+  document.documentElement.removeAttribute('data-platform')
+  document.documentElement.removeAttribute('data-fullscreen')
   document.documentElement.removeAttribute('data-windows-titlebar')
   document.body.removeAttribute('data-ds-dark-theme')
   disposers.splice(0).reverse().forEach(dispose => dispose())
@@ -98,6 +100,14 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   const setSessions = value => { sessionList = value; sessionListeners.forEach(fn => fn()) }
   const setPanel = id => { panelState = { activePanelId: id }; panelListeners.forEach(fn => fn()) }
   const registrations = new Map()
+  let sidebarEntries = []
+  const sidebarListeners = new Set()
+  const Menu = ({ anchor, open, items = [], onSelect, portal, side, getAnchorRect, listClassName, children }) => {
+    const list = open && React.createElement('div', { className: listClassName, role: 'menu', 'data-side': side, 'data-anchor-right': getAnchorRect?.()?.right },
+      children,
+      items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.icon, item.label)))
+    return React.createElement('div', null, anchor, list && (portal ? createPortal(list, document.body) : list))
+  }
   const footerSlot = 'sidebar.footer.action'
   const slotCore = new SlotCore()
   slotCore.register({ name: 'root', children: { [footerSlot]: { kind: 'list', scope: 'root' } } }, () => null)
@@ -110,12 +120,20 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     plugin = factory(name => {
       if (name === 'react') return React
       if (name === 'react-dom') return { createPortal }
-      if (name === '@deepseek-ai/dsh-client-ui-primitives') return { IconUsersOutlineRegular: () => null, IconChevronLeftOutlineRegular: () => null, Button: ({ variant, size, ...props }) => React.createElement('button', props), Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body), Menu: ({ anchor, open, items, onSelect }) => React.createElement('div', null, anchor, open && items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.icon, item.label))) }
+      if (name === '@deepseek-ai/dsh-client-ui-primitives') return {
+        Button: ({ variant, size, ...props }) => React.createElement('button', props),
+        Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body),
+        IconUsersOutlineRegular: () => null, IconChevronLeftOutlineRegular: () => null,
+        Menu, IconPanelLeftOutlineRegular: () => React.createElement('svg'),
+        IconNewChatOutlineRegular: () => React.createElement('svg'), IconSearchOutlineRegular: () => React.createElement('svg'),
+        MenuItemButton: ({ children, onSelect }) => React.createElement('button', { role: 'menuitem', onClick: onSelect }, children)
+      }
       throw new Error(name)
     })
   } }
   new Function(await readFile(process.env.DSH_TEST_HOST_DIALOG_CLIENT_SOURCE || 'packages/dsh-desktop-client-ui/client.js', 'utf8'))()
   plugin.apply({
+    get: name => name === 'shortcuts' ? { catalog: { getSnapshot: () => [{ id: 'sidebar.left.toggle', binding: { code: 'KeyB', modifiers: ['meta'] } }] } } : undefined,
     inject(names, callback) {
       if (names.includes('desktopWorkbenches')) {
         bindWorkbench = callback
@@ -134,8 +152,13 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
         if (options.name === 'shell.overlay' && options.id !== 'desktop-bot-sidebar-back') return
         registrations.set(options.name === 'shell.overlay' ? options.id : options.name, { component, props: options.inject() })
       },
-      entries: name => slotCore.entries(name),
-      subscribe: (name, listener) => slotCore.subscribe(name, listener)
+      entries: name => name === 'sidebar.workspaces' ? sidebarEntries : slotCore.entries(name),
+      entriesOfSlot: name => name === 'sidebar.workspaces' ? sidebarEntries : slotCore.entriesOfSlot(name),
+      subscribe(name, listener) {
+        if (name !== 'sidebar.workspaces') return slotCore.subscribe(name, listener)
+        sidebarListeners.add(listener)
+        return () => sidebarListeners.delete(listener)
+      }
     }
   })
   container = document.createElement('div')
@@ -149,10 +172,16 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   const botBack = registrations.get('desktop-bot-sidebar-back')
   await act(async () => root.render(React.createElement(React.Fragment, null,
     botBack && React.createElement(botBack.component, { ...botBack.props, t: key => dictionaries.get('desktop.chatWork')[activeLocale][key] }),
-    React.createElement('aside', null, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: navigationOptions.wide ?? true, expandSidebar: navigationOptions.expandSidebar, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }, ...(navigationOptions.panels || [])], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection }), React.createElement(SidebarFooter)),
-    React.createElement(content.component, { ...content.props, columns: '1fr 0px', work: React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }) })
+    React.createElement('aside', { 'data-dsh-sidebar-root': navigationOptions.wide === false ? '' : undefined }, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: navigationOptions.wide ?? true, expandSidebar: navigationOptions.expandSidebar, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }, ...(navigationOptions.panels || [])], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection }), React.createElement(SidebarFooter)),
+    React.createElement(content.component, { ...content.props, rightbarWidth: 420, work: React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }) })
   )))
   return {
+    async sidebarEntry(face) {
+      await act(async () => {
+        sidebarEntries = face ? [{ inject: () => face }] : []
+        sidebarListeners.forEach(listener => listener())
+      })
+    },
     async footerAction(options, component) {
       let dispose
       await act(async () => { dispose = slotCore.register({ name: footerSlot, ...options }, component) })
@@ -380,6 +409,84 @@ it('switches modes without a transient light zero-sized presentation', async () 
   expect(window.dshEnterpriseChat.open).not.toHaveBeenCalled()
 })
 
+it('removes the shared host card only while the enterprise workspace is docked in Chat', async () => {
+  const ui = await mount(true)
+  const modes = container.querySelector('.dshModes')
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(false)
+  await ui.pushState({ workspaceDockOpen: true })
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(true)
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ radius: 0 }))
+  await ui.click('work')
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(false)
+  await ui.click('chat')
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(true)
+  await ui.pushState({ workspaceDockOpen: false })
+  expect(modes.hasAttribute('data-dsh-workspace-dock')).toBe(false)
+})
+
+it('keeps Chat and Work clear of the dynamically mounted DS Bot column', async () => {
+  let tick = 0
+  const frames = new Map()
+  vi.stubGlobal('requestAnimationFrame', callback => { frames.set(++tick, callback); return tick })
+  vi.stubGlobal('cancelAnimationFrame', id => frames.delete(id))
+  const advanceFrame = async () => act(async () => {
+    for (const [id, callback] of [...frames]) { frames.delete(id); callback() }
+  })
+  const ui = await mount(true)
+  const modes = container.querySelector('.dshModes')
+  const chat = container.querySelector('#dsh-panel-chat')
+  const inset = () => Number.parseFloat(modes.style.getPropertyValue('--dsh-plugin-rail-inset')) || 0
+  modes.getBoundingClientRect = () => ({ left: 24 + inset() })
+  chat.getBoundingClientRect = () => ({ x: 25 + inset(), y: 100, right: 1000, height: 500 })
+  const rail = document.createElement('div')
+  rail.className = 'bt-leftcol'
+  let width = 280
+  let translate = 0
+  const motion = { playState: 'finished' }
+  rail.getAnimations = () => [motion]
+  rail.getBoundingClientRect = () => ({ width, height: 600, right: 12 + width + translate })
+  const check = (expectedInset, x) => {
+    expect(inset()).toBe(expectedInset)
+    expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({
+      visible: true, bounds: { x, y: 100, width: 1000 - x, height: 500 }
+    }))
+  }
+  await act(async () => document.body.append(rail))
+  try {
+    check(280, 305)
+    width = 72
+    await ui.resize(rail)
+    check(72, 97)
+    await ui.click('work')
+    expect(inset()).toBe(72)
+    expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+    width = 280
+    await ui.resize(rail)
+    expect(inset()).toBe(280)
+    expect(modes.hasAttribute('data-dsh-plugin-rail-inset')).toBe(true)
+    motion.playState = 'running'
+    rail.dispatchEvent(new Event('transitionrun'))
+    translate = -100
+    await advanceFrame()
+    expect(inset()).toBe(180)
+    await ui.click('chat')
+    check(180, 205)
+    translate = -200
+    await advanceFrame()
+    check(80, 105)
+    translate = -280
+    motion.playState = 'finished'
+    await advanceFrame()
+    check(0, 25)
+    expect(modes.hasAttribute('data-dsh-plugin-rail-inset')).toBe(true)
+    expect(frames.size).toBe(0)
+  } finally {
+    await act(async () => rail.remove())
+  }
+  check(0, 25)
+  expect(modes.hasAttribute('data-dsh-plugin-rail-inset')).toBe(false)
+})
+
 
 it('shows the picker only on the Work landing page and releases the header space on panels and active sessions', async () => {
   const ui = await mount()
@@ -471,7 +578,7 @@ const directNavigation = () => [...container.querySelectorAll('nav [data-navigat
 const orderedNavigation = () => [...document.querySelectorAll('[data-navigation-order-id]')].map(node => node.dataset.navigationOrderId)
 async function navigationMenu(label) {
   await act(async () => container.querySelector('[data-navigation-id=more]').click())
-  if (label) await act(async () => [...container.querySelectorAll('[role=menuitem]')].find(node => node.textContent === label).click())
+  if (label) await act(async () => [...document.querySelectorAll('[role=menuitem]')].find(node => node.textContent === label).click())
 }
 async function dialogButton(label) {
   await act(async () => [...document.querySelectorAll('[role=dialog] button')].find(node => node.textContent === label).click())
@@ -576,13 +683,42 @@ it.each(['invalid json', '{}', '[null, 5, "web:page-2", "web:page-2", "local:mis
   expect(directNavigation()).toEqual(stored.startsWith('[') ? ['plugins', 'web:page-2', 'web:page-1', 'more'] : ['plugins', 'web:page-1', 'web:page-2', 'more'])
   await ui.locale('zh')
   await navigationMenu('调整顺序')
-  expect(expandSidebar).toHaveBeenCalledTimes(1)
+  expect(expandSidebar).not.toHaveBeenCalled()
   expect(document.querySelector('[role=dialog]').getAttribute('aria-label')).toBe('调整顺序')
   await ui.navigation([{ id: 'new', label: 'New' }])
   expect(orderedNavigation()).toEqual(['web:new'])
   await dialogButton('保存')
   expect(directNavigation()).toEqual(['plugins', 'web:new', 'more'])
   if (stored === 'invalid json') expect(warning).toHaveBeenCalled()
+})
+
+it('opens More beside the collapsed rail and keeps native Chat visible', async () => {
+  const expandSidebar = vi.fn()
+  const ui = await mount(true, {}, false, undefined, false, { wide: false, expandSidebar })
+  await ui.navigation(navigationEntries(6))
+  const sidebar = container.querySelector('aside')
+  const trigger = sidebar.querySelector('[data-navigation-id=more]')
+  sidebar.getBoundingClientRect = () => new DOMRect(12, 12, 56, 700)
+  trigger.getBoundingClientRect = () => new DOMRect(20, 120, 40, 30)
+  const panel = container.querySelector('#dsh-panel-chat')
+  panel.getBoundingClientRect = () => new DOMRect(80, 80, 880, 640)
+  await ui.resize(panel)
+
+  await navigationMenu()
+  const menu = document.body.querySelector(':scope > [role=menu]')
+  expect(menu.dataset.side).toBe('right')
+  expect(menu.dataset.anchorRight).toBe('68')
+  expect([...menu.querySelectorAll('[role=menuitem]')].map(row => row.textContent)).toEqual(['Page 6', 'Reorder navigation'])
+  menu.getBoundingClientRect = () => new DOMRect(72, 120, 144, 60)
+  await ui.resize(menu)
+  const present = window.dshEnterpriseChat.present
+  expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, bounds: { x: 224, y: 80, width: 736, height: 640 } }))
+
+  await act(async () => menu.querySelector('[role=menuitem]').click())
+  expect(expandSidebar).not.toHaveBeenCalled()
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  expect(window.dshEnterpriseChat.openPage).toHaveBeenLastCalledWith('page-6')
+  expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, bounds: { x: 80, y: 80, width: 880, height: 640 } }))
 })
 
 it('moves a compatible DS Bot return action into primary navigation and releases it with the plugin', async () => {
@@ -811,12 +947,94 @@ it('reserves a docked DS Bot sidebar mounted in the body and follows its lifecyc
   }
 })
 
+it('switches DS Bot between its existing icon rail and expanded sidebar in both macOS window modes', async () => {
+  document.documentElement.dataset.platform = 'darwin'
+  const ui = await mount(true, {}, false, undefined, true)
+  const leading = document.createElement('div')
+  leading.dataset.shellLeading = ''
+  leading.innerHTML = '<div class="IW6AQa_controls"><button>Toggle</button><button>New</button></div>'
+  container.append(leading)
+  const rail = document.createElement('aside')
+  rail.className = 'bt-leftcol'
+  rail.dataset.left = 'hidden'
+  rail.style.width = '88px'
+  rail.innerHTML = '<div class="bt-side bt-rail"><div class="bt-rail-top"><button class="bt-side-collapse">Bot toggle</button><button>Chief</button></div><button class="bt-rail-folder">Folder</button><div class="bt-leftcol-foot-rail"><button class="bt-round">Footer new</button></div></div>'
+  document.body.append(rail)
+  let preference = 'hidden'
+  let drawer = false
+  const listeners = new Set()
+  const actions = {
+    surfaceMode: () => 'bot',
+    setSurface: vi.fn(),
+    openNewChat: vi.fn(), openPalette: vi.fn(),
+    setSidebarPref: vi.fn(value => {
+      preference = value
+      rail.dataset.left = value
+      listeners.forEach(listener => listener())
+    }),
+    setLeftDrawer: vi.fn(value => {
+      drawer = value
+      listeners.forEach(listener => listener())
+    })
+  }
+  let frame = { viewport: 1200, sidebarWidth: 280 }
+  const subscribe = listener => { listeners.add(listener); return () => listeners.delete(listener) }
+  const surface = { mode: 'bot' }
+  const uninstall = await ui.footerAction({ id: 'bot-return', inject: () => ({ actions, hooks: { surface: { subscribe, getSnapshot: () => surface } } }) }, () => null)
+  try {
+    expect(getComputedStyle(leading.querySelector('button:last-child')).display).toBe('none')
+    await ui.sidebarEntry({ actions, hooks: { sidebarPref: { subscribe, getSnapshot: () => preference }, frame: { subscribe, getSnapshot: () => frame }, ui: { subscribe, getSnapshot: () => ({ leftDrawer: drawer }) } } })
+    const button = container.querySelector('[data-dsh-bot-sidebar-toggle]')
+    expect(actions.setSidebarPref).toHaveBeenLastCalledWith('rail')
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect(getComputedStyle(leading).display).toBe('none')
+    expect(getComputedStyle(rail.querySelector('.bt-side-collapse')).display).toBe('none')
+    const railActions = rail.querySelector('.bt-rail-top .dshBotRailActions')
+    expect(railActions).not.toBeNull()
+    expect([...railActions.querySelectorAll('button')].map(action => action.getAttribute('aria-label'))).toEqual(['Back to classic Agent', 'create', 'search'])
+    expect(getComputedStyle(rail.querySelector('.bt-leftcol-foot-rail button')).display).toBe('none')
+    await act(async () => { railActions.querySelector('[aria-label="create"]').click(); railActions.querySelector('[aria-label="search"]').click() })
+    expect(actions.openNewChat).toHaveBeenCalledWith('new')
+    expect(actions.openPalette).toHaveBeenCalledOnce()
+    expect(getComputedStyle(button).left).toBe('88px')
+
+    await act(async () => button.click())
+    expect(rail.dataset.left).toBe('open')
+    expect(rail.querySelector('.dshBotRailActions')).toBeNull()
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    document.documentElement.dataset.fullscreen = 'true'
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyB', metaKey: true, cancelable: true })))
+    expect(rail.dataset.left).toBe('rail')
+    expect(getComputedStyle(button).left).toBe('26px')
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => button.click())
+    expect(rail.dataset.left).toBe('open')
+    await act(async () => {
+      frame = { viewport: 620, sidebarWidth: 280 }
+      listeners.forEach(listener => listener())
+    })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => button.click())
+    expect(actions.setLeftDrawer).toHaveBeenLastCalledWith(true)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    await act(async () => button.click())
+    expect(actions.setLeftDrawer).toHaveBeenLastCalledWith(false)
+    await ui.sidebarEntry(null)
+    expect(container.querySelector('[data-dsh-bot-sidebar-toggle]')).toBeNull()
+  } finally {
+    await uninstall()
+    await act(async () => rail.remove())
+  }
+})
+
 it('reserves the hosted app toolbar, yields to host overlays and returns to the existing app directory', async () => {
   const sidebar = document.createElement('div')
   sidebar.className = 'bt-leftcol'
   sidebar.dataset.left = 'open'
   sidebar.getBoundingClientRect = () => new DOMRect(0, 0, 240, 748)
   const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+    const inset = Number.parseFloat(this.closest('.dshModes')?.style.getPropertyValue('--dsh-plugin-rail-inset')) || 0
+    if (this.classList.contains('dshModes') || this.id === 'dsh-panel-chat') return new DOMRect(inset, 48, 960 - inset, 700)
     if (this.hasAttribute('data-shell-leading')) return { left: 80, right: 156, bottom: 70 }
     if (this.parentElement?.id === 'dsh-panel-chat') return { x: 0, y: 100, right: 960, width: 960, height: 648 }
     return { x: 0, y: 48, right: 960, width: 960, height: 700 }
@@ -827,6 +1045,9 @@ it('reserves the hosted app toolbar, yields to host overlays and returns to the 
     const draft = ui.draft()
     await ui.navigation([{ id: 'apps', label: 'Apps', path: '/apps', primary: true, active: true }], '/apps')
     await ui.pushState({ hostedApp: { slug: 'fixture-app', phase: 'loading' } })
+    const modes = container.querySelector('.dshModes')
+    modes.style.borderTopLeftRadius = '16px'
+    modes.style.borderTopWidth = '1px'
     const chat = container.querySelector('#dsh-panel-chat')
     const leading = document.createElement('div')
     leading.dataset.shellLeading = ''
@@ -834,16 +1055,18 @@ it('reserves the hosted app toolbar, yields to host overlays and returns to the 
     expect(chat.querySelector('header button').textContent).toBe('Back to App Center')
     expect(chat.querySelector('[role=status]').textContent).toBe('Opening app…')
     expect(bridge.present).toHaveBeenLastCalledWith(expect.objectContaining({
-      visible: true, bounds: { x: 156, y: 48, width: 804, height: 700 },
+      visible: true, radius: 15, bounds: { x: 156, y: 48, width: 804, height: 700 },
       hostedAppBounds: { x: 156, y: 100, width: 804, height: 648 }
     }))
     await ui.pushState({ hostedApp: { slug: 'fixture-app', phase: 'ready' } })
     expect(chat.querySelector('[role=status]')).toBeNull()
     await act(async () => document.body.append(sidebar))
-    expect(bridge.present.mock.lastCall[0]).toMatchObject({ hostedAppBounds: { x: 240, y: 100, width: 720, height: 648 } })
+    expect(bridge.present.mock.lastCall[0]).toMatchObject({ hostedAppBounds: { x: 252, y: 100, width: 708, height: 648 } })
+    expect(modes.style.getPropertyValue('--dsh-plugin-rail-inset')).toBe('252px')
     await act(async () => { sidebar.dataset.left = 'drawer' })
     expect(bridge.present.mock.lastCall[0]).toMatchObject({ visible: false })
     expect(bridge.present.mock.lastCall[0]).not.toHaveProperty('hostedAppBounds')
+    expect(modes.style.getPropertyValue('--dsh-plugin-rail-inset')).toBe('')
     await act(async () => sidebar.remove())
     expect(bridge.present.mock.lastCall[0]).toMatchObject({ hostedAppBounds: { x: 156, y: 100, width: 804, height: 648 } })
     await act(async () => { container.inert = true })
@@ -1137,6 +1360,22 @@ it('keeps native Chat behind nested host confirmations until their final removal
   expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }))
 })
 
+it('keeps native Chat hidden through the DS Bot picker and creation form until close', async () => {
+  const view = await mount(true)
+  await view.click('chat')
+  let portal
+  await act(async () => {
+    portal = hostDialog('<div class="bt-pane"><div class="bt-newchat" role="dialog"><input aria-label="Recipient"></div></div>')
+  })
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+  await act(async () => {
+    portal.firstElementChild.innerHTML = '<div class="bt-create" role="dialog"><input aria-label="Bot name"></div>'
+  })
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+  await act(async () => portal.remove())
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }))
+})
+
 it('tracks modal visibility and semantics within surviving portal containers', async () => {
   const view = await mount(true)
   await view.click('chat')
@@ -1151,6 +1390,68 @@ it('tracks modal visibility and semantics within surviving portal containers', a
   expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
   await act(async () => { portal.firstElementChild.setAttribute('aria-modal', 'false') })
   expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }))
+})
+
+it('fits sidebar tooltips and conversation menus beside Chat without hiding it', async () => {
+  const view = await mount(true)
+  await view.click('chat')
+  const sidebar = container.querySelector('aside')
+  sidebar.setAttribute('data-dsh-sidebar-root', '')
+  sidebar.getBoundingClientRect = () => new DOMRect(12, 48, 280, 660)
+  const panel = container.querySelector('#dsh-panel-chat')
+  panel.getBoundingClientRect = () => new DOMRect(304, 80, 656, 628)
+  await view.resize(panel)
+  const present = window.dshEnterpriseChat.present
+  const base = { visible: true, bounds: { x: 304, y: 80, width: 656, height: 628 } }
+  expect(present).toHaveBeenLastCalledWith(expect.objectContaining(base))
+  present.mockClear()
+  const offset = '--dsh-sidebar-overlay-offset'
+  const rectAt = (element, x, y, width, height) => () =>
+    new DOMRect(x + (Number.parseFloat(element.style.getPropertyValue(offset)) || 0), y, width, height)
+  const tip = document.createElement('span')
+  tip.setAttribute('role', 'tooltip')
+  tip.getBoundingClientRect = rectAt(tip, 230, 140, 138, 28)
+  await act(async () => sidebar.append(tip))
+  expect(tip.style.getPropertyValue(offset)).toBe('-72px')
+  expect(present).not.toHaveBeenCalled()
+
+  const hoverCard = document.createElement('div')
+  hoverCard.setAttribute('data-dsh-hover-card', '')
+  hoverCard.getBoundingClientRect = rectAt(hoverCard, 230, 175, 244, 42)
+  await act(async () => document.body.append(hoverCard))
+  expect(hoverCard.style.getPropertyValue(offset)).toBe('-178px')
+  expect(present).not.toHaveBeenCalled()
+
+  const actions = sidebar.querySelector('.dshCloudHistoryActions')
+  await act(async () => actions.click())
+  const menu = document.body.querySelector(':scope > [role="menu"]')
+  menu.getBoundingClientRect = rectAt(menu, 150, 240, 140, 40)
+  await view.resize(menu)
+  expect(menu.style.getPropertyValue(offset)).toBe('')
+  expect(present).not.toHaveBeenCalled()
+
+  menu.getBoundingClientRect = rectAt(menu, 20, 240, 420, 40)
+  await view.resize(menu)
+  expect(menu.style.getPropertyValue(offset)).toBe('-8px')
+  expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, bounds: { x: 440, y: 80, width: 520, height: 628 } }))
+
+  await act(async () => { window.dispatchEvent(new Event('blur')); tip.remove(); hoverCard.remove() })
+  expect(actions.getAttribute('aria-expanded')).toBe('false')
+  expect(tip.style.getPropertyValue(offset)).toBe('')
+  expect(hoverCard.style.getPropertyValue(offset)).toBe('')
+  expect(menu.style.getPropertyValue(offset)).toBe('')
+  expect(present).toHaveBeenLastCalledWith(expect.objectContaining(base))
+  expect(present.mock.calls.every(([value]) => value.visible)).toBe(true)
+})
+
+it('passes the right panel width to its resize handle without changing the work grid tracks', async () => {
+  await mount(false)
+  const panel = container.querySelector('#dsh-panel-work')
+  expect(panel.style.getPropertyValue('--dsh-work-rightbar-width')).toBe('420px')
+  expect(panel.style.gridTemplateColumns).toBe('')
+  const styles = [...document.querySelectorAll('style')].map(style => style.textContent).join('\n')
+  expect(styles).toContain('grid-template:minmax(0,1fr) / minmax(0,1fr) 0px')
+  expect(styles).toContain('right:calc(var(--dsh-work-rightbar-width) - 4px)')
 })
 
 it('keeps Work selected when its confirmation closes and releases modal observers on unmount', async () => {

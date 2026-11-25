@@ -1,7 +1,13 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/index.js b/node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/index.js
 --- a/node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/index.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/index.js
-@@ -5591,8 +5591,22 @@
+@@ -4963,4 +4963,5 @@ function HoverCard({ anchor, content, openDelayMs = 500, disabled = false, groupe
+ 		ref: cardRef,
+ 		className: clsx(css$17.card, variant === "preview" && css$17.preview, inline && css$17.media, copyable && css$17.copyable, copied && css$17.feedback),
++		"data-dsh-hover-card": "",
+ 		"data-closing": closing || void 0,
+ 		style: {
+@@ -5591,8 +5592,22 @@
  * @param props - Reference kind, optional size, and optional CSS class.
  * @returns The corresponding decorative current-color SVG glyph.
  */
@@ -24,7 +30,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-primitives/lib/index.js b/n
  		case "session": return jsx(ChatLinesOutlineArtwork, {
  			size,
  			className,
-@@ -11523,7 +11537,7 @@
+@@ -11523,7 +11538,7 @@
  				"aria-label": mention.label,
  				onClick: mention.open,
  				children: [jsx(LinkIconMedium, {

@@ -42,6 +42,10 @@ Harness 0.2.0-rc.2 的 `dsh-client-ui-input-trigger` 将 pointer hover 与 keybo
 
 ds-bot 0.3.9 在 Bot 模式折叠 Harness 侧栏，并把自己的固定侧栏挂到 `body`。桌面 UI 只能从该版本的 `.bt-leftcol[data-left]` 读取其布局，因为 Harness 的侧栏尺寸服务只报告原生侧栏。企业 Chat 在展开或窄栏时按侧栏宽度定位，在抽屉打开时让出原生视图。挂载、卸载及模式变化通过直接子节点和属性变化重算，拖动通过尺寸观察重算。回归入口为 `test/desktop-modes-ui.test.mjs`。ds-bot 或 Harness 暴露实际占位后使用该契约。
 
+macOS 上，桌面 UI 读取 ds-bot 0.3.10 在 `sidebar.workspaces` 当前贡献项上提供的侧栏状态和动作。按钮和配置的侧栏快捷键切换 `open` 与 `rail`，旧 `hidden` 偏好迁移为 `rail`。宽度不足时借用 Bot 自有抽屉。窄栏保留原插件渲染的 Bot 图标和操作。普通窗口把开关放在系统红绿灯旁，并隐藏标题栏的新会话按钮。全屏把开关放在侧栏顶部。插件卸载或未提供这一接口时，由原侧栏提供开关。
+
+窄栏通过插件已有的 `.bt-rail-top` 按「返回、新建、搜索」排列顶部操作，新建和搜索调用同一贡献项中的 `openNewChat` 和 `openPalette`。顶部操作实际挂载后隐藏底部重复的新建按钮。工作区行菜单的对齐由 `dsh-client-ui-workspace@0.2.1-rc.2` 的补丁设为末端，使菜单从触发按钮向侧栏内部展开。该版本没有用于配置工作区行菜单对齐的 slot。上游提供相同对齐行为后可移除该补丁段。
+
 ### DS Bot 的主菜单入口
 
 经典 Agent 模式的「多代理协作」由桌面 UI 插件通过现有 `sidebar.primaryNavigation` 渲染。插件读取 ds-bot 0.3.9 注册在 `sidebar.footer.action` 的 `bot-return`，沿用其 `surface` 快照及 `setSurface('bot')`。主菜单渲染入口时，通过列表插槽的优先级接管同 ID 的页脚位置。入口卸载时释放页脚占位，缺少兼容注册时保留插件自己的页脚。升级 ds-bot 或 Harness 时重跑 `test/desktop-modes-ui.test.mjs` 的菜单与页脚回归，并用对应企业插件验证实际切换。ds-bot 提供正式的模式切换接缝后迁移。
@@ -78,6 +82,10 @@ Bot 模式通过 `shell.overlay` 在可见的 `.bt-side-top > .bt-brand` 或 `.b
 - 可复用的扩展点优先设计成可向上游提交的能力；是否提交上游 issue/PR 由用户授权，不自动发送。
 
 ## 2. Slot 契约包含布局与生命周期
+
+桌面 `desktop.mode.content` 保持 Work 渲染树挂载一次。右侧面板沿用 Harness 的覆盖式定位，宿主网格把右栏锚点留在内容区右边缘，工作区宽度独立于右栏。布局补丁传入面板和拖拽手柄共用的实际宽度，未注册桌面 slot 的 Harness 继续使用上游分栏。聊天视图由原生 WebContentsView 承载。宿主侧栏的菜单和提示优先放入侧栏可用空间，空间不足时原生视图临时收窄。宿主模态弹窗继续独占内容区，关闭后按当前布局恢复。
+
+`dsh-client-ui-primitives@0.2.1-rc.2` 的 `HoverCard` 将预览直接挂在 `body`，没有可供宿主识别的标记。补丁只增加 `data-dsh-hover-card`，由桌面插件处理布局。上游提供等效标记后可移除该补丁段。
 
 下列任一变化都应在评审中明确，不能仅以“slot 名称未变”判断兼容：
 
