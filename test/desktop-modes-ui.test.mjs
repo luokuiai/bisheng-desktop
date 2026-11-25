@@ -31,7 +31,7 @@ afterEach(async () => {
   delete window.__ModuleLoader__
   vi.unstubAllGlobals()
 })
-async function mount(connected = false, collection = {}, inert = false, workbench) {
+async function mount(connected = false, collection = {}, inert = false, workbench, wide = true) {
   let workbenchSnapshot = workbench
   let bindWorkbench, disposeWorkbench
   const workbenchListeners = new Set()
@@ -91,10 +91,16 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   const setSessions = value => { sessionList = value; sessionListeners.forEach(fn => fn()) }
   const setPanel = id => { panelState = { activePanelId: id }; panelListeners.forEach(fn => fn()) }
   const registrations = new Map()
+  const expandSidebar = vi.fn()
+  const Menu = ({ anchor, open, items, onSelect, portal, side, getAnchorRect }) => {
+    const list = open && React.createElement('div', { role: 'menu', 'data-side': side, 'data-anchor-right': getAnchorRect?.()?.right },
+      items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.label)))
+    return React.createElement('div', null, anchor, list && (portal ? createPortal(list, document.body) : list))
+  }
   window.__ModuleLoader__ = { load({ factory }) {
     plugin = factory(name => {
       if (name === 'react') return React
-      if (name === '@deepseek-ai/dsh-client-ui-primitives') return { Button: ({ variant, size, ...props }) => React.createElement('button', props), Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body), Menu: ({ anchor, open, items, onSelect }) => React.createElement('div', null, anchor, open && items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.label))) }
+      if (name === '@deepseek-ai/dsh-client-ui-primitives') return { Button: ({ variant, size, ...props }) => React.createElement('button', props), Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body), Menu }
       throw new Error(name)
     })
   } }
@@ -125,10 +131,11 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   root = createRoot(container)
   const content = registrations.get('desktop.mode.content'), history = registrations.get('sidebar.workspaces.collection'), primary = registrations.get('sidebar.primaryNavigation')
   await act(async () => root.render(React.createElement(React.Fragment, null,
-    React.createElement('aside', null, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: true, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection })),
+    React.createElement('aside', { 'data-dsh-sidebar-root': wide ? undefined : '' }, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide, expandSidebar, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection })),
     React.createElement(content.component, { ...content.props, columns: '1fr 0px', work: React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }) })
   )))
   return {
+    expandSidebar,
     async resize(element) {
       await act(async () => {
         for (const observer of [...resizeObservers]) {
@@ -513,6 +520,33 @@ it('shares account navigation across Chat and Work and keeps Plugins directly ac
   await ui.account(false)
   expect(sidebar.querySelector('[data-navigation-id=plugins]')).not.toBeNull()
   expect(sidebar.querySelector('[data-navigation-id=more]')).toBeNull()
+})
+
+it('opens More at the collapsed rail edge and restores the native view after selection', async () => {
+  const ui = await mount(true, {}, false, undefined, false)
+  await ui.navigation([{ id: 'knowledge', label: 'Knowledge', path: '/knowledge', active: false }])
+  const sidebar = container.querySelector('aside')
+  const trigger = sidebar.querySelector('[data-navigation-id=more]')
+  vi.spyOn(sidebar, 'getBoundingClientRect').mockReturnValue(new DOMRect(12, 12, 56, 700))
+  vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 120, 40, 30))
+
+  await act(async () => trigger.click())
+
+  const menu = document.body.querySelector('[role=menu]')
+  expect(ui.expandSidebar).not.toHaveBeenCalled()
+  expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  expect(menu.parentElement).toBe(document.body)
+  expect(menu.dataset.side).toBe('right')
+  expect(menu.dataset.anchorRight).toBe('68')
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+
+  await act(async () => menu.querySelector('[role=menuitem]').click())
+
+  expect(ui.expandSidebar).not.toHaveBeenCalled()
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  expect(document.body.querySelector('[role=menu]')).toBeNull()
+  expect(window.dshEnterpriseChat.openPage).toHaveBeenLastCalledWith('knowledge')
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }))
 })
 
 it('starts a new conversation without forwarding the click event as a workspace identity', async () => {

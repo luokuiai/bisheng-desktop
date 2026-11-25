@@ -817,7 +817,8 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           const y = rect.y
           const remote = surfaceOpen && state.settingsProtocolVersion === 1 && settingsSurface
           const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mode-page')
-          const hostModalOpen = dialogOpen || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
+          const hostModalOpen = dialogOpen || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open') ||
+            document.body.hasAttribute('data-dsh-sidebar-flyout')
           const palette = hostPalette()
           const modesStyle = modes && typeof getComputedStyle === 'function' ? getComputedStyle(modes) : undefined
           // Keep the native view inside the skin card's inner corners.
@@ -908,7 +909,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         if (frame) chromeLayout.observe(frame, { childList: true, attributes: true, attributeFilter: ['data-sidebar-collapsed'] })
         chromeLayout.observe(document.body, { childList: true })
         const theme = new MutationObserver(present)
-        theme.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
+        theme.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'data-dsh-sidebar-flyout'] })
         const dialogs = observeHostDialogs(open => { dialogOpen = open; present() })
         dialogOpen = dialogs.isOpen()
         const unsubscribeLocale = locale.subscribe(present)
@@ -970,11 +971,19 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: id === 'more' ? 3 : 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
         React.createElement('path', { d: NAV_ICON_PATHS[id === 'capabilities' ? 'skills' : id] || NAV_ICON_PATHS.apps }))
     }
-    function PrimaryNavigation({ wide, renderAction, expandSidebar, panels, selectPanel, renderPanelIcon, navigation, t }) {
+    function collapsedNavigationAnchor() {
+      const rail = document.querySelector('[data-dsh-sidebar-root]')
+      const trigger = rail?.querySelector('[data-navigation-id="more"]')
+      if (!trigger) return null
+      const bounds = trigger.getBoundingClientRect()
+      return new DOMRect(rail.getBoundingClientRect().right, bounds.top, 0, bounds.height)
+    }
+
+    function PrimaryNavigation({ wide, renderAction, panels, selectPanel, renderPanelIcon, navigation, t }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const [menuOpen, setMenuOpen] = React.useState(false)
       React.useEffect(() => { setMenuOpen(false) }, [state.epoch])
-      React.useEffect(() => { if (!wide) setMenuOpen(false) }, [wide])
+      React.useEffect(() => { setMenuOpen(false) }, [wide])
       React.useEffect(() => {
         if (!menuOpen) return
         // Electron's embedded Chat view takes focus without an iframe in this document.
@@ -991,14 +1000,22 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         ...entries.map(entry => ({ id: `web:${entry.id}`, label: entry.label, icon: React.createElement(NavigationIcon, { id: entry.id }) })),
         ...morePanels.map(panel => ({ id: `local:${panel.id}`, label: panel.label, icon: renderPanelIcon(panel.id) }))
       ]
+      const flyoutOpen = !wide && menuOpen && items.length > 0
+      React.useEffect(() => {
+        if (!flyoutOpen) return
+        // The native Chat view paints above DOM portals, even when they use fixed positioning.
+        document.body.setAttribute('data-dsh-sidebar-flyout', '')
+        return () => document.body.removeAttribute('data-dsh-sidebar-flyout')
+      }, [flyoutOpen])
       return React.createElement('nav', { className: 'dshPrimaryNavigation', 'data-wide': wide, 'aria-label': t('navigation') },
         plugins && renderAction({ id: plugins.id, label: plugins.label, icon: renderPanelIcon(plugins.id), active: state.mode === 'work' && state.activePanelId === plugins.id, onClick: () => { setMenuOpen(false); navigation.select('work'); selectPanel(plugins.id) } }),
         items.length > 0 && React.createElement(Menu, {
           open: menuOpen, onClose: () => setMenuOpen(false), items, autoFocus: true, dense: true,
-          className: 'dshNavigationMenu', listClassName: 'dshNavigationMenuList',
+          portal: !wide, side: wide ? 'bottom' : 'right', getAnchorRect: wide ? undefined : collapsedNavigationAnchor,
+          className: 'dshNavigationMenu', listClassName: wide ? 'dshNavigationMenuList' : undefined,
           selectedId: activeId ? `web:${activeId}` : undefined,
           onSelect: id => { setMenuOpen(false); if (id.startsWith('web:')) void navigation.openPage(id.slice(4)); else { navigation.select('work'); selectPanel(id.slice(6)) } },
-          anchor: renderAction({ id: 'more', label: t('moreNavigation'), icon: React.createElement(NavigationIcon, { id: 'more' }), active: Boolean(activeId) || (state.mode === 'work' && morePanels.some(panel => panel.id === state.activePanelId)), expanded: menuOpen, onClick: () => { if (!wide) expandSidebar(); setMenuOpen(open => !open) } })
+          anchor: renderAction({ id: 'more', label: t('moreNavigation'), icon: React.createElement(NavigationIcon, { id: 'more' }), active: Boolean(activeId) || (state.mode === 'work' && morePanels.some(panel => panel.id === state.activePanelId)), expanded: menuOpen, onClick: () => setMenuOpen(open => !open) })
         }))
     }
     // Work overlays use viewport coordinates. Isolate stacking while keeping
@@ -1572,8 +1589,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         height: var(--dsk-shell-top);
         -webkit-app-region: drag;
       }
-      /* Reuse the sidebar's toggle while expanded. When collapsed, Harness
-         already mounts its opener at the same position in shell.leading. */
+      /* Reuse the sidebar's toggle while expanded and shell.leading when collapsed. */
       html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-sidebar-collapsed]) .hHd-Xa_topStrip {
         position: fixed;
         z-index: 16;
@@ -1586,11 +1602,45 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         justify-content: center;
         -webkit-app-region: no-drag;
       }
-      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-sidebar-collapsed]) .hHd-Xa_topStrip {
-        left: 12px;
-      }
       html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] .hHd-Xa_topStrip {
         display: none;
+      }
+      /* In a regular window the title bar supplies both controls. */
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] [data-dsh-sidebar-root] > .hHd-Xa_newSession {
+        display: none;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] [data-dsh-sidebar-wide="false"] {
+        inline-size: 100%;
+        padding: 8px 9px 6px;
+      }
+      /* In full screen the sidebar owns its toggle in both widths. */
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] {
+        position: relative;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-sidebar-collapsed]) .hHd-Xa_topStrip {
+        position: absolute;
+        inset: 11px 12px auto auto;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-sidebar-collapsed]) [data-dsh-sidebar-root] > .hHd-Xa_newSession {
+        margin-right: 38px;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] {
+        --dsh-frame-leading-clearance: 0px;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] .hHd-Xa_topStrip {
+        display: flex;
+        justify-content: center;
+        height: 34px;
+        margin: 0 0 8px;
+        padding: 0;
+        opacity: 1;
+        -webkit-app-region: no-drag;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .hHd-Xa_topStrip .hHd-Xa_railMark {
+        display: none;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .hHd-Xa_topStrip .hHd-Xa_panelIcon {
+        display: inline;
       }
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol {
         background: var(--dsk-content-surface);
@@ -1654,6 +1704,17 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] .dshWorkContent > .pI_x6G_centerCol {
         margin-left: 0 !important;
         transition-property: margin-right;
+      }
+
+      /* @copylee/dsh-image-gen uses its own accent by default. Bridge its
+         gallery colors to the desktop theme without changing plugin settings. */
+      body[data-dsh-desktop-ui="dsh"] .dig-root {
+        --dig-accent: var(--dsw-alias-button-primary-fill);
+        --dig-accent-ink: var(--dsw-alias-label-primary-foreground);
+        --dig-focus: var(--dsw-alias-state-business-primary);
+      }
+      body[data-dsh-desktop-ui="dsh"] .dig-root .dig-btn-primary:hover:not(:disabled) {
+        background: var(--dsw-alias-button-primary-hover);
       }
 
       /* DS Bot supplies its own sidebar and chat controls. Keep their behavior,

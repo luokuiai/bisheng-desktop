@@ -1,11 +1,41 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js
-index a5096f4..45ad121 100644
+index a5096f4..fde3989 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js
-@@ -313,6 +313,26 @@ window.__ModuleLoader__.load({
+@@ -204,6 +204,17 @@ window.__ModuleLoader__.load({
+ 				onLostPointerCapture: onPointerCancel
+ 			});
+ 		}
++		function isMacosFullscreen() {
++			const { dataset } = document.documentElement;
++			return dataset.platform === "darwin" && dataset.fullscreen === "true";
++		}
++		function subscribeMacosFullscreen(onChange) {
++			const root = document.documentElement;
++			if (root.dataset.platform !== "darwin") return () => {};
++			const observer = new MutationObserver(onChange);
++			observer.observe(root, { attributes: true, attributeFilter: ["data-fullscreen"] });
++			return () => observer.disconnect();
++		}
+ 		/** The three-column frame (see module doc). */
+ 		function AppFrame({ useStore, useSessions, usePanelInfo, actions, renderSlot, t }) {
+ 			const layoutInfo = useStore((state) => state.layoutInfo);
+@@ -239,7 +250,8 @@ window.__ModuleLoader__.load({
+ 			const sidebarPreference = sidebarCollapsed ? 0 : layoutInfo.sidebar === 0 ? 280 : layoutInfo.sidebar;
+ 			const rightbarPreference = layoutInfo.rightbar ?? viewport * .45;
+ 			const darwin = document.documentElement.dataset.platform === "darwin";
+-			const collapsedWidth = darwin || document.documentElement.hasAttribute("data-windows-titlebar") ? 0 : 56;
++			const macosFullscreen = (0, react.useSyncExternalStore)(subscribeMacosFullscreen, isMacosFullscreen);
++			const collapsedWidth = document.documentElement.hasAttribute("data-windows-titlebar") ? 0 : 56;
+ 			const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, collapsedWidth);
+ 			const cols = computeColumns(viewport, sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth);
+ 			const colsRef = (0, react.useRef)(cols);
+@@ -312,7 +324,27 @@ window.__ModuleLoader__.load({
+ 			}), [usePanelInfo, renderSlot]);
  			const overlays = (0, react.useMemo)(() => renderSlot("shell.overlay", {}), [renderSlot]);
  			const leading = (0, react.useMemo)(() => renderSlot("shell.leading", {}), [renderSlot]);
- 			const leadingMounted = darwin && sidebarCollapsed;
+-			const leadingMounted = darwin && sidebarCollapsed;
++			const leadingMounted = darwin && !macosFullscreen && sidebarCollapsed;
 +			const contentColumns = `minmax(${cols.rightbar === 0 ? 0 : 400}px, 1fr) minmax(0px, ${rightbarMax}px)`;
 +			const work = (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)(CenterColumn, { children: main }), (0, react_jsx_runtime.jsx)(RightbarColumn, { children: renderSlot("rightbar", {
 +						width: normal.rightbar,
@@ -29,7 +59,7 @@ index a5096f4..45ad121 100644
  			return (0, react_jsx_runtime.jsxs)("div", {
  				ref: frameRef,
  				className: AppFrame_module_css_default.frame,
-@@ -336,11 +356,7 @@ window.__ModuleLoader__.load({
+@@ -336,11 +368,7 @@ window.__ModuleLoader__.load({
  						className: AppFrame_module_css_default.sidebarCol,
  						children: sidebar
  					}),
@@ -42,7 +72,7 @@ index a5096f4..45ad121 100644
  					(0, react_jsx_runtime.jsx)("div", {
  						className: AppFrame_module_css_default.bottomRow,
  						"data-shell-bottom": true,
-@@ -362,13 +378,6 @@ window.__ModuleLoader__.load({
+@@ -362,13 +390,6 @@ window.__ModuleLoader__.load({
  						onStart: onSidebarStart,
  						onDrag: onSidebarDrag,
  						onEnd: onDragEnd
@@ -56,7 +86,7 @@ index a5096f4..45ad121 100644
  					})
  				]
  			});
-@@ -624,6 +633,7 @@ window.__ModuleLoader__.load({
+@@ -624,6 +645,7 @@ window.__ModuleLoader__.load({
  					name: "root",
  					locale: "common",
  					children: {
