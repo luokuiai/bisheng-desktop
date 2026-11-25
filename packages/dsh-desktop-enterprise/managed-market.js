@@ -19,15 +19,19 @@ export function createManagedMarketSource(market) {
     accepts: target => typeof target === 'string' && target.startsWith(PREFIX),
     listBundles() {
       const state = market.state()
-      return state.installed.map(record => ({
-        name: `${PREFIX}${state.accountKey}:${record.plugin_id}`,
-        meta: { title: record.display_name || record.name },
-        description: `${record.display_name || record.name} (${record.name})`,
-        version: record.version, official: false, availability: 'profile',
-        installed: true, enabled: record.status === 'enabled', optional: false,
-        removable: true, rows: [], overrides: [],
-        ...(record.error ? { error: { code: 'operation-error', diagnostic: record.error } } : {})
-      }))
+      return state.installed.map(record => {
+        const title = record.display_name || record.name
+        const description = typeof record.description === 'string' ? record.description.trim() : ''
+        return {
+          name: `${PREFIX}${state.accountKey}:${record.plugin_id}`,
+          meta: { title, ...(description ? { description } : {}) },
+          description: `${title} (${record.name})`,
+          version: record.version, official: false, availability: 'profile',
+          installed: true, enabled: record.status === 'enabled', optional: false,
+          removable: true, rows: [], overrides: [],
+          ...(record.error ? { error: { code: 'operation-error', diagnostic: record.error } } : {})
+        }
+      })
     },
     prepare(input) {
       const target = targetFor(input.plugin_id)
