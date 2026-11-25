@@ -6,7 +6,18 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' })
 
     const React = require('react')
-    const { Menu, MenuItemButton, Modal, Button, ReferenceIconRegular, IconUsersOutlineRegular, IconChevronLeftOutlineRegular } = require('@deepseek-ai/dsh-client-ui-primitives')
+    const { Menu, MenuItemButton, Modal, Button, ReferenceIconRegular, IconPanelLeftOutlineRegular, IconNewChatOutlineRegular, IconSearchOutlineRegular, IconUsersOutlineRegular, IconChevronLeftOutlineRegular } = require('@deepseek-ai/dsh-client-ui-primitives')
+
+    // luokui-ui:list-section:start
+    /** A host can inject its own React runtime (including classic script loaders). */
+    function createListSection(h) {
+        return function ListSection({ heading, headingClassName, before, after, children, ...props }) {
+            return h('section', props, heading == null ? null : h('div', { className: headingClassName }, heading), before, children, after);
+        };
+    }
+    // luokui-ui:list-section:end
+    const ListSection = createListSection(React.createElement)
+
 
     function BishengMark(props = {}) {
       const { size = 17, dark = false, ...imageProps } = props
@@ -293,6 +304,11 @@ window.__ModuleLoader__.load({
       en: { menu: 'Delete', actions: 'Conversation actions', title: 'Delete conversation', close: 'Close', cancel: 'Cancel', confirm: 'Delete conversation', description: 'Permanently delete “{name}” and its chat history?', pending: 'Deleting conversation…', failed: 'Deletion failed. Please try again.' }
     }
     const MODES_NS = 'desktop.chatWork'
+    const BOT_SIDEBAR_NS = 'desktop.botSidebar'
+    const BOT_SIDEBAR_COPY = {
+      zh: { expand: '展开侧栏', collapse: '收起侧栏', create: '新建', search: '搜索' },
+      en: { expand: 'Expand sidebar', collapse: 'Collapse sidebar', create: 'New…', search: 'Search' }
+    }
     const MODES_COPY = {
       zh: { welcomeMessage: '来一起创造', welcome: '欢迎来到', newConversation: '新建对话', navigation: '导航', moreNavigation: '更多', recent: '对话', projects: '工作区', all: '所有会话', results: '搜索结果', cloud: '云端聊天', local: '本地工作', recentEmpty: '暂无最近会话', recentSearchEmpty: '当前列表没有匹配的会话', chat: '聊天', work: '工作', label: '聊天与工作', loading: '正在连接企业聊天…', error: '企业聊天连接失败，请重试', retry: '重新连接', refresh: '刷新聊天记录', historyLoading: '正在加载聊天记录…', historyError: '加载失败，点击重试', empty: '暂无聊天记录', more: '加载更多', newChat: '新聊天', signIn: '登录企业账号', signInTitle: '登录后使用聊天', signInDescription: '聊天由企业平台提供。登录后，即可使用平台中的模型和对话记录。', continueWork: '继续使用工作', close: '关闭', justNow: '刚刚',
         reorderNavigation: '调整顺序', navigationOrderDescription: '拖动调整顺序，前 5 个显示在侧栏，其余放入“更多”。也可以使用上移、下移按钮。', navigationMoveUp: '上移', navigationMoveDown: '下移', navigationDirect: '侧栏', navigationOverflow: '更多', navigationOrderSave: '保存', navigationOrderCancel: '取消', navigationOrderError: '保存顺序失败，请重试。',
@@ -586,6 +602,13 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         if (title.current) title.current.scrollLeft = 0
       }
       React.useEffect(() => reset, [item.title])
+      React.useEffect(() => {
+        if (!menuOpen) return
+        // Clicking into the native Chat view blurs this document without a pointer event.
+        const close = () => setMenuOpen(false)
+        window.addEventListener('blur', close)
+        return () => window.removeEventListener('blur', close)
+      }, [menuOpen])
       const reveal = () => {
         reset()
         const element = title.current
@@ -629,16 +652,19 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       const rows = [...local, ...cloud].sort((a, b) => Number(!!b.blank) - Number(!!a.blank) || Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt - a.updatedAt || a.key.localeCompare(b.key))
       return React.createElement('div', { className: 'dshSharedCollection', 'data-mode': state.mode },
         projects(state.mode === 'work', hiddenWorkspaceId),
-        React.createElement('section', { className: 'dshRecentHistory', 'aria-label': t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all') },
-          React.createElement('div', { className: 'dshHistoryHeading' },
-            React.createElement('span', null, t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all'))),
-          ...rows.map(item => item.kind === 'work'
-            ? React.createElement('div', { key: item.key, 'data-history-kind': 'work' }, item.render(state.mode === 'work'))
-            : React.createElement(CloudHistoryRow, { key: item.key, item, selected: state.mode === 'chat' && !state.pageId && state.conversationId === item.id, navigation, t, deleteText })),
-          state.historyPhase === 'error' && React.createElement('button', { type: 'button', className: 'dshHistoryNotice', onClick: () => navigation.refreshHistory() }, t('historyError')),
-          initialHistoryLoading && React.createElement('div', { className: 'dshHistoryNotice', role: 'status' }, t('historyLoading')),
-          rows.length === 0 && !resultsPending && React.createElement('div', { className: 'dshHistoryNotice' }, t(search ? 'recentSearchEmpty' : 'recentEmpty')),
-          state.hasMore && !archivedOnly && React.createElement('button', { type: 'button', className: 'dshHistoryNotice', disabled: state.historyPhase === 'loading', onClick: () => navigation.refreshHistory(true) }, t('more'))))
+        React.createElement(ListSection, {
+          className: 'dshRecentHistory',
+          'aria-label': t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all'),
+          headingClassName: 'dshHistoryHeading',
+          heading: React.createElement('span', null, t(mode === 'projects' ? 'recent' : mode === 'search' ? 'results' : 'all')),
+          after: React.createElement(React.Fragment, null,
+            state.historyPhase === 'error' && React.createElement('button', { type: 'button', className: 'dshHistoryNotice', onClick: () => navigation.refreshHistory() }, t('historyError')),
+            initialHistoryLoading && React.createElement('div', { className: 'dshHistoryNotice', role: 'status' }, t('historyLoading')),
+            rows.length === 0 && !resultsPending && React.createElement('div', { className: 'dshHistoryNotice' }, t(search ? 'recentSearchEmpty' : 'recentEmpty')),
+            state.hasMore && !archivedOnly && React.createElement('button', { type: 'button', className: 'dshHistoryNotice', disabled: state.historyPhase === 'loading', onClick: () => navigation.refreshHistory(true) }, t('more')))
+        }, rows.map(item => item.kind === 'work'
+          ? React.createElement('div', { key: item.key, 'data-history-kind': 'work' }, item.render(state.mode === 'work'))
+          : React.createElement(CloudHistoryRow, { key: item.key, item, selected: state.mode === 'chat' && !state.pageId && state.conversationId === item.id, navigation, t, deleteText }))))
     }
     function historyTime(date, t) {
       const time = new Date(date).getTime()
@@ -647,48 +673,108 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       if (elapsed >= 0 && elapsed < 60000) return t('justNow')
       return new Date(time).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })
     }
-    /** Host body portals own modal input; native content yields until the last one closes. */
-    function observeHostDialogs(report) {
-      const selector = '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], dialog[open]'
-      const portals = new Map()
-      let previous = false
-      let initialized = false
+    /**
+     * Modal surfaces take over the content area. Sidebar menus and tooltips
+     * share it with Chat by fitting beside the native view.
+     */
+    function observeHostOverlays(report) {
+      // Both steps of the Bot creation flow must remain above the native
+      // enterprise view, even though the plugin doesn't set aria-modal.
+      const botDialog = '.bt-pane > :is(.bt-newchat, .bt-create)[role="dialog"]'
+      const dialogSelector = `[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], dialog[open], ${botDialog}`
+      const floatingSelector = 'body > :is([role="menu"], [role="tooltip"][data-portal], [data-dsh-hover-card]), :is([data-dsh-sidebar-root], .bt-leftcol) [role="tooltip"]'
+      const offsetProperty = '--dsh-sidebar-overlay-offset'
+      const offsets = new Map()
+      let bounds
+      let modalOpen = false
+      let floatingRight = 0
       let disposed = false
-      const refresh = () => {
-        if (disposed || document.hidden) return
-        const children = new Set([...document.body.children].filter(element => element.id !== 'root' && !element.matches('script, style, link')))
-        for (const [element, observer] of portals) {
-          if (children.has(element)) continue
-          observer.disconnect()
-          portals.delete(element)
+      let scheduled = false
+      const readModal = () => [...document.querySelectorAll(dialogSelector)].some(dialog =>
+        dialog.checkVisibility({ checkVisibilityCSS: true }) &&
+        (dialog.getAttribute('aria-modal') === 'true' || dialog.matches(`:modal, ${botDialog}`)))
+      const fit = () => {
+        let right = bounds?.x ?? 0
+        const floating = bounds ? [...document.querySelectorAll(floatingSelector)] : []
+        for (const element of offsets.keys()) {
+          if (floating.includes(element)) continue
+          element.style.removeProperty(offsetProperty)
+          offsets.delete(element)
+          sizes.unobserve(element)
         }
-        for (const element of children) {
-          if (portals.has(element)) continue
-          const observer = new MutationObserver(refresh)
-          observer.observe(element, { childList: true, subtree: true, attributes: true, attributeFilter: ['role', 'aria-modal', 'open', 'hidden', 'style', 'class'] })
-          portals.set(element, observer)
+        for (const element of floating) {
+          if (!offsets.has(element)) sizes.observe(element)
+          const previousOffset = offsets.get(element) ?? 0
+          let offset = 0
+          if (element.checkVisibility({ checkVisibilityCSS: true })) {
+            const rect = element.getBoundingClientRect()
+            if (rect.width > 0 && rect.bottom > bounds.y && rect.top < bounds.y + bounds.height) {
+              const submenus = [...element.querySelectorAll('[role="menu"]')].map(menu => menu.getBoundingClientRect())
+              // Use CSS pixels so reading back a translated rectangle at fractional
+              // zoom cannot repeatedly change the offset by a fraction of a pixel.
+              const left = Math.round(Math.min(rect.left, ...submenus.map(menu => menu.left)) - previousOffset)
+              const end = Math.round(Math.max(rect.right, ...submenus.map(menu => menu.right)) - previousOffset)
+              // Leave room for the floating surface's shadow along the native edge.
+              const availableRight = bounds.x - 8
+              if (end > availableRight) {
+                // The collapsed More menu opens to the right of its trigger.
+                if (!element.classList.contains('dshNavigationFlyout')) {
+                  offset = Math.min(0, Math.max(12 - left, Math.floor(availableRight - end)))
+                }
+                right = Math.max(right, Math.ceil(end + offset + 8))
+              }
+            }
+          }
+          if (offset !== previousOffset) {
+            if (offset) element.style.setProperty(offsetProperty, `${offset}px`)
+            else element.style.removeProperty(offsetProperty)
+          }
+          offsets.set(element, offset)
         }
-        const open = [...children].some(element => {
-          const dialogs = [...(element.matches(selector) ? [element] : []), ...element.querySelectorAll(selector)]
-          return dialogs.some(dialog => dialog.checkVisibility({ checkVisibilityCSS: true }) &&
-            (dialog.getAttribute('aria-modal') === 'true' || dialog.matches(':modal')))
-        })
-        if (open === previous) return
-        previous = open
-        if (initialized) report(open)
+        return right
       }
-      const body = new MutationObserver(refresh)
-      body.observe(document.body, { childList: true })
-      document.addEventListener('visibilitychange', refresh)
-      refresh()
-      initialized = true
-      return { isOpen: () => previous, dispose: () => {
-        disposed = true
-        body.disconnect()
-        for (const observer of portals.values()) observer.disconnect()
-        portals.clear()
-        document.removeEventListener('visibilitychange', refresh)
-      } }
+      const refresh = () => {
+        if (disposed) return
+        const open = readModal()
+        const right = fit()
+        if (open === modalOpen && right === floatingRight) return
+        modalOpen = open
+        floatingRight = right
+        report()
+      }
+      const schedule = () => {
+        if (disposed || scheduled) return
+        scheduled = true
+        queueMicrotask(() => {
+          scheduled = false
+          refresh()
+        })
+      }
+      const sizes = new ResizeObserver(schedule)
+      const body = new MutationObserver(schedule)
+      body.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['role', 'aria-modal', 'open', 'hidden', 'style', 'class']
+      })
+      document.addEventListener('visibilitychange', schedule)
+      modalOpen = readModal()
+      return {
+        isModalOpen: () => modalOpen,
+        fitBeside(nextBounds) {
+          bounds = nextBounds
+          floatingRight = fit()
+          return floatingRight
+        },
+        dispose() {
+          disposed = true
+          body.disconnect()
+          sizes.disconnect()
+          for (const element of offsets.keys()) element.style.removeProperty(offsetProperty)
+          document.removeEventListener('visibilitychange', schedule)
+        }
+      }
     }
     function HostedAppContent({ app, seat, sourcePath, t }) {
       const [command, setCommand] = React.useState('idle')
@@ -709,9 +795,96 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
             React.createElement(Button, { type: 'button', variant: 'outline', disabled: command === 'pending', onClick: () => { void run(() => window.dshEnterpriseChat.retryHostedApp()) } }, t('hostedAppRetry')))))
     }
 
-    function DesktopModes({ work, columns, resizeHandle, navigation, t, locale }) {
+    function BotSidebarToggle({ slots, shortcuts, t }) {
+      const name = 'sidebar.workspaces'
+      const subscribe = React.useCallback(listener => slots.subscribe(name, listener), [slots])
+      const snapshot = React.useCallback(() => slots.entries(name), [slots])
+      const entries = React.useSyncExternalStore(subscribe, snapshot)
+      const bot = React.useMemo(() => {
+        if (!entries.length) return null
+        const face = slots.entriesOfSlot(name)[0]?.inject?.()
+        return typeof face?.actions?.surfaceMode === 'function' && face.actions.surfaceMode() === 'bot' &&
+          typeof face.actions.setSidebarPref === 'function' && face.hooks?.sidebarPref && face.hooks?.frame && face.hooks?.ui ? face : null
+      }, [entries, slots])
+      return bot && React.createElement(BotSidebarButton, { bot, shortcuts, t })
+    }
+
+    // DS Bot 0.3.10 exposes its own preference and actions through its sidebar slot.
+    function BotRailActions({ actions, t }) {
+      const [seat, setSeat] = React.useState(null)
+      React.useLayoutEffect(() => {
+        let column
+        const syncSeat = () => setSeat(column?.matches('[data-left="rail"]:not([data-leaving])')
+          ? column.querySelector('.bt-rail-top') : null)
+        const changes = new MutationObserver(syncSeat)
+        const syncColumn = () => {
+          changes.disconnect()
+          column = document.body.querySelector(':scope > .bt-leftcol')
+          if (column) changes.observe(column, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-left', 'data-leaving'] })
+          syncSeat()
+        }
+        const mounts = new MutationObserver(records => {
+          if (records.some(record => [...record.addedNodes, ...record.removedNodes].some(node => node.matches?.('.bt-leftcol')))) syncColumn()
+        })
+        mounts.observe(document.body, { childList: true })
+        syncColumn()
+        return () => { mounts.disconnect(); changes.disconnect() }
+      }, [])
+      if (!seat) return null
+      const { createPortal } = require('react-dom')
+      return createPortal(React.createElement('div', { className: 'dshBotRailActions' },
+        React.createElement('div', { className: 'dshBotRailBackSeat' }),
+        React.createElement('button', { type: 'button', 'aria-label': t('create'), title: t('create'), onClick: () => actions.openNewChat('new') }, React.createElement(IconNewChatOutlineRegular, { size: 16, 'aria-hidden': true })),
+        React.createElement('button', { type: 'button', 'aria-label': t('search'), title: t('search'), onClick: () => actions.openPalette() }, React.createElement(IconSearchOutlineRegular, { size: 16, 'aria-hidden': true }))), seat)
+    }
+
+    function BotSidebarButton({ bot, shortcuts, t }) {
+      const { actions, hooks } = bot
+      const preference = React.useSyncExternalStore(hooks.sidebarPref.subscribe, hooks.sidebarPref.getSnapshot)
+      const frame = React.useSyncExternalStore(hooks.frame.subscribe, hooks.frame.getSnapshot)
+      const readDrawer = () => hooks.ui.getSnapshot().leftDrawer === true
+      const drawer = React.useSyncExternalStore(hooks.ui.subscribe, readDrawer)
+      const canDock = frame.viewport >= frame.sidebarWidth + 420 // DS Bot's minimum conversation width
+      const expanded = preference === 'open' && (canDock || drawer)
+      const label = t(expanded ? 'collapse' : 'expand')
+      const toggle = () => {
+        actions.setSidebarPref(expanded ? 'rail' : 'open')
+        actions.setLeftDrawer?.(!expanded && !canDock)
+      }
+      React.useLayoutEffect(() => {
+        if (preference === 'hidden') actions.setSidebarPref('rail')
+      }, [preference, actions])
+      React.useEffect(() => {
+        if (!shortcuts) return
+        const onKeyDown = event => {
+          if (event.defaultPrevented || event.isComposing || event.target?.closest?.('.xterm') ||
+              document.querySelector('[aria-modal="true"], dialog:modal, #root[inert]')) return
+          const binding = shortcuts.catalog.getSnapshot().find(row => row.id === 'sidebar.left.toggle')?.binding
+          if (!binding || event.code !== binding.code || event.ctrlKey !== binding.modifiers.includes('control') ||
+              event.altKey !== binding.modifiers.includes('alt') || event.shiftKey !== binding.modifiers.includes('shift') ||
+              event.metaKey !== binding.modifiers.includes('meta')) return
+          event.preventDefault()
+          event.stopPropagation()
+          if (!event.repeat) toggle()
+        }
+        // DS Bot listens on document capture for this same configured shortcut.
+        window.addEventListener('keydown', onKeyDown, true)
+        return () => window.removeEventListener('keydown', onKeyDown, true)
+      })
+      const toggleButton = React.createElement('button', {
+        type: 'button', 'data-dsh-bot-sidebar-toggle': '', 'aria-label': label, 'aria-expanded': expanded, title: label,
+        style: { '--dsh-bot-sidebar-width': `${frame.sidebarWidth}px` },
+        onMouseDown: drawer ? event => event.stopPropagation() : undefined,
+        onClick: toggle
+      }, React.createElement(IconPanelLeftOutlineRegular, { size: 16, 'aria-hidden': true }))
+      return React.createElement(React.Fragment, null, toggleButton,
+        typeof actions.openNewChat === 'function' && typeof actions.openPalette === 'function' && React.createElement(BotRailActions, { actions, t }))
+    }
+
+    function DesktopModes({ work, rightbarWidth, resizeHandle, navigation, t, locale, slots, shortcuts, botSidebarText }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const { mode, settingsOpen, settingsSurface } = state
+      const workspaceDockOpen = mode === 'chat' && state.phase === 'ready' && state.workspaceDockOpen === true
       React.useEffect(() => navigation.start(), [navigation])
       const panel = React.useRef(null)
       const hostedSeat = React.useRef(null)
@@ -724,29 +897,47 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         const bridge = window.dshEnterpriseChat
         if (!bridge) return
         const appRoot = document.getElementById('root')
+        const modes = panel.current?.closest('.dshModes')
+        const railSelector = '.bt-leftcol'
         let observedLeading
         let observedBotSidebar
-        let dialogOpen = false
+        let railInset = 0
+        let railFrame = null
+        const rails = new Set()
         const present = () => {
+          const botSidebar = document.body.querySelector(BOT_SIDEBAR_SELECTOR)
+          if (botSidebar !== observedBotSidebar) {
+            botSidebarState.disconnect()
+            observedBotSidebar = botSidebar
+            if (botSidebar) botSidebarState.observe(botSidebar, { attributes: true, attributeFilter: ['data-left', 'data-leaving', 'aria-hidden', 'hidden'] })
+          }
+          const botSidebarMode = botSidebar?.matches(':not([data-leaving]):not([aria-hidden="true"]):not([hidden])')
+            ? botSidebar.dataset.left : undefined
+          const botSidebarDocked = botSidebarMode === 'open' || botSidebarMode === 'rail'
+          if (modes) {
+            // Both tabs follow the outer rail's visual edge, including its
+            // slide animation (which does not trigger ResizeObserver).
+            const baseLeft = modes.getBoundingClientRect().left - railInset
+            let nextInset = 0
+            for (const rail of rails) {
+              // A DS Bot drawer overlays the card, rather than moving it.
+              if (rail === botSidebar && !botSidebarDocked) continue
+              const bounds = rail.getBoundingClientRect()
+              if (!bounds.width || !bounds.height) continue
+              nextInset = Math.max(nextInset, bounds.right + 12 - baseLeft)
+            }
+            if (nextInset !== railInset) {
+              railInset = nextInset
+              if (railInset) modes.style.setProperty('--dsh-plugin-rail-inset', `${railInset}px`)
+              else modes.style.removeProperty('--dsh-plugin-rail-inset')
+            }
+          }
           const rect = panel.current?.getBoundingClientRect()
           if (!rect) return
           const sidebarRight = document.querySelector('[data-dsh-sidebar-root]')?.getBoundingClientRect().right || 0
           // DS Bot folds the shell sidebar and portals its fixed-left replacement
           // to body. Its layout width stays stable during the slide-in animation.
-          const botSidebar = document.body.querySelector(BOT_SIDEBAR_SELECTOR)
-          if (botSidebar !== observedBotSidebar) {
-            if (observedBotSidebar) resize.unobserve(observedBotSidebar)
-            botSidebarState.disconnect()
-            observedBotSidebar = botSidebar
-            if (botSidebar) {
-              resize.observe(botSidebar)
-              botSidebarState.observe(botSidebar, { attributes: true, attributeFilter: ['data-left', 'data-leaving', 'aria-hidden', 'hidden'] })
-            }
-          }
-          const botSidebarMode = botSidebar?.matches(':not([data-leaving]):not([aria-hidden="true"]):not([hidden])')
-            ? botSidebar.dataset.left : undefined
-          const botSidebarRight = botSidebarMode === 'open' || botSidebarMode === 'rail'
-            ? botSidebar.getBoundingClientRect().width : 0
+          const botSidebarRight = botSidebarDocked ? botSidebar.getBoundingClientRect().width : 0
           const contentLeft = Math.max(rect.x, sidebarRight, botSidebarRight)
           // Native WebContentsView paints above DOM chrome regardless of z-index.
           // macOS moves the sidebar opener into this seat when the rail disappears.
@@ -758,21 +949,33 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           }
           const chrome = leading?.getBoundingClientRect()
           // Keep the title beside the native controls instead of adding a row.
-          const x = chrome && chrome.bottom > rect.y && chrome.left < rect.right
+          const baseX = chrome && chrome.bottom > rect.y && chrome.left < rect.right
             ? Math.max(contentLeft, chrome.right) : contentLeft
           const y = rect.y
           const remote = surfaceOpen && state.settingsProtocolVersion === 1 && settingsSurface
           const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mode-page')
-          const hostModalOpen = dialogOpen || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
+          const hostOverlayOpen = overlays.isModalOpen() || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
           const palette = hostPalette()
-          const chatVisible = mode === 'chat' && !surfaceOpen && !safeModePageOpen && !hostModalOpen && botSidebarMode !== 'drawer'
+          const modesStyle = modes && typeof getComputedStyle === 'function' ? getComputedStyle(modes) : undefined
+          // Keep the native view inside the skin card's inner corners.
+          const radius = !workspaceDockOpen && modesStyle
+            ? Math.max(0, Math.round((Number.parseFloat(modesStyle.borderTopLeftRadius) || 0) - (Number.parseFloat(modesStyle.borderTopWidth) || 0)))
+            : 0
+          const chatVisible = mode === 'chat' && !surfaceOpen && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
+          const settingsVisible = remote && !hostOverlayOpen && state.connected && remote.bounds.width > 0 && remote.bounds.height > 0
+          const overlayBounds = settingsVisible ? remote.bounds : chatVisible ? { x: baseX, y, height: rect.height } : undefined
+          const floatingRight = overlays.fitBeside(overlayBounds)
+          const x = Math.max(baseX, floatingRight)
+          const remoteBounds = remote && { ...remote.bounds, x: Math.max(remote.bounds.x, floatingRight),
+            width: Math.max(0, remote.bounds.width - Math.max(0, floatingRight - remote.bounds.x)) }
           const hostedRect = chatVisible ? hostedSeat.current?.getBoundingClientRect() : undefined
           if (hostedRect) panel.current.style.setProperty('--dsh-hosted-start-offset', `${x - rect.x}px`)
           void bridge.present({
-            visible: remote ? !hostModalOpen && state.connected && remote.bounds.width > 0 && remote.bounds.height > 0 : chatVisible,
+            visible: remote ? settingsVisible && remoteBounds.width > 0 : chatVisible,
             ...(remote ? { settings: remote.section } : {}),
             ...(palette ? { palette } : {}),
-            bounds: remote ? remote.bounds : { x, y, width: Math.max(0, rect.right - x), height: Math.max(0, rect.height) },
+            radius,
+            bounds: remote ? remoteBounds : { x, y, width: Math.max(0, rect.right - x), height: Math.max(0, rect.height) },
             ...(hostedRect ? { hostedAppBounds: { x, y: hostedRect.y, width: Math.max(0, hostedRect.right - x), height: Math.max(0, hostedRect.height) } } : {}),
             theme: document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light',
             locale: locale.getSnapshot().active === 'zh' ? 'zh' : 'en'
@@ -782,9 +985,57 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         // Onboarding makes #root inert while its dialog lives in a body portal.
         const interaction = new MutationObserver(present)
         if (appRoot) interaction.observe(appRoot, { attributes: true, attributeFilter: ['inert'] })
-// About covers Chat and remote settings. The recovery page covers Chat only.
-interaction.observe(document.documentElement, { attributes: true, attributeFilter: ['data-dsh-about-open', 'data-dsh-safe-mode-page'] })
+        // About covers Chat and remote settings. The recovery page covers Chat only.
+        interaction.observe(document.documentElement, { attributes: true, attributeFilter: ['data-dsh-about-open', 'data-dsh-safe-mode-page'] })
         const resize = new ResizeObserver(present)
+        const followRailMotion = () => {
+          if (railFrame !== null) return
+          railFrame = requestAnimationFrame(() => {
+            railFrame = null
+            present()
+            if ([...rails].some(rail => rail.getAnimations?.().some(animation =>
+              animation.pending || animation.playState === 'running'))) followRailMotion()
+          })
+        }
+        const railMotionEvents = ['animationstart', 'transitionrun']
+        const onRailMotion = event => {
+          if (event.target === event.currentTarget) followRailMotion()
+        }
+        const observeRailMotion = (rail, observe) => {
+          for (const event of railMotionEvents) {
+            if (observe) rail.addEventListener(event, onRailMotion)
+            else rail.removeEventListener(event, onRailMotion)
+          }
+        }
+        const syncRails = () => {
+          const current = new Set(document.querySelectorAll(railSelector))
+          for (const rail of rails) {
+            if (!current.has(rail)) {
+              observeRailMotion(rail, false)
+              resize.unobserve(rail)
+              rails.delete(rail)
+            }
+          }
+          for (const rail of current) {
+            if (!rails.has(rail)) {
+              resize.observe(rail)
+              observeRailMotion(rail, true)
+              rails.add(rail)
+              followRailMotion()
+            }
+          }
+          modes?.toggleAttribute('data-dsh-plugin-rail-inset', rails.size > 0)
+        }
+        const railMount = new MutationObserver(records => {
+          const affectsRail = node => node.nodeType === 1 && (node.matches(railSelector) || node.querySelector(railSelector))
+          if (records.some(record => [...record.addedNodes, ...record.removedNodes].some(affectsRail))) {
+            syncRails()
+            present()
+          }
+        })
+        railMount.observe(document.body, { childList: true, subtree: true })
+        syncRails()
+        if (modes) resize.observe(modes)
         if (panel.current) resize.observe(panel.current)
         if (hostedSeat.current) resize.observe(hostedSeat.current)
         const sidebar = document.querySelector('[data-dsh-sidebar-root]')
@@ -801,15 +1052,19 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         chromeLayout.observe(document.body, { childList: true })
         const theme = new MutationObserver(present)
         theme.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
-        const dialogs = observeHostDialogs(open => { dialogOpen = open; present() })
-        dialogOpen = dialogs.isOpen()
+        const overlays = observeHostOverlays(present)
         const unsubscribeLocale = locale.subscribe(present)
         window.addEventListener('resize', present)
         present()
         return () => {
-          dialogs.dispose(); interaction.disconnect(); resize.disconnect(); botSidebarState.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
+          railMount.disconnect()
+          for (const rail of rails) observeRailMotion(rail, false)
+          if (railFrame !== null) cancelAnimationFrame(railFrame)
+          modes?.removeAttribute('data-dsh-plugin-rail-inset')
+          if (railInset) modes?.style.removeProperty('--dsh-plugin-rail-inset')
+          overlays.dispose(); interaction.disconnect(); resize.disconnect(); botSidebarState.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
         }
-      }, [mode, surfaceOpen, hostedAppSlug, settingsSurface, state.connected, state.settingsProtocolVersion, locale])
+      }, [mode, surfaceOpen, hostedAppSlug, settingsSurface, state.connected, state.settingsProtocolVersion, workspaceDockOpen, locale])
       React.useEffect(() => () => {
         void window.dshEnterpriseChat?.present({ visible: false, bounds: { x: 0, y: 48, width: 0, height: 0 }, theme: 'light' }).catch(() => {})
       }, [])
@@ -824,7 +1079,9 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         const next = event.key === 'Home' ? 'chat' : event.key === 'End' ? 'work' : mode === 'chat' ? 'work' : 'chat'
         if (select(next)) tabs.current[next]?.focus()
       }
-      return React.createElement('div', { className: 'dshModes' },
+      return React.createElement('div', { className: 'dshModes', 'data-dsh-workspace-dock': workspaceDockOpen ? '' : undefined },
+        document.documentElement.dataset.platform === 'darwin' && slots.entriesOfSlot &&
+          React.createElement(BotSidebarToggle, { slots, shortcuts, t: botSidebarText }),
         state.signInPromptOpen && React.createElement(Modal, {
           open: true, title: t('signInTitle'), closeLabel: t('close'), onClose: navigation.dismissSignIn,
           footer: React.createElement('div', { className: 'dshChatSignInActions' },
@@ -834,7 +1091,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         showModePicker && React.createElement('header', { className: 'dshModesHeader' },
           React.createElement('div', { role: 'tablist', 'aria-label': t('label'), className: 'dshModesTabs', onKeyDown: keyDown },
             ...['chat', 'work'].map((key) => React.createElement('button', { key, id: `dsh-mode-${key}`, type: 'button', role: 'tab', 'aria-selected': mode === key, 'aria-controls': `dsh-panel-${key}`, tabIndex: mode === key ? 0 : -1, ref: (node) => { tabs.current[key] = node }, onClick: (event) => { setAnimateWork(event.detail > 0 && key === 'work'); select(key) } }, t(key))))),
-        React.createElement('section', { id: 'dsh-panel-work', role: 'tabpanel', 'aria-label': t('work'), hidden: mode !== 'work', className: 'dshModeBody dshWorkContent', 'data-reveal-controls': animateWork, onTransitionEnd: event => { if (event.propertyName === 'clip-path') setAnimateWork(false) }, style: { gridTemplateColumns: columns } }, work, resizeHandle),
+        React.createElement('section', { id: 'dsh-panel-work', role: 'tabpanel', 'aria-label': t('work'), hidden: mode !== 'work', className: 'dshModeBody dshWorkContent', 'data-reveal-controls': animateWork, onTransitionEnd: event => { if (event.propertyName === 'clip-path') setAnimateWork(false) }, style: { '--dsh-work-rightbar-width': `${rightbarWidth ?? 0}px` } }, work, resizeHandle),
         React.createElement('section', { ref: panel, id: 'dsh-panel-chat', role: 'tabpanel', 'aria-label': t('chat'), hidden: mode !== 'chat', className: 'dshModeBody' },
           hostedApp ? React.createElement(HostedAppContent, { key: hostedAppSlug, app: hostedApp, seat: hostedSeat, sourcePath: state.path, t }) : React.createElement('div', { className: 'dshChatStatus', role: 'status' },
             React.createElement('p', null, state.phase === 'error' ? t('error') : state.phase === 'ready' ? '' : t('loading')),
@@ -858,6 +1115,14 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: id === 'more' ? 3 : 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
         React.createElement('path', { d: NAV_ICON_PATHS[id === 'capabilities' ? 'skills' : id] || NAV_ICON_PATHS.apps }))
     }
+    function collapsedNavigationAnchor() {
+      const rail = document.querySelector('[data-dsh-sidebar-root]')
+      const trigger = rail?.querySelector('[data-navigation-id="more"]')
+      if (!trigger) return null
+      const bounds = trigger.getBoundingClientRect()
+      return new DOMRect(rail.getBoundingClientRect().right, bounds.top, 0, bounds.height)
+    }
+
     const BOT_FOOTER_SLOT = 'sidebar.footer.action'
     const BOT_RETURN_ID = 'bot-return'
     const BOT_SIDEBAR_SELECTOR = ':scope > .bt-leftcol[data-left]'
@@ -950,7 +1215,8 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
             if (column) columnObserver.observe(column, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-left', 'data-leaving', 'aria-hidden', 'hidden'] })
           }
           const visible = !root?.inert && column?.matches(':not([data-leaving]):not([aria-hidden="true"]):not([hidden])')
-          setSeat(visible ? column.querySelector(':scope > .bt-side > .bt-side-top > span.bt-brand, :scope > .bt-side > .bt-rail-top') : null)
+          const seat = visible ? column.querySelector(':scope > .bt-side > .bt-side-top > span.bt-brand, :scope > .bt-side > .bt-rail-top') : null
+          setSeat(seat?.querySelector('.dshBotRailBackSeat') ?? seat)
         }
         bodyObserver.observe(document.body, { childList: true })
         if (root) bodyObserver.observe(root, { attributes: true, attributeFilter: ['inert'] })
@@ -1017,7 +1283,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       }, [seat, oldLabel])
       if (!seat) return null
       const label = t('botBackToAgent')
-      const rail = seat.matches('.bt-rail-top')
+      const rail = seat.closest('.bt-rail-top') !== null
       const brand = seat.firstElementChild
       // The 0.3.9 title is a plain span. A different title shape keeps its plugin rendering.
       const showTitle = !rail && brand?.matches('span:not([class])') && brand.textContent === 'DS Bot'
@@ -1104,7 +1370,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       error && React.createElement('p', { role: 'alert' }, error))
     }
 
-    function PrimaryNavigation({ wide, renderAction, expandSidebar, panels, selectPanel, renderPanelIcon, navigation, botNavigation, t }) {
+    function PrimaryNavigation({ wide, renderAction, panels, selectPanel, renderPanelIcon, navigation, botNavigation, t }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const { entry: botEntry, action: botAction } = useBotReturn(botNavigation)
       const botSurface = botAction ?? EMPTY_BOT_SOURCE
@@ -1117,7 +1383,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         if (botVisible) return botNavigation.hideFooter(botEntry)
       }, [botNavigation, botEntry, botVisible])
       React.useEffect(() => { setMenuOpen(false); setSorting(null) }, [state.epoch, state.connected])
-      React.useEffect(() => { if (!wide) setMenuOpen(false) }, [wide])
+      React.useEffect(() => { setMenuOpen(false) }, [wide])
       React.useEffect(() => {
         if (!menuOpen) return
         // Electron's embedded Chat view takes focus without an iframe in this document.
@@ -1149,10 +1415,11 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         visible.map(item => React.createElement(React.Fragment, { key: item.id }, renderAction({ ...item, active: item.id === selectedId, onClick: () => openItem(item.id) }))),
         items.length > 0 && React.createElement(Menu, {
           open: menuOpen, onClose: () => setMenuOpen(false), items: [...overflow, { id: 'reorder', label: t('reorderNavigation'), icon: React.createElement(NavigationIcon, { id: 'reorder' }) }], autoFocus: true, dense: true,
-          className: 'dshNavigationMenu', listClassName: 'dshNavigationMenuList',
+          portal: !wide, side: wide ? 'bottom' : 'right', getAnchorRect: wide ? undefined : collapsedNavigationAnchor,
+          className: 'dshNavigationMenu', listClassName: wide ? 'dshNavigationMenuList' : 'dshNavigationFlyout',
           selectedId,
           onSelect: id => { if (id === 'reorder') { setMenuOpen(false); setSorting({}) } else openItem(id) },
-          anchor: renderAction({ id: 'more', label: t('moreNavigation'), icon: React.createElement(NavigationIcon, { id: 'more' }), active: overflow.some(item => item.id === selectedId), expanded: menuOpen, onClick: () => { if (!wide) expandSidebar(); setMenuOpen(open => !open) } })
+          anchor: renderAction({ id: 'more', label: t('moreNavigation'), icon: React.createElement(NavigationIcon, { id: 'more' }), active: overflow.some(item => item.id === selectedId), expanded: menuOpen, onClick: () => setMenuOpen(open => !open) })
         }),
         sorting && React.createElement(NavigationOrderDialog, { items, order, t, onClose: () => setSorting(null), onSave: next => { setOrder(next); setSorting(null) } }))
     }
@@ -1163,6 +1430,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       const botNavigation = createBotNavigation(ctx.slots)
       ctx.effect(() => () => navigation.deletion.dispose())
       ctx.effect(() => ctx.locale.register(MODES_NS, MODES_COPY), 'desktop: Chat and Work locale')
+      ctx.effect(() => ctx.locale.register(BOT_SIDEBAR_NS, BOT_SIDEBAR_COPY))
       ctx.effect(() => ctx.locale.register(CLOUD_DELETE_NS, CLOUD_DELETE_COPY))
       ctx.slots.inject('shell.overlay', () => ctx.slots.register({
         name: 'shell.overlay', id: 'desktop-cloud-chat-delete-dialog', locale: CLOUD_DELETE_NS,
@@ -1182,6 +1450,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
           .dshPrimaryNavigation[data-wide=false]{gap:12px}
           .dshBotSidebarBack{display:inline-flex;align-items:center;justify-content:center;gap:4px;flex:none;padding:4px 6px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer;-webkit-app-region:no-drag}
           .dshBotSidebarBack:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
+          .bt-rail-top .dshBotSidebarBack{width:36px;height:36px;border-radius:var(--dsw-radius-md)}
           .dshBotSidebarBack:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}
           .bt-side-top>span.bt-brand:has(>.dshBotSidebarTitle)>span:first-child:not([class]){display:none}
           .dshBotSidebarTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:14px}
@@ -1201,7 +1470,9 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
           .dshModesTabs button[aria-selected=true]{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}
           .dshModes button:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
           .dshModeBody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}.dshModeBody[hidden]{display:none}
-          .dshWorkContent{display:grid;grid-template-rows:minmax(0,1fr);isolation:isolate}.dshWorkContent[hidden]{display:none}
+          [style*="--dsh-sidebar-overlay-offset:"] { translate: var(--dsh-sidebar-overlay-offset); }
+          .dshWorkContent{display:grid;grid-template:minmax(0,1fr) / minmax(0,1fr) 0px;isolation:isolate}.dshWorkContent[hidden]{display:none}
+          .dshWorkContent>.pI_x6G_handle[data-side=rightbar]{grid-area:auto;right:calc(var(--dsh-work-rightbar-width) - 4px);margin-left:0}
           .dshWorkContent[data-reveal-controls=true]:not([hidden]) [data-dsh-hero-controls]{clip-path:inset(-8px -8px -8px -8px);transition:clip-path 180ms cubic-bezier(.23,1,.32,1)}
           @starting-style{.dshWorkContent[data-reveal-controls=true]:not([hidden]) [data-dsh-hero-controls]{clip-path:inset(-8px 100% -8px -8px)}}
           @media(prefers-reduced-motion:reduce){.dshWorkContent[data-reveal-controls=true] [data-dsh-hero-controls]{transition:none;clip-path:none}}
@@ -1229,7 +1500,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       })
       ctx.slots.inject('sidebar.primaryNavigation', () => ctx.slots.register({ name: 'sidebar.primaryNavigation', id: 'desktop-primary-navigation', inject: () => ({ navigation, botNavigation, t: ctx.locale.bind(MODES_NS) }) }, PrimaryNavigation))
       ctx.slots.inject('sidebar.workspaces.title', () => ctx.slots.register({ name: 'sidebar.workspaces.title', inject: () => ({ t: ctx.locale.bind(MODES_NS) }) }, ({ flat, t }) => t(flat ? 'all' : 'projects')))
-      ctx.slots.inject('desktop.mode.content', () => ctx.slots.register({ name: 'desktop.mode.content', id: 'desktop-chat-work', inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS), locale: ctx.locale }) }, DesktopModes))
+      ctx.slots.inject('desktop.mode.content', () => ctx.slots.register({ name: 'desktop.mode.content', id: 'desktop-chat-work', inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS), locale: ctx.locale, slots: ctx.slots, shortcuts: ctx.get?.('shortcuts'), botSidebarText: ctx.locale.bind(BOT_SIDEBAR_NS) }) }, DesktopModes))
       ctx.slots.inject('sidebar.workspaces.collection', () => ctx.slots.register({ name: 'sidebar.workspaces.collection', id: 'desktop-shared-collection', inject: () => ({ navigation, botNavigation, t: ctx.locale.bind(MODES_NS), deleteText: ctx.locale.bind(CLOUD_DELETE_NS) }) }, SharedCollection))
       return navigation
     }
@@ -1670,12 +1941,524 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       })
     }
 
+    /**
+     * Desktop UI layer. These values are the product's shell, not an optional
+     * skin: the client UI plugin is mounted in every profile, so the card
+     * layout, tokens and surfaces apply without a separate plugin row.
+     */
+    const both = value => ({ light: value, dark: value })
+    const UI_TOKENS = {
+      '--dsw-radius-xs': both('6px'),
+      '--dsw-radius-sm': both('10px'),
+      '--dsw-radius-md': both('12px'),
+      '--dsw-radius-lg': both('16px'),
+      '--dsw-radius-xl': both('16px'),
+      '--dsw-radius-panel': both('24px'),
+      '--dsw-alias-button-primary-fill': both('var(--dsw-static-blue-500)'),
+      '--dsw-alias-button-primary-hover': {
+        light: 'var(--dsw-static-blue-600)',
+        dark: 'var(--dsw-static-blue-400)'
+      },
+      '--dsw-alias-label-primary-foreground': both('var(--dsw-static-neutral-bluish-00)'),
+      '--dsw-specific-bubble': {
+        light: 'var(--dsw-static-neutral-bluish-00)',
+        dark: 'var(--dsw-static-neutral-bluish-850)'
+      },
+      '--dsw-specific-input-major': {
+        light: 'var(--dsw-static-neutral-bluish-00)',
+        dark: 'var(--dsw-static-neutral-bluish-850)'
+      }
+    }
+
+    /*
+     * Structural selectors use stable data hooks wherever the host provides
+     * them. The hash-suffixed module classes are pinned by the locked 0.2.1-rc.2
+     * packages and match upstream 0.2.2, so they stay aligned with DSH Desktop.
+     * `data-dsh-sidebar-new-session` is not in the 0.2.1 sidebar patch, so the
+     * new-session card uses the pinned module class instead of that later hook.
+     */
+    const UI_STYLE = `
+      /* App shell: the frame owns scrolling; never expose document scrollbars. */
+      html, body {
+        overflow: hidden;
+      }
+      body[data-dsh-desktop-ui="dsh"] {
+        --dsk-shell-top: calc(var(--dsh-windows-titlebar-height, 0px) + 10px);
+        --dsk-card-radius: 24px;
+        --dsk-card-border: 1px solid var(--dsw-alias-border-l2);
+        --dsk-card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -24px rgb(0 0 0 / 0.30);
+        --dsk-card-surface: var(--dsw-alias-bg-layer-1);
+        --dsk-page-surface: var(--dsw-alias-bg-module-platform);
+        --dsk-content-surface: color-mix(in srgb, var(--dsk-card-surface) 25%, var(--dsk-page-surface));
+        background: var(--dsk-page-surface);
+      }
+      /* macOS traffic lights sit over the content; clear them on both cards. */
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] {
+        --dsk-shell-top: calc(var(--dsh-frame-top-clearance, 48px) + 10px);
+      }
+
+      /* Shell: page ground, inset cards, hairline separators. */
+      body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
+        background: var(--dsk-page-surface);
+        padding: var(--dsk-shell-top) 12px 12px;
+        column-gap: 12px;
+      }
+      /* Harness budgets the titlebar padding on Windows only. On macOS,
+         keep the new top and bottom insets inside the viewport too. */
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
+        box-sizing: border-box;
+      }
+      /* Reserve the traffic lights on the left and leave higher native
+         controls (e.g. the collapsed sidebar opener) clickable. */
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 88px;
+        height: var(--dsk-shell-top);
+        -webkit-app-region: drag;
+      }
+      /* Reuse the sidebar's toggle while expanded and shell.leading when collapsed. */
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-sidebar-collapsed]) .hHd-Xa_topStrip {
+        position: fixed;
+        z-index: 16;
+        top: 11px;
+        left: 88px;
+        width: 28px;
+        height: 28px;
+        margin: 0;
+        padding: 0;
+        justify-content: center;
+        -webkit-app-region: no-drag;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] .hHd-Xa_topStrip {
+        display: none;
+      }
+      /* In a regular window the title bar supplies both controls. */
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] [data-dsh-sidebar-root] > .hHd-Xa_newSession {
+        display: none;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] [data-dsh-sidebar-wide="false"] {
+        inline-size: 100%;
+        padding: 8px 9px 6px;
+      }
+      /* In full screen the sidebar owns its toggle in both widths. */
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] {
+        position: relative;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-sidebar-collapsed]) .hHd-Xa_topStrip {
+        position: absolute;
+        inset: 11px 12px auto auto;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-sidebar-collapsed]) [data-dsh-sidebar-root] > .hHd-Xa_newSession {
+        margin-right: 38px;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] {
+        --dsh-frame-leading-clearance: 0px;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] .hHd-Xa_topStrip {
+        display: flex;
+        justify-content: center;
+        height: 34px;
+        margin: 0 0 8px;
+        padding: 0;
+        opacity: 1;
+        -webkit-app-region: no-drag;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .hHd-Xa_topStrip .hHd-Xa_railMark {
+        display: none;
+      }
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .hHd-Xa_topStrip .hHd-Xa_panelIcon {
+        display: inline;
+      }
+      body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol {
+        background: var(--dsk-content-surface);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: var(--dsk-card-shadow);
+        overflow: hidden;
+      }
+      /* DS Bot replaces the collapsed Harness rail with its own docked card. */
+      body[data-dsh-desktop-ui="dsh"]:has(> .bt-leftcol:is([data-left="open"], [data-left="rail"]):not([data-leaving], [aria-hidden="true"], [hidden]))
+      .pI_x6G_frame[data-sidebar-collapsed] > .pI_x6G_sidebarCol {
+        visibility: hidden;
+      }
+      /* The native caption only contains the sidebar toggle in a regular window. */
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
+      [data-shell-leading] > .IW6AQa_controls > button:nth-of-type(2),
+      body[data-dsh-desktop-ui="dsh"]:has([data-dsh-bot-sidebar-toggle])
+      :is([data-shell-leading], .bt-leftcol .bt-side-collapse, .bt-title-toggle) {
+        display: none;
+      }
+      body[data-dsh-desktop-ui="dsh"]:has([data-dsh-bot-sidebar-toggle]) .pI_x6G_frame > .pI_x6G_sidebarCol {
+        visibility: hidden;
+      }
+      [data-dsh-bot-sidebar-toggle] {
+        position: fixed;
+        z-index: 30;
+        top: 11px;
+        left: 88px;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--dsw-radius-sm);
+        background: transparent;
+        color: var(--dsw-alias-label-secondary);
+        cursor: pointer;
+        -webkit-app-region: no-drag;
+      }
+      [data-dsh-bot-sidebar-toggle]:hover { background: var(--dsw-alias-interactive-bg-hover); }
+      [data-dsh-bot-sidebar-toggle]:focus-visible {
+        outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+        outline-offset: -2px;
+      }
+      html[data-fullscreen="true"] [data-dsh-bot-sidebar-toggle] {
+        top: calc(var(--dsk-shell-top) + 11px);
+        left: calc(var(--dsh-bot-sidebar-width) - 28px);
+      }
+      html[data-fullscreen="true"] body:has(> .bt-leftcol[data-left="rail"]) [data-dsh-bot-sidebar-toggle] {
+        left: 26px;
+      }
+      body[data-dsh-desktop-ui="dsh"]:has([data-dsh-bot-sidebar-toggle]) > .bt-leftcol[data-left="rail"] {
+        /* DS Bot writes its own width inline. Match the Agent rail's 56px track. */
+        width: 56px !important;
+      }
+      body[data-dsh-desktop-ui="dsh"]:has([data-dsh-bot-sidebar-toggle]) .bt-rail :is(.bt-row, .bt-agent, .bt-round, .bt-account, .bt-you) {
+        width: 36px;
+        height: 36px;
+        min-height: 36px;
+      }
+      body[data-dsh-desktop-ui="dsh"]:has([data-dsh-bot-sidebar-toggle]) .bt-rail .bt-agent-ava {
+        width: 30px;
+        height: 30px;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-rail .bt-rail-folder {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--dsw-radius-md);
+        background: transparent;
+        box-shadow: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-rail .bt-rail-folder:is(:hover, [aria-current="page"]) {
+        background: var(--dsw-alias-interactive-bg-hover);
+      }
+      .bt-leftcol[data-left="rail"]:has(.dshBotRailActions) .bt-leftcol-foot-rail > button.bt-round:first-child { display: none; }
+      .dshBotRailActions { display: grid; gap: 8px; }
+      .dshBotRailBackSeat { display: contents; }
+      .dshBotRailActions button {
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--dsw-radius-md);
+        background: transparent;
+        color: var(--dsw-alias-label-primary);
+        cursor: pointer;
+      }
+      .dshBotRailActions button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+      .dshBotRailActions button:focus-visible {
+        outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+        outline-offset: -2px;
+      }
+      html[data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"]:has([data-dsh-bot-sidebar-toggle]) > .bt-leftcol[data-left="rail"] {
+        padding-top: 50px;
+      }
+      html[data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"]:has([data-dsh-bot-sidebar-toggle])
+      .bt-leftcol .bt-side-top {
+        padding-inline-end: 40px;
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] {
+        background: transparent;
+      }
+      /* The session list is the flexible part; the account/settings slot
+         stays at the bottom of the bounded sidebar card. */
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol,
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol [data-dsh-sidebar-root] {
+        min-height: 0;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_regionArea {
+        flex: 1 1 0;
+        min-height: 0;
+      }
+      body[data-dsh-desktop-ui="dsh"] .pI_x6G_centerCol {
+        background: var(--dsk-content-surface);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: var(--dsk-card-shadow);
+        overflow: hidden;
+      }
+      /*
+       * Bisheng mounts 'desktop.mode.content' instead of the stock center column,
+       * so chat and work share this panel. It is the visible card: the native
+       * enterprise chat view is rounded to the inner radius reported from here.
+       */
+      body[data-dsh-desktop-ui="dsh"] .dshModes {
+        box-sizing: border-box;
+        margin-left: var(--dsh-plugin-rail-inset, 0px);
+        width: calc(100% - var(--dsh-plugin-rail-inset, 0px));
+        background: var(--dsk-content-surface);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: var(--dsk-card-shadow);
+        overflow: hidden;
+      }
+      /* Work mode nests the stock center column; the mode panel already carries the card. */
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-workspace-dock] {
+        background: var(--dsk-page-surface);
+        border-color: transparent;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .dshModes .pI_x6G_centerCol {
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      /* The outer card already reserves DS Bot's left column. Preserve its
+         right-side adjustments, but don't indent the nested Work column twice. */
+      /* DS Bot also animates the inner left margin. The shared card drives
+         that edge; keep only the plugin's right-side transition. */
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] .dshWorkContent > .pI_x6G_centerCol {
+        margin-left: 0 !important;
+        transition-property: margin-right;
+      }
+
+      /* @copylee/dsh-image-gen uses its own accent by default. Bridge its
+         gallery colors to the desktop theme without changing plugin settings. */
+      body[data-dsh-desktop-ui="dsh"] .dig-root {
+        --dig-accent: var(--dsw-alias-button-primary-fill);
+        --dig-accent-ink: var(--dsw-alias-label-primary-foreground);
+        --dig-focus: var(--dsw-alias-state-business-primary);
+      }
+      body[data-dsh-desktop-ui="dsh"] .dig-root .dig-btn-primary:hover:not(:disabled) {
+        background: var(--dsw-alias-button-primary-hover);
+      }
+
+      /* DS Bot supplies its own sidebar and chat controls. Keep their behavior,
+         but use the same card and theme roles as the ordinary Agent shell. */
+      body[data-dsh-desktop-ui="dsh"] :is(.bt-leftcol, .dshModes[data-dsh-plugin-rail-inset] .dshWorkContent) {
+        --bt-font: var(--dsw-font-family, system-ui, sans-serif);
+        --bt-main: var(--dsk-content-surface);
+        --bt-card: var(--dsk-card-surface);
+        --bt-sidebar: var(--dsk-content-surface);
+        --bt-ink: var(--dsw-alias-label-primary);
+        --bt-ink-2: var(--dsw-alias-label-secondary);
+        --bt-ink-3: var(--dsw-alias-label-tertiary);
+        --bt-line: var(--dsw-alias-border-l1);
+        --bt-line-2: var(--dsw-alias-border-l2);
+        --bt-hover: var(--dsw-alias-interactive-bg-hover);
+        --bt-active: var(--dsw-alias-interactive-bg-hover-solid);
+        --bt-bubble: var(--dsw-alias-bg-layer-2);
+        --bt-user: var(--dsw-specific-bubble);
+        --bt-user-ink: var(--dsw-alias-label-primary);
+        --bt-accent: var(--dsw-alias-button-primary-fill);
+        --bt-accent-ink: var(--dsw-alias-label-primary-foreground);
+      }
+      body[data-dsh-desktop-ui="dsh"] > .bt-leftcol[data-left] {
+        left: 12px;
+        top: var(--dsk-shell-top);
+        bottom: 12px;
+        --bt-lc-clear: 0px;
+        background: var(--dsk-content-surface);
+        border: 0;
+        border-radius: var(--dsk-card-radius);
+        box-shadow: var(--dsk-card-shadow);
+      }
+      body[data-dsh-desktop-ui="dsh"] > .bt-leftcol[data-left]::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        border: var(--dsk-card-border);
+        border-radius: inherit;
+        pointer-events: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-leftcol .bt-leftcol-foot {
+        border-top: 1px solid var(--dsw-alias-border-l1);
+      }
+      /* Center both steps in the available pane, retaining the plugin's
+         sidebar offset. Only the card, not the entire row, intercepts input. */
+      body[data-dsh-desktop-ui="dsh"] .bt-pane:has(> :is(.bt-newchat, .bt-create)[role="dialog"]) {
+        top: calc(var(--dsk-shell-top) + 24px);
+        right: 0;
+        bottom: auto;
+        justify-content: center;
+        box-sizing: border-box;
+        padding: 0 12px;
+        background: transparent;
+        pointer-events: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > :is(.bt-newchat, .bt-create)[role="dialog"] {
+        flex: 0 1 560px;
+        max-width: 100%;
+        max-height: calc(100dvh - var(--dsk-shell-top) - 36px);
+        overflow: auto;
+        box-sizing: border-box;
+        background: var(--dsk-card-surface);
+        border: var(--dsk-card-border);
+        border-radius: var(--dsw-radius-lg);
+        box-shadow: 0 2px 5px rgb(0 0 0 / 0.08), 0 16px 40px rgb(0 0 0 / 0.16);
+        pointer-events: auto;
+        -webkit-app-region: no-drag;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > .bt-create[role="dialog"] {
+        max-height: min(76dvh, calc(100dvh - var(--dsk-shell-top) - 60px));
+        overflow: hidden;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > .bt-create[role="dialog"] > .bt-create-head {
+        flex: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > .bt-create[role="dialog"] > .bt-create-body {
+        min-height: 0;
+        padding: 16px;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-pane > .bt-create[role="dialog"] > .bt-create-body > .bt-create-card {
+        align-self: flex-start;
+        max-width: 100%;
+        padding-bottom: 12px;
+        box-sizing: border-box;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-newchat[role="dialog"] .bt-to {
+        padding: 8px 12px;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-newchat[role="dialog"] .bt-to input {
+        min-width: 0;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-newchat[role="dialog"] .bt-drop {
+        position: static;
+        width: auto;
+        max-height: min(280px, 38dvh);
+        margin: 8px;
+        background: var(--dsk-content-surface);
+        border-color: var(--dsw-alias-border-l2);
+        backdrop-filter: none;
+        box-shadow: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .bt-leftcol :is(.bt-round, .bt-tile),
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] .bt-pill {
+        border-radius: var(--dsw-radius-sm);
+      }
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] .bt-pill {
+        background: var(--dsk-card-surface);
+        border: var(--dsk-card-border);
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+      body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-plugin-rail-inset] :is(.bt-bubble, .bt-ububble) {
+        border: 1px solid var(--dsw-alias-border-l1);
+        border-radius: var(--dsw-radius-xl);
+      }
+
+      /* Sidebar navigation: quiet rows, blue pill for the active page. */
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow {
+        border-radius: 10px;
+        color: var(--dsw-alias-label-secondary);
+        transition: background-color .15s var(--ds-ease-in-out), color .15s var(--ds-ease-in-out);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow:hover {
+        background: var(--dsw-alias-interactive-bg-hover);
+        color: var(--dsw-alias-label-primary);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow[aria-current="page"] {
+        background: var(--dsw-static-blue-500);
+        color: var(--dsw-static-neutral-bluish-00);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow[aria-current="page"] svg {
+        color: currentColor;
+      }
+      body[data-dsh-desktop-ui="dsh"] .hHd-Xa_newSession {
+        background: var(--dsk-card-surface);
+        border: 1px solid var(--dsw-alias-border-l2);
+        border-radius: 12px;
+        box-shadow: 0 1px 1px rgb(0 0 0 / 0.03);
+      }
+      body[data-dsh-desktop-ui="dsh"] .hHd-Xa_newSession:hover {
+        background: var(--dsw-alias-interactive-bg-hover);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-workbench-switcher] {
+        background: var(--dsk-page-surface);
+        border-radius: 10px;
+        padding: 2px;
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-settings] {
+        border-top: 1px solid var(--dsw-alias-border-l1);
+        margin-top: 4px;
+        padding-top: 6px;
+      }
+
+      /* Use the same gray surface across the conversation and its host card. */
+      body[data-dsh-desktop-ui="dsh"] .wSkVaW_root {
+        background: var(--dsk-content-surface);
+      }
+      body[data-dsh-desktop-ui="dsh"] [class*="_bubble_"]:not([data-side]):not([data-portal]) {
+        border: 1px solid var(--dsw-alias-border-l1);
+        border-radius: 16px;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+      }
+
+      /* Composer: white capsule with a soft contact shadow. */
+      body[data-dsh-desktop-ui="dsh"] [data-composer-card] {
+        background: var(--dsk-card-surface);
+        border: 1px solid var(--dsw-alias-border-l2);
+        border-radius: var(--dsk-card-radius);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 18px 40px -28px rgb(0 0 0 / 0.38);
+      }
+      body[data-dsh-desktop-ui="dsh"] [data-composer-card]:focus-within {
+        border-color: color-mix(in srgb, var(--dsw-static-blue-500) 45%, var(--dsw-alias-border-l2));
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-static-blue-500) 10%, transparent), 0 18px 40px -28px rgb(0 0 0 / 0.38);
+      }
+
+      /* Thin scrollbars keep the card surface calm. */
+      body[data-dsh-desktop-ui="dsh"] * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--dsw-alias-scrollbar-bg-l2) transparent;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] .hHd-Xa_panelRow {
+          transition: none;
+        }
+      }
+    `
+
     const inject = ['slots', 'locale', 'remote', 'remote.session', 'sessions', 'uiWorkspace', 'layout', 'theme']
     function apply(ctx) {
       const themeStore = {
         subscribe: listener => ctx.on('theme/change', listener),
         snapshot: () => ctx.theme.getTheme().active.colorScheme
       }
+      // Ship the card shell as the default UI: tokens stack over the active
+      // palette through the theme registry, and the stylesheet is owned here.
+      if (typeof ctx.inject === 'function') {
+        ctx.inject(['theme'], scoped => {
+          if (!scoped.theme || typeof scoped.theme.overrideTokens !== 'function' || typeof scoped.effect !== 'function') return
+          scoped.effect(
+            () => scoped.theme.overrideTokens('dsh-desktop-ui', UI_TOKENS),
+            'desktop ui: theme tokens'
+          )
+        })
+      }
+      if (typeof document !== 'undefined' && document.body) {
+        ctx.effect(() => {
+          document.body.dataset.dshDesktopUi = 'dsh'
+          return () => { delete document.body.dataset.dshDesktopUi }
+        }, 'desktop ui: body scope')
+      }
+      ctx.effect(() => {
+        const id = 'dsh-desktop-ui-style'
+        if (document.getElementById(id) !== null) return
+        const style = document.createElement('style')
+        style.id = id
+        style.dataset.pluginCss = 'dsh-desktop-client-ui'
+        style.textContent = UI_STYLE
+        document.head.appendChild(style)
+        return () => style.remove()
+      }, 'desktop ui: shell styles')
       ctx.effect(() => ctx.locale.register(DELETE_SESSION_NS, {
         zh: {
           menu: '永久删除会话', title: '删除会话', close: '关闭', cancel: '取消', confirm: '删除会话',

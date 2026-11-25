@@ -68,16 +68,17 @@ async function loadWithin<T>(operation: Promise<T>, ms: number): Promise<T> {
   } finally { clearTimeout(timer) }
 }
 
-function windowBounds(bounds: EnterpriseViewBounds, zoom: number, width: number, height: number): EnterpriseViewBounds {
+function windowBounds(bounds: EnterpriseViewBounds, zoom: number, width: number, height: number, roundSize = Math.round): EnterpriseViewBounds {
   const x = Math.max(0, Math.round(bounds.x * zoom))
   const y = Math.max(0, Math.round(bounds.y * zoom))
-  return { x, y, width: Math.max(0, Math.min(width - x, Math.round(bounds.width * zoom))), height: Math.max(0, Math.min(height - y, Math.round(bounds.height * zoom))) }
+  return { x, y, width: Math.max(0, Math.min(width - x, roundSize(bounds.width * zoom))), height: Math.max(0, Math.min(height - y, roundSize(bounds.height * zoom))) }
 }
 
 export class EnterpriseChatView {
   private modalOpen = false
   private dialogViewport?: string
   private landing?: boolean
+  private workspaceDockPath?: string
   private navigation?: ReturnType<typeof parseEnterpriseNavigation>
   private navigationRequest = 0
   private origin?: string
@@ -126,7 +127,9 @@ export class EnterpriseChatView {
   }
 
   snapshot(): EnterpriseChatViewState {
-    return { ...this.state, settingsProtocolVersion: 1, settingsSection: this.settingsSection, settingsReady: this.isSettingsReady(), settingsFailure: this.settingsFailure, navigation: this.navigation, path: this.view ? new URL(this.view.webContents.getURL() || 'about:blank').pathname.replace(/^\/workspace/u, '') : undefined, landing: this.landing, epoch: this.generation, conversationId: this.view?.webContents.getURL().match(/\/workspace\/(?:c|chat|linsight)\/([a-zA-Z0-9_-]+)/u)?.[1], connected: this.enterprise.snapshot().connected, hostedApp: this.hostedApp.snapshot() }
+    const pathname = this.view ? new URL(this.view.webContents.getURL() || 'about:blank').pathname : undefined
+    const workspaceDockOpen = this.workspaceDockPath !== undefined && this.workspaceDockPath === pathname
+    return { ...this.state, settingsProtocolVersion: 1, settingsSection: this.settingsSection, settingsReady: this.isSettingsReady(), settingsFailure: this.settingsFailure, navigation: this.navigation, path: pathname?.replace(/^\/workspace/u, ''), landing: this.landing, workspaceDockOpen, epoch: this.generation, conversationId: this.view?.webContents.getURL().match(/\/workspace\/(?:c|chat|linsight)\/([a-zA-Z0-9_-]+)/u)?.[1], connected: this.enterprise.snapshot().connected, hostedApp: this.hostedApp.snapshot() }
   }
 
   private notify(): void {
@@ -412,10 +415,16 @@ export class EnterpriseChatView {
     const zoom = this.owner.webContents.getZoomFactor()
     const [width = 0, height = 0] = this.owner.getContentSize()
     this.hostedApp.present(hosted && hostedAppBounds ? windowBounds(hostedAppBounds, zoom, width, height) : undefined)
-    const contentBounds = windowBounds(bounds, zoom, width, height)
+    // Fractional card edges round down inside the embedded document and expose a
+    // page scrollbar (macOS "always show"); ceil keeps the viewport at least the
+    // card's size, and the card clips the extra pixel.
+    const contentBounds = windowBounds(bounds, zoom, width, height, Math.ceil)
     const { x, y } = contentBounds
     const windowDialog = this.modalOpen && !this.presentation.settings
     this.view.setBounds(windowDialog ? { x: 0, y: 0, width, height } : contentBounds)
+    // The host card is drawn by the desktop skin; the native view must not
+    // paint square corners over it. Dialogs fill the window and stay square.
+    this.view.setBorderRadius(windowDialog ? 0 : this.presentation.radius ?? 0)
     const viewZoom = this.view.webContents.getZoomFactor()
     const viewportScript = chatDialogViewportScript(windowDialog ? {
       x: x / viewZoom, y: y / viewZoom, width: contentBounds.width / viewZoom, height: contentBounds.height / viewZoom
@@ -531,6 +540,14 @@ export class EnterpriseChatView {
             this.note(`[enterprise-settings] ready_report path_match=${report.path === url.pathname} section_match=${report.section === this.settingsSection} content_mode=${url.searchParams.get('dshSettings') === '1'}`)
           }
           if (report.path !== url.pathname) return
+          if (channel === 'enterprise-chat:workspace-dock') {
+            if (!/^\/workspace\/c\/[a-zA-Z0-9_-]+$/u.test(url.pathname) || typeof report.open !== 'boolean') return
+            const next = report.open ? url.pathname : undefined
+            if (this.workspaceDockPath === next) return
+            this.workspaceDockPath = next
+            this.notify()
+            return
+          }
           if (channel === 'enterprise-chat:modal') {
             if (typeof report.open !== 'boolean') return
             const opening = report.open && !this.modalOpen
@@ -576,6 +593,7 @@ export class EnterpriseChatView {
         view.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
           if (isMainFrame && !isInPlace && generation === this.generation && this.view === view) {
             this.modalOpen = false
+            this.workspaceDockPath = undefined
             this.dialogViewport = undefined
             this.layout()
           }
@@ -593,6 +611,7 @@ export class EnterpriseChatView {
             this.modalOpen = false
             view.webContents.send('enterprise-chat:sync-modal')
             this.landing = undefined
+            if (this.workspaceDockPath !== new URL(this.view.webContents.getURL()).pathname) this.workspaceDockPath = undefined
             if (this.settingsSection) {
               const url = new URL(view.webContents.getURL())
               this.note(`[enterprise-settings] navigated section_match=${url.pathname === `/workspace/settings/${this.settingsSection}`} content_mode=${url.searchParams.get('dshSettings') === '1'}`)
@@ -801,6 +820,7 @@ export class EnterpriseChatView {
     this.settingsReady = false
     this.settingsFailure = undefined
     this.landing = undefined
+    this.workspaceDockPath = undefined
     this.navigation = undefined
     this.navigationRequest++
     this.generation += 1

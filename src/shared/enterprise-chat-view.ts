@@ -12,6 +12,8 @@ export interface EnterpriseChatPresentation {
   theme: 'light' | 'dark'
   locale?: 'zh' | 'en'
   settings?: EnterpriseSettingsSection
+  /** Corner radius of the host card the native view fills; 0 keeps square corners. */
+  radius?: number
   /** Host surfaces and ink resolved from the active Harness theme; absent when they cannot be sampled. */
   palette?: EnterprisePalette
 }
@@ -71,6 +73,7 @@ export interface EnterpriseChatViewState {
   path?: string
   epoch?: number
   landing?: boolean
+  workspaceDockOpen?: boolean
   conversationId?: string
   connected?: boolean
   phase: 'idle' | 'loading' | 'ready' | 'error'
@@ -106,12 +109,17 @@ export function parseChatPresentation(value: unknown): EnterpriseChatPresentatio
   }
   const settings = input.settings === undefined ? undefined : parseEnterpriseSettingsSection(input.settings)
   const palette = parseEnterprisePalette(input.palette)
+  const radius = input.radius
+  if (radius !== undefined && (typeof radius !== 'number' || !Number.isInteger(radius) || radius < 0 || radius > 64)) {
+    throw new Error('Invalid Chat radius.')
+  }
   const hostedAppBounds = input.hostedAppBounds === undefined ? undefined : parseViewBounds(input.hostedAppBounds)
   return {
     visible: input.visible,
     theme: input.theme as 'light' | 'dark',
     locale: input.locale,
     settings,
+    ...(radius === undefined ? {} : { radius }),
     ...(palette ? { palette } : {}),
     ...(hostedAppBounds ? { hostedAppBounds } : {}),
     bounds: parseViewBounds(input.bounds)

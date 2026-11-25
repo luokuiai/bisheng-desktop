@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('dshChatPresentation', Object.freeze({
   reportLanding(landing: unknown): void {
     if (typeof landing === 'boolean') ipcRenderer.send('enterprise-chat:landing', { landing, path: window.location.pathname })
   },
+  reportWorkspaceDock(open: unknown): void {
+    if (typeof open === 'boolean') ipcRenderer.send('enterprise-chat:workspace-dock', { open, path: window.location.pathname })
+  },
   reportSettings(section: unknown): void {
     ipcRenderer.send('enterprise-chat:settings-ready', { section, path: window.location.pathname })
   },
