@@ -848,6 +848,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       tools: 'M14.7 6.3a5.5 5.5 0 0 0-7 7L3 18a2.1 2.1 0 0 0 3 3l4.7-4.7a5.5 5.5 0 0 0 7-7l-3.5 3.5-3-3 3.5-3.5Z',
       skills: 'M5 3h14v18H5V3Zm3 4h8M8 11h8M8 15h5',
       square: 'M3 4h6v6H3V4Zm12 0h6v6h-6V4ZM3 14h6v6H3v-6Zm12 0h6v6h-6v-6',
+      reorder: 'M8 4v16m-3-3 3 3 3-3M16 20V4m-3 3 3-3 3 3',
       more: 'M5 12h.01M12 12h.01M19 12h.01'
     }
     function ResourceIcon({ id, size = 16 }) {
@@ -1156,7 +1157,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
         plugins && renderAction({ id: plugins.id, label: plugins.label, icon: renderPanelIcon(plugins.id), active: state.mode === 'work' && state.activePanelId === plugins.id, onClick: () => { setMenuOpen(false); navigation.select('work'); selectPanel(plugins.id) } }),
         visible.map(item => React.createElement(React.Fragment, { key: item.id }, renderAction({ ...item, active: item.id === selectedId, onClick: () => openItem(item.id) }))),
         items.length > 0 && React.createElement(Menu, {
-          open: menuOpen, onClose: () => setMenuOpen(false), items: [...overflow, { id: 'reorder', label: t('reorderNavigation') }], autoFocus: true, dense: true,
+          open: menuOpen, onClose: () => setMenuOpen(false), items: [...overflow, { id: 'reorder', label: t('reorderNavigation'), icon: React.createElement(NavigationIcon, { id: 'reorder' }) }], autoFocus: true, dense: true,
           className: 'dshNavigationMenu', listClassName: 'dshNavigationMenuList',
           selectedId,
           onSelect: id => { if (id === 'reorder') { setMenuOpen(false); setSorting({}) } else openItem(id) },

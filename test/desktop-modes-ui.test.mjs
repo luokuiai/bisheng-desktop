@@ -110,7 +110,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     plugin = factory(name => {
       if (name === 'react') return React
       if (name === 'react-dom') return { createPortal }
-      if (name === '@deepseek-ai/dsh-client-ui-primitives') return { IconUsersOutlineRegular: () => null, IconChevronLeftOutlineRegular: () => null, Button: ({ variant, size, ...props }) => React.createElement('button', props), Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body), Menu: ({ anchor, open, items, onSelect }) => React.createElement('div', null, anchor, open && items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.label))) }
+      if (name === '@deepseek-ai/dsh-client-ui-primitives') return { IconUsersOutlineRegular: () => null, IconChevronLeftOutlineRegular: () => null, Button: ({ variant, size, ...props }) => React.createElement('button', props), Modal: ({ children, title, footer, onClose, closeLabel }) => createPortal(React.createElement('div', { role: 'dialog', 'aria-modal': true, 'aria-label': title }, React.createElement('button', { onClick: onClose, 'aria-label': closeLabel }, closeLabel), children, footer), document.body), Menu: ({ anchor, open, items, onSelect }) => React.createElement('div', null, anchor, open && items.map(item => React.createElement('button', { key: item.id, role: 'menuitem', onClick: () => onSelect(item.id) }, item.icon, item.label))) }
       throw new Error(name)
     })
   } }
@@ -450,6 +450,7 @@ it('shares account navigation across Chat and Work and keeps Plugins directly ac
   const openMore = () => act(async () => sidebar.querySelector('[data-navigation-id=more]').click())
   await openMore()
   expect([...sidebar.querySelectorAll('[role=menuitem]')].map(node => node.textContent)).toEqual(['Reorder navigation'])
+  expect(sidebar.querySelector('[role=menuitem] svg[aria-hidden=true]')).not.toBeNull()
   await act(async () => sidebar.querySelector('[data-navigation-id="web:knowledge"]').click())
   expect(window.dshEnterpriseChat.openPage).toHaveBeenLastCalledWith('knowledge')
   await act(async () => sidebar.querySelector('[data-navigation-id=plugins]').click())
