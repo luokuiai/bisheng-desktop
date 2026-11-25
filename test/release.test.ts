@@ -387,7 +387,6 @@ describe('GitHub release contract', () => {
       'MACOS_OUTPUT_DIR=$RUNNER_TEMP/bisheng-macos-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${{ matrix.arch }}'
     )
     expect(workflow).toContain('--config.directories.output="$MACOS_OUTPUT_DIR"')
-    expect(workflow).toContain('$MACOS_OUTPUT_DIR/${{ matrix.app-directory }}/BISHENG.app')
     expect(workflow).toContain(
       'stage-development-assets.mjs ${{ matrix.arch }} "$MACOS_OUTPUT_DIR"'
     )
@@ -494,7 +493,7 @@ describe('GitHub release contract', () => {
     ).toHaveLength(2)
   })
 
-  it('uses ad-hoc macOS signing without Apple certificate or notarization jobs', async () => {
+  it('uses ad-hoc macOS signing without certificate, notarization or signature-verification jobs', async () => {
     const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8')) as {
       build: { mac: { identity: string; forceCodeSigning: boolean; notarize: boolean }; afterSign?: string }
     }
@@ -502,8 +501,7 @@ describe('GitHub release contract', () => {
     expect(packageJson.build.afterSign).toBeUndefined()
     const workflow = await readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
     expect(workflow).toContain('Build ad-hoc ${{ matrix.label }} release package')
-    expect(workflow).toContain('codesign --verify --deep --strict')
-    expect(workflow).toContain('Signature=adhoc')
+    expect(workflow).not.toMatch(/codesign\s+--(?:verify|display)|Signature=adhoc/)
     expect(workflow).not.toMatch(/secrets\.DESKTOP_(CSC|APPLE)|notarytool|stapler|signing_keychain/)
   })
 

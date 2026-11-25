@@ -122,18 +122,14 @@ it('packages PRs and develop pushes, and uploads original-format assets only on 
     ['package:dev:win', 'bisheng-windows-x64-setup.exe']
   ])
   const packageStep = build.steps.findIndex(step => step.run === 'npm run ${{ matrix.script }}')
-  const verifyStep = build.steps.findIndex(step => step.name === 'Verify app signature inside the macOS installer')
   const artifactStep = build.steps.findIndex(step => step.uses?.startsWith('actions/upload-artifact@'))
   expect(packageStep).toBeGreaterThanOrEqual(0)
   expect(build.steps[packageStep].if).toBeUndefined()
   expect(build.steps[packageStep].env).toEqual({
     CSC_FOR_PULL_REQUEST: "${{ runner.os == 'macOS' && github.event_name == 'pull_request' && 'true' || 'false' }}"
   })
-  expect(verifyStep).toBeGreaterThan(packageStep)
-  expect(build.steps[verifyStep].if).toBe("runner.os == 'macOS'")
-  expect(build.steps[verifyStep].run).toContain('codesign --verify --deep --strict')
-  expect(build.steps[verifyStep].run).toContain('"$mount_point/BISHENG.app"')
-  expect(artifactStep).toBeGreaterThan(verifyStep)
+  expect(source).not.toMatch(/codesign\s+--(?:verify|display)|Signature=adhoc/)
+  expect(artifactStep).toBeGreaterThan(packageStep)
   const upload = build.steps[artifactStep]
   expect(upload.uses).toBe('actions/upload-artifact@v7')
   expect(upload.with).toMatchObject({
@@ -158,7 +154,7 @@ it('only adds update YAML artifacts with the installer retention rules', async (
   expect(shouldPrepare({ event_name: 'pull_request', ref: 'refs/pull/1/merge' })).toBe(false)
   expect(shouldPrepare({ event_name: 'push', ref: 'refs/heads/develop' })).toBe(true)
   expect(shouldPrepare({ event_name: 'push', ref: 'refs/heads/main' })).toBe(false)
-  expect(steps.indexOf(prepare)).toBeGreaterThan(steps.findIndex(step => step.name === 'Verify app signature inside the macOS installer'))
+  expect(steps.indexOf(prepare)).toBeGreaterThan(steps.findIndex(step => step.run === 'npm run ${{ matrix.script }}'))
   const uploads = steps.filter(step => step.uses === 'actions/upload-artifact@v7')
   expect(uploads).toHaveLength(2)
   for (const upload of uploads) {
