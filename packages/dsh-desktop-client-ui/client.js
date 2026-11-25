@@ -934,23 +934,6 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       return verified?.action === action && verified?.id === candidate ? candidate : undefined
     }
 
-    function BotNavigationEntry({ botNavigation, wide, renderAction, t }) {
-      const { entry, action } = useBotReturn(botNavigation)
-      return action ? React.createElement(BotNavigationRow, { botNavigation, entry, action, wide, renderAction, t }) : null
-    }
-
-    function BotNavigationRow({ botNavigation, entry, action, wide, renderAction, t }) {
-      const mode = React.useSyncExternalStore(action.subscribe, action.snapshot)
-      React.useLayoutEffect(() => {
-        if (mode === 'agent') return botNavigation.hideFooter(entry)
-      }, [botNavigation, entry, mode])
-      if (mode !== 'agent') return null
-      return renderAction({
-        id: BOT_RETURN_ID, label: t('multiAgentCollaboration'), onClick: action.open,
-        icon: React.createElement(IconUsersOutlineRegular, { size: wide ? 16 : 18 })
-      })
-    }
-
     function useBotBackSeat(active) {
       const [seat, setSeat] = React.useState(null)
       React.useLayoutEffect(() => {
@@ -1056,7 +1039,7 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
     function readNavigationOrder() {
       try {
         const value = JSON.parse(window.localStorage.getItem(NAVIGATION_ORDER_KEY) || '[]')
-        return Array.isArray(value) ? [...new Set(value.filter(id => typeof id === 'string' && /^(web|local):.+/.test(id)))] : []
+        return Array.isArray(value) ? [...new Set(value.filter(id => typeof id === 'string' && (id === BOT_RETURN_ID || /^(web|local):.+/.test(id))))] : []
       } catch {
         console.warn('[desktop-navigation] Could not read saved order; using the default order')
         return []
@@ -1123,9 +1106,16 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
 
     function PrimaryNavigation({ wide, renderAction, expandSidebar, panels, selectPanel, renderPanelIcon, navigation, botNavigation, t }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
+      const { entry: botEntry, action: botAction } = useBotReturn(botNavigation)
+      const botSurface = botAction ?? EMPTY_BOT_SOURCE
+      const botMode = React.useSyncExternalStore(botSurface.subscribe, botSurface.snapshot)
+      const botVisible = Boolean(botEntry && botAction && botMode === 'agent')
       const [menuOpen, setMenuOpen] = React.useState(false)
       const [order, setOrder] = React.useState(readNavigationOrder)
       const [sorting, setSorting] = React.useState(null)
+      React.useLayoutEffect(() => {
+        if (botVisible) return botNavigation.hideFooter(botEntry)
+      }, [botNavigation, botEntry, botVisible])
       React.useEffect(() => { setMenuOpen(false); setSorting(null) }, [state.epoch, state.connected])
       React.useEffect(() => { if (!wide) setMenuOpen(false) }, [wide])
       React.useEffect(() => {
@@ -1142,18 +1132,19 @@ interaction.observe(document.documentElement, { attributes: true, attributeFilte
       const morePanels = panels.filter(panel => panel.id !== 'plugins')
       const items = orderNavigationItems([
         ...entries.map(entry => ({ id: `web:${entry.id}`, label: entry.label, icon: React.createElement(NavigationIcon, { id: entry.id }) })),
-        ...morePanels.map(panel => ({ id: `local:${panel.id}`, label: panel.label, icon: renderPanelIcon(panel.id) }))
+        ...morePanels.map(panel => ({ id: `local:${panel.id}`, label: panel.label, icon: renderPanelIcon(panel.id) })),
+        ...(botVisible ? [{ id: BOT_RETURN_ID, label: t('multiAgentCollaboration'), icon: React.createElement(IconUsersOutlineRegular, { size: wide ? 16 : 18 }) }] : [])
       ], order)
       const visible = items.slice(0, VISIBLE_NAVIGATION_COUNT)
       const overflow = items.slice(VISIBLE_NAVIGATION_COUNT)
       const selectedId = activeId ? `web:${activeId}` : state.mode === 'work' && state.activePanelId ? `local:${state.activePanelId}` : undefined
       const openItem = id => {
         setMenuOpen(false)
-        if (id.startsWith('web:')) void navigation.openPage(id.slice(4))
+        if (id === BOT_RETURN_ID) botAction?.open()
+        else if (id.startsWith('web:')) void navigation.openPage(id.slice(4))
         else { navigation.select('work'); selectPanel(id.slice(6)) }
       }
       return React.createElement('nav', { className: 'dshPrimaryNavigation', 'data-wide': wide, 'aria-label': t('navigation') },
-        React.createElement(BotNavigationEntry, { botNavigation, wide, renderAction, t }),
         plugins && renderAction({ id: plugins.id, label: plugins.label, icon: renderPanelIcon(plugins.id), active: state.mode === 'work' && state.activePanelId === plugins.id, onClick: () => { setMenuOpen(false); navigation.select('work'); selectPanel(plugins.id) } }),
         visible.map(item => React.createElement(React.Fragment, { key: item.id }, renderAction({ ...item, active: item.id === selectedId, onClick: () => openItem(item.id) }))),
         items.length > 0 && React.createElement(Menu, {
