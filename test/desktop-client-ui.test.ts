@@ -71,6 +71,7 @@ describe('BISHENG client slot occupants', () => {
             if (dispose) effectDisposers.push(dispose)
           },
           useMemo: (calculate: () => unknown) => calculate(),
+          useRef: (initial: unknown) => ({ current: initial }),
           useState: (initial: unknown) => [typeof initial === 'function' ? initial() : typeof initial === 'boolean' ? menuOpen : initial, setMenuOpen],
           useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot()
         }
