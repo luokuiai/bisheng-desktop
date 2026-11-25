@@ -8,9 +8,8 @@ const mocks = vi.hoisted(() => ({
   listeners: new Map<string, (...args: unknown[]) => void>(),
   userData: '',
   supported: true,
-  openInstaller: vi.fn(async () => {}),
+  openDownload: vi.fn(async () => {}),
   defaultUpdaterAccess: vi.fn(),
-  prepareToInstall: vi.fn(async () => {}),
   quit: vi.fn(),
   updater: {
     autoDownload: true,
@@ -25,8 +24,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron-updater', () => ({ default: { get autoUpdater() { mocks.defaultUpdaterAccess(); return mocks.updater } } }))
-vi.mock('../src/main/update/mac-installer-updater', () => ({
-  MacInstallerUpdater: class { constructor() { return { ...mocks.updater, openInstaller: mocks.openInstaller } } }
+vi.mock('../src/main/update/browser-updater', () => ({
+  BrowserUpdater: class { constructor() { return Object.assign(mocks.updater, { openDownload: mocks.openDownload }) } }
 }))
 vi.mock('electron', () => ({
   app: {
@@ -54,7 +53,7 @@ let manager: typeof import('../src/main/update/update-manager')
 const originalPlatform = process.platform
 
 function start() {
-  manager.startUpdateManager({ prepareToInstall: mocks.prepareToInstall })
+  manager.startUpdateManager()
 }
 function emit(event: string, value?: unknown) {
   mocks.listeners.get(event)?.(value)
@@ -138,10 +137,9 @@ it.each(['win32', 'darwin'])('does not initialize or check updates on %s when th
   expect(mocks.defaultUpdaterAccess).not.toHaveBeenCalled()
   expect(mocks.updater.on).not.toHaveBeenCalled()
   expect(mocks.updater.checkForUpdates).not.toHaveBeenCalled()
-  await manager.downloadAvailableUpdate()
-  await manager.installDownloadedUpdate()
+  await manager.openUpdateDownload()
   expect(mocks.updater.downloadUpdate).not.toHaveBeenCalled()
-  expect(mocks.openInstaller).not.toHaveBeenCalled()
+  expect(mocks.openDownload).not.toHaveBeenCalled()
   expect(mocks.updater.quitAndInstall).not.toHaveBeenCalled()
 })
 
@@ -154,85 +152,76 @@ it('keeps packages without an explicit update policy disabled', async () => {
   expect(mocks.updater.checkForUpdates).not.toHaveBeenCalled()
 })
 
-it('offers an update without downloading, then prepares shutdown only after download and install consent', async () => {
+it.each(['darwin', 'win32'])('opens the browser on %s only after a trusted explicit click and permits reopening', async platform => {
+  Object.defineProperty(process, 'platform', { value: platform })
   start()
   mocks.updater.checkForUpdates.mockImplementation(async () => emit('update-available', { version: '1.0.2' }))
   await manager.checkForUpdates(true)
   expect(manager.getUpdateStatus()).toMatchObject({ phase: 'available', availableVersion: '1.0.2' })
-  await manager.installDownloadedUpdate()
-  expect(mocks.updater.downloadUpdate).not.toHaveBeenCalled()
-  expect(mocks.prepareToInstall).not.toHaveBeenCalled()
-  mocks.updater.downloadUpdate.mockImplementation(async () => {
-    emit('download-progress', { percent: 50 })
-    expect(manager.getUpdateStatus()).toMatchObject({ phase: 'downloading', percent: 50 })
-    emit('update-downloaded', { version: '1.0.2' })
-  })
-  await manager.downloadAvailableUpdate()
-  expect(manager.getUpdateStatus().phase).toBe('downloaded')
-  expect(mocks.updater.quitAndInstall).not.toHaveBeenCalled()
-  await manager.installDownloadedUpdate()
-  expect(mocks.prepareToInstall).toHaveBeenCalledOnce()
-  expect(mocks.updater.quitAndInstall).toHaveBeenCalledWith(false, true)
-  expect(mocks.prepareToInstall.mock.invocationCallOrder[0]).toBeLessThan(
-    mocks.updater.quitAndInstall.mock.invocationCallOrder[0] ?? 0
-  )
-})
-
-it('opens the macOS installer from trusted IPC before preparing and requesting a normal quit', async () => {
-  Object.defineProperty(process, 'platform', { value: 'darwin' })
-  start()
-  mocks.updater.checkForUpdates.mockImplementation(async () => emit('update-available', { version: '1.0.2' }))
-  await manager.checkForUpdates(true)
-  expect(manager.getUpdateStatus()).toMatchObject({ phase: 'available', installationMode: 'manual' })
-  expect(mocks.defaultUpdaterAccess).not.toHaveBeenCalled()
-  mocks.updater.downloadUpdate.mockImplementation(async () => {
-    emit('download-progress', { percent: 50 })
-    emit('update-downloaded', { version: '1.0.2' })
-  })
-  await manager.downloadAvailableUpdate()
+  expect(mocks.openDownload).not.toHaveBeenCalled()
   const trusted: unknown = { sender: 'main', senderFrame: 'main-frame' }
   manager.registerUpdateHandlers({ assertTrusted: event => {
     if (event !== trusted) throw new Error('Untrusted update sender')
   } })
-  const install = mocks.ipc.get('updates:install')
-  expect(() => install?.({ sender: 'foreign' })).toThrow('Untrusted update sender')
-  expect(mocks.openInstaller).not.toHaveBeenCalled()
+  const open = mocks.ipc.get('updates:open-download')
+  expect(() => open?.({ sender: 'foreign' })).toThrow('Untrusted update sender')
+  expect(mocks.openDownload).not.toHaveBeenCalled()
   let finishOpening: (() => void) | undefined
-  mocks.openInstaller.mockImplementationOnce(() => new Promise<void>(resolve => { finishOpening = resolve }))
-  const installation = install?.(trusted)
-  expect(mocks.openInstaller).toHaveBeenCalledOnce()
-  expect(mocks.prepareToInstall).not.toHaveBeenCalled()
-  expect(mocks.quit).not.toHaveBeenCalled()
-  await install?.(trusted)
-  expect(mocks.openInstaller).toHaveBeenCalledOnce()
+  mocks.openDownload.mockImplementationOnce(() => new Promise<void>(resolve => { finishOpening = resolve }))
+  const opening = open?.(trusted)
+  expect(mocks.openDownload).toHaveBeenCalledOnce()
+  await open?.(trusted)
+  expect(mocks.openDownload).toHaveBeenCalledOnce()
+  await manager.checkForUpdates(true)
+  expect(mocks.updater.checkForUpdates).toHaveBeenCalledOnce()
   finishOpening?.()
-  await installation
-  expect(mocks.prepareToInstall).toHaveBeenCalledWith('manual')
-  expect(mocks.quit).toHaveBeenCalledOnce()
+  await opening
+  expect(manager.getUpdateStatus().phase).toBe('external-download')
+  await open?.(trusted)
+  expect(mocks.openDownload).toHaveBeenCalledTimes(2)
+  expect(mocks.defaultUpdaterAccess).not.toHaveBeenCalled()
+  expect(mocks.updater.downloadUpdate).not.toHaveBeenCalled()
   expect(mocks.updater.quitAndInstall).not.toHaveBeenCalled()
-  expect(mocks.prepareToInstall.mock.invocationCallOrder[0]).toBeLessThan(mocks.quit.mock.invocationCallOrder[0] ?? 0)
-  await install?.(trusted)
-  expect(mocks.openInstaller).toHaveBeenCalledOnce()
+  expect(mocks.quit).not.toHaveBeenCalled()
 })
 
-it.each(['open', 'prepare'] as const)('keeps the client running when the macOS installer %s step fails', async stage => {
-  Object.defineProperty(process, 'platform', { value: 'darwin' })
+it('does not allow the browser action without trusted sender validation', () => {
+  manager.registerUpdateHandlers()
+  expect(() => mocks.ipc.get('updates:open-download')?.({})).toThrow('trusted main-window sender')
+  expect(mocks.openDownload).not.toHaveBeenCalled()
+})
+
+it('continues periodic version checks after handing the download to the browser', async () => {
+  start()
+  await vi.advanceTimersByTimeAsync(30_000)
+  mocks.updater.checkForUpdates.mockImplementation(async () => emit('update-available', { version: '1.0.2' }))
+  await manager.checkForUpdates(true)
+  await manager.openUpdateDownload()
+  expect(manager.getUpdateStatus().phase).toBe('external-download')
+  mocks.updater.checkForUpdates.mockImplementation(async () => emit('update-available', { version: '1.0.3' }))
+  await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1_000)
+  expect(mocks.updater.checkForUpdates).toHaveBeenCalledTimes(3)
+  expect(manager.getUpdateStatus()).toMatchObject({ phase: 'available', availableVersion: '1.0.3' })
+  expect(mocks.openDownload).toHaveBeenCalledOnce()
+})
+
+it('does not open a changed offer while an earlier consent waits for a manual check', async () => {
   start()
   mocks.updater.checkForUpdates.mockImplementation(async () => emit('update-available', { version: '1.0.2' }))
   await manager.checkForUpdates(true)
-  mocks.updater.downloadUpdate.mockImplementation(async () => emit('update-downloaded', { version: '1.0.2' }))
-  await manager.downloadAvailableUpdate()
-  const failed = stage === 'open' ? mocks.openInstaller : mocks.prepareToInstall
-  failed.mockRejectedValueOnce(new Error('Installer step failed'))
-  await manager.installDownloadedUpdate()
-  expect(mocks.quit).not.toHaveBeenCalled()
-  expect(mocks.updater.quitAndInstall).not.toHaveBeenCalled()
-  if (stage === 'open') expect(mocks.prepareToInstall).not.toHaveBeenCalled()
-  expect(manager.getUpdateStatus()).toMatchObject({ phase: 'error', message: 'Installer step failed' })
-  await manager.checkForUpdates(true)
-  await manager.downloadAvailableUpdate()
-  await manager.installDownloadedUpdate()
-  expect(mocks.quit).toHaveBeenCalledOnce()
+  let finishCheck: (() => void) | undefined
+  mocks.updater.checkForUpdates.mockImplementationOnce(() => {
+    emit('update-available', { version: '1.0.2' })
+    return new Promise<void>(resolve => { finishCheck = resolve })
+  })
+  const checking = manager.checkForUpdates(true)
+  await Promise.resolve()
+  const opening = manager.openUpdateDownload()
+  emit('update-available', { version: '1.0.3' })
+  finishCheck?.()
+  await checking
+  await opening
+  expect(mocks.openDownload).not.toHaveBeenCalled()
 })
 
 it('preserves a failed check and allows a manual retry', async () => {
@@ -244,13 +233,13 @@ it('preserves a failed check and allows a manual retry', async () => {
   expect(manager.getUpdateStatus().phase).toBe('up-to-date')
 })
 
-it('preserves a download error and permits checking again', async () => {
+it('preserves a browser launch error and permits checking again', async () => {
   start()
   mocks.updater.checkForUpdates.mockImplementation(async () => emit('update-available', { version: '1.0.2' }))
   await manager.checkForUpdates(true)
-  mocks.updater.downloadUpdate.mockRejectedValueOnce(new Error('download failed'))
-  await manager.downloadAvailableUpdate()
-  expect(manager.getUpdateStatus()).toMatchObject({ phase: 'error', message: 'download failed' })
+  mocks.openDownload.mockRejectedValueOnce(new Error('browser failed'))
+  await manager.openUpdateDownload()
+  expect(manager.getUpdateStatus()).toMatchObject({ phase: 'error', message: 'browser failed' })
   await manager.checkForUpdates(true)
   expect(manager.getUpdateStatus().phase).toBe('available')
 })
@@ -269,5 +258,7 @@ it('does not expose the removed version-list and rollback handlers', () => {
   manager.registerUpdateHandlers()
   expect(mocks.ipc.has('updates:list-versions')).toBe(false)
   expect(mocks.ipc.has('updates:install-version')).toBe(false)
+  expect(mocks.ipc.has('updates:install')).toBe(false)
+  expect(mocks.ipc.has('updates:download')).toBe(false)
   expect(mocks.updater.quitAndInstall).not.toHaveBeenCalled()
 })

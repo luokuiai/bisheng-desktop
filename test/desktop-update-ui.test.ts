@@ -63,43 +63,50 @@ afterEach(() => {
 const status = (phase: UpdateStatus['phase'], extra: Partial<UpdateStatus> = {}): UpdateStatus => ({ phase, currentVersion: '1.0.0', manual: true, presentationId: 7, ...extra })
 
 describe('desktop update presentation at the IPC boundary', () => {
-  it.each(['zh', 'en'] as const)('opens manual installers from an explicit %s quit action and stays busy until exit', async locale => {
+  it.each(['zh', 'en'] as const)('opens the browser from an explicit %s action and permits reopening', async locale => {
     const ui = await mount(Promise.resolve(status('idle', { manual: false, locale })))
-    const manual = { manual: false, installationMode: 'manual' as const, availableVersion: '1.1.0', locale }
-    ui.emit(status('available', manual))
-    const download = required(Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === (locale === 'zh' ? '下载新版' : 'Download new version')))
-    download.click()
-    expect(ipc.invoke).toHaveBeenCalledWith('updates:download')
-    ui.emit(status('downloaded', manual))
-    expect(ui.shadow.textContent).toContain(locale === 'zh' ? '请先保存工作' : 'Save your work first')
-    const label = locale === 'zh' ? '打开安装包并退出' : 'Open installer and quit'
-    const install = () => required(Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === label))
+    const offer = { manual: false, availableVersion: '1.1.0', locale }
+    ui.emit(status('available', offer))
+    const label = locale === 'zh' ? '更新' : 'Update'
+    const update = required(Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === label))
     let finish: (() => void) | undefined
     ipc.invoke.mockImplementation(() => new Promise<void>(resolve => { finish = resolve }))
-    install().click()
-    expect(ipc.invoke).toHaveBeenLastCalledWith('updates:install')
-    expect(ui.shadow.textContent).toContain(locale === 'zh' ? '正在打开并退出…' : 'Opening and quitting…')
-    finish?.()
-    await Promise.resolve()
+    update.click()
+    expect(ipc.invoke).toHaveBeenLastCalledWith('updates:open-download')
     const busy = required(ui.shadow.querySelector<HTMLButtonElement>('.primary'))
+    expect(busy.textContent).toBe(locale === 'zh' ? '正在打开浏览器…' : 'Opening browser…')
     expect(busy.disabled).toBe(true)
     busy.click()
-    expect(ipc.invoke.mock.calls.filter(([channel]) => channel === 'updates:install')).toHaveLength(1)
+    expect(ipc.invoke.mock.calls.filter(([channel]) => channel === 'updates:open-download')).toHaveLength(1)
+    finish?.()
+    await Promise.resolve()
+    await Promise.resolve()
+    ui.emit(status('external-download', offer))
+    expect(ui.shadow.textContent).toContain(locale === 'zh' ? '请在浏览器中查看下载进度' : 'Check the download in your browser')
+    expect(ui.shadow.querySelector('[role="progressbar"]')).toBeNull()
+    expect(ui.shadow.textContent).not.toContain('Restart and install')
+    const again = required(Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === (locale === 'zh' ? '重新下载' : 'Download again')))
+    expect(again.disabled).toBe(false)
+    again.click()
+    expect(ipc.invoke.mock.calls.filter(([channel]) => channel === 'updates:open-download')).toHaveLength(2)
+    expect(ipc.invoke.mock.calls.some(([channel]) => channel === 'updates:install' || channel === 'updates:download')).toBe(false)
+    finish?.()
+    await Promise.resolve()
   })
 
-  it.each(['zh', 'en'] as const)('reports an installer open failure in %s and permits a retry', async locale => {
+  it.each(['zh', 'en'] as const)('reports a browser launch failure in %s and permits retry', async locale => {
     const ui = await mount(Promise.resolve(status('idle', { manual: false, locale })))
-    const manual = { manual: false, installationMode: 'manual' as const, availableVersion: '1.1.0', locale }
-    ui.emit(status('downloaded', manual))
-    const label = locale === 'zh' ? '打开安装包并退出' : 'Open installer and quit'
-    const install = () => required(Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === label))
-    ipc.invoke.mockRejectedValueOnce(new Error('Installer could not be opened'))
-    install().click()
+    const offer = { manual: false, availableVersion: '1.1.0', locale }
+    ui.emit(status('available', offer))
+    const label = locale === 'zh' ? '更新' : 'Update'
+    const update = () => required(Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === label))
+    ipc.invoke.mockRejectedValueOnce(new Error('Browser could not be opened'))
+    update().click()
     await Promise.resolve()
     await Promise.resolve()
-    expect(ui.shadow.textContent).toContain('Installer could not be opened')
-    ui.emit(status('downloaded', manual))
-    expect(install().disabled).toBe(false)
+    expect(ui.shadow.textContent).toContain('Browser could not be opened')
+    ui.emit(status('available', offer))
+    expect(update().disabled).toBe(false)
   })
 
   it.each(['up-to-date', 'error', 'unsupported', 'checking'] as const)('does not replay historical manual %s snapshots or same-request events', async phase => {
@@ -127,18 +134,18 @@ describe('desktop update presentation at the IPC boundary', () => {
     expect(ui.host.style.bottom).toBe('20px')
     ui.shadow.querySelector<HTMLButtonElement>('.details')?.click()
     expect(ui.shadow.querySelector('[role="dialog"]')).not.toBeNull()
-    ui.emit(status('downloading', { manual: false, source, availableVersion: '1.1.0', percent: 25 }))
+    ui.emit(status('external-download', { manual: false, source, availableVersion: '1.1.0' }))
     expect(ui.shadow.querySelector('[role="dialog"]')).not.toBeNull()
   })
 
-  it.each(['available', 'downloading', 'downloaded'] as const)('retains a historical manual %s update as a corner notification across same-ID progress', async phase => {
-    const ui = await mount(Promise.resolve(status(phase, { availableVersion: '1.1.0', percent: 25 })))
+  it.each(['available', 'external-download'] as const)('retains a historical manual %s update as a corner notification after the browser handoff', async phase => {
+    const ui = await mount(Promise.resolve(status(phase, { availableVersion: '1.1.0' })))
     expect(ui.shadow.querySelector('[role="status"]')).not.toBeNull()
-    ui.emit(status('downloading', { availableVersion: '1.1.0', percent: 75 }))
+    ui.emit(status('external-download', { availableVersion: '1.1.0' }))
     expect(ui.shadow.querySelector('[role="dialog"]')).toBeNull()
-    expect(ui.shadow.textContent).toContain('75%')
-    ui.emit(status('error', { message: 'Old download failed' }))
-    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('Old download failed')
+    expect(ui.shadow.textContent).toContain('Check the download in your browser')
+    ui.emit(status('error', { message: 'Old browser action failed' }))
+    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('Old browser action failed')
     expect(Array.from(ui.shadow.querySelectorAll('button')).some(button => button.textContent === 'Retry')).toBe(true)
   })
 
@@ -168,12 +175,12 @@ describe('desktop update presentation at the IPC boundary', () => {
     expect(ui.host.dataset.updatePhase).toBe('checking')
   })
 
-  it('reports a main-process download error even when the download invoke resolves, and allows a real retry sequence', async () => {
+  it('reports a main-process browser error even when the browser invoke resolves, and allows a real retry sequence', async () => {
     const ui = await mount(Promise.resolve(status('idle', { manual: false })))
-    const failure = status('error', { manual: false, source: 'startup', message: 'Download connection interrupted' })
+    const failure = status('error', { manual: false, source: 'startup', message: 'Browser launch interrupted' })
     ipc.invoke.mockImplementation(async channel => {
-      if (channel === 'updates:download') {
-        ui.emit(status('downloading', { manual: false, source: 'startup', availableVersion: '1.1.0', percent: 15 }))
+      if (channel === 'updates:open-download') {
+        ui.emit(status('external-download', { manual: false, source: 'startup', availableVersion: '1.1.0' }))
         ui.emit(failure)
         return failure
       }
@@ -187,7 +194,8 @@ describe('desktop update presentation at the IPC boundary', () => {
     expect(ui.shadow.querySelector('[role="dialog"]')).toBeNull()
     Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Update')?.click()
     await Promise.resolve()
-    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('Download connection interrupted')
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('Browser launch interrupted')
     const retry = Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Retry')
     expect(retry).toBeDefined()
     retry?.click()
@@ -195,18 +203,18 @@ describe('desktop update presentation at the IPC boundary', () => {
     expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('New version')
     Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Update')?.click()
     await Promise.resolve()
-    expect(ipc.invoke.mock.calls.filter(([channel]) => channel === 'updates:download')).toHaveLength(2)
-    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('Download connection interrupted')
+    expect(ipc.invoke.mock.calls.filter(([channel]) => channel === 'updates:open-download')).toHaveLength(2)
+    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('Browser launch interrupted')
   })
 
-  it('does not suppress a new download failure with an old dismissed error, or replay the new error after closing it', async () => {
+  it('does not suppress a new browser failure with an old dismissed error, or replay the new error after closing it', async () => {
     const ui = await mount(Promise.resolve(status('idle', { manual: false })))
     ui.emit(status('error', { message: 'Previous manual failure' }))
     ui.shadow.querySelector<HTMLButtonElement>('.confirm:last-child')?.click()
     expect(ui.host.style.display).toBe('none')
-    const failure = status('error', { manual: false, source: 'runtime', message: 'New automatic download failed' })
+    const failure = status('error', { manual: false, source: 'runtime', message: 'New browser launch failed' })
     ipc.invoke.mockImplementation(async () => {
-      ui.emit(status('downloading', { manual: false, source: 'runtime', availableVersion: '1.1.0', percent: 25 }))
+      ui.emit(status('external-download', { manual: false, source: 'runtime', availableVersion: '1.1.0' }))
       ui.emit(failure)
       return failure
     })
@@ -214,18 +222,19 @@ describe('desktop update presentation at the IPC boundary', () => {
     ui.emit(status('available', { manual: false, source: 'runtime', availableVersion: '1.1.0' }))
     Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Update')?.click()
     await Promise.resolve()
-    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('New automatic download failed')
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('New browser launch failed')
     ui.shadow.querySelector<HTMLButtonElement>('.confirm:last-child')?.click()
     ui.emit(failure)
     expect(ui.host.style.display).toBe('none')
   })
 
-  it('surfaces a fresh failure after historical manual download progress was dismissed', async () => {
-    const ui = await mount(Promise.resolve(status('downloading', { availableVersion: '1.1.0', percent: 25 })))
+  it('surfaces a fresh failure after a historical browser handoff was dismissed', async () => {
+    const ui = await mount(Promise.resolve(status('external-download', { availableVersion: '1.1.0' })))
     Array.from(ui.shadow.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Ignore')?.click()
     expect(ui.host.style.display).toBe('none')
-    ui.emit(status('error', { message: 'Restored download failed' }))
-    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('Restored download failed')
+    ui.emit(status('error', { message: 'Restored browser action failed' }))
+    expect(ui.shadow.querySelector('[role="dialog"]')?.textContent).toContain('Restored browser action failed')
     expect(Array.from(ui.shadow.querySelectorAll('button')).some(button => button.textContent === 'Retry')).toBe(true)
   })
 

@@ -25,6 +25,7 @@ export default defineConfig({
       'test/safe-mode*.test.ts',
       'test/update*.test.ts',
       'test/update-feed-config.test.mjs',
+      'test/browser-updater.test.mjs',
       'test/package-signing-policy.test.mjs',
       'test/runtime.test.ts',
       'test/runtime-package-root.test.ts',

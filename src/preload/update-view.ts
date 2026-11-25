@@ -2,23 +2,14 @@ import type { AvailableRelease, UpdateStatus } from '../shared/contracts'
 
 export type UpdateLocale = 'en' | 'zh'
 
-export function updateDownloadLabel(status: UpdateStatus, locale: UpdateLocale): string {
-  if (status.installationMode === 'manual') return locale === 'zh' ? '下载新版' : 'Download new version'
+export function updateDownloadLabel(status: UpdateStatus, locale: UpdateLocale, busy = false): string {
+  if (busy) return locale === 'zh' ? '正在打开浏览器…' : 'Opening browser…'
+  if (status.phase === 'external-download') return locale === 'zh' ? '重新下载' : 'Download again'
   return locale === 'zh' ? '更新' : 'Update'
 }
 
-export function updateInstallLabel(status: UpdateStatus, locale: UpdateLocale, busy = false): string {
-  const zh = locale === 'zh'
-  if (status.installationMode === 'manual') {
-    if (busy) return zh ? '正在打开并退出…' : 'Opening and quitting…'
-    return zh ? '打开安装包并退出' : 'Open installer and quit'
-  }
-  if (busy) return zh ? '正在重启…' : 'Restarting…'
-  return zh ? '重新启动并安装' : 'Restart and install'
-}
-
 export function shouldShowUpdate(status: UpdateStatus, allowManualPresentation = true): boolean {
-  if (['available', 'downloading', 'downloaded'].includes(status.phase)) return true
+  if (['available', 'external-download'].includes(status.phase)) return true
   return allowManualPresentation && status.manual && ['checking', 'up-to-date', 'error', 'unsupported'].includes(status.phase)
 }
 
@@ -66,28 +57,15 @@ export function updateHeadline(status: UpdateStatus, locale: UpdateLocale): Upda
       return {
         title: zh ? `检测到新版本 ${version}` : `New version ${version} available`,
         description: zh
-          ? `${version} 已发布，同意后开始下载。`
-          : `${version} is ready to download.`
+          ? `${version} 已发布。点击“更新”将在浏览器中下载安装包。`
+          : `${version} is available. Click “Update” to download the installer in your browser.`
       }
-    case 'downloading':
+    case 'external-download':
       return {
-        title: zh ? '正在下载更新' : 'Downloading update',
-        description: zh ? `${version} · ${Math.round(status.percent ?? 0)}%` : `${version} · ${Math.round(status.percent ?? 0)}%`
-      }
-    case 'downloaded':
-      if (status.installationMode === 'manual') {
-        return {
-          title: zh ? '更新已就绪' : 'Update ready',
-          description: zh
-            ? `${version} 已下载完成，请先保存工作。点击“打开安装包并退出”后，BISHENG 将打开安装包并自动退出。然后将新版拖到“应用程序”并替换旧版本。`
-            : `${version} has downloaded. Save your work first. Click “Open installer and quit” to open the installer and automatically quit BISHENG. Then drag the new app to Applications and replace the old version.`
-        }
-      }
-      return {
-        title: zh ? '更新已就绪' : 'Update ready',
+        title: zh ? '已打开浏览器下载' : 'Download opened in browser',
         description: zh
-          ? `${version} 将在重启后生效。`
-          : `${version} will be applied on next launch.`
+          ? '请在浏览器中查看下载进度。下载完成后保存工作并退出 BISHENG，再打开安装包安装新版。'
+          : 'Check the download in your browser. When it finishes, save your work and quit BISHENG, then run the installer to update.'
       }
     case 'up-to-date':
       return {
@@ -104,7 +82,7 @@ export function updateHeadline(status: UpdateStatus, locale: UpdateLocale): Upda
     case 'error':
       return {
         title: zh ? '更新失败' : 'Update failed',
-        description: zh ? '无法检查或下载更新。' : 'Unable to check for or download updates.'
+        description: zh ? '无法检查更新或打开下载链接。' : 'Unable to check for updates or open the download link.'
       }
     case 'idle':
       return { title: '', description: '' }
@@ -122,18 +100,14 @@ export function updateMessage(status: UpdateStatus, locale: UpdateLocale): strin
       return zh
         ? `发现新版本${version}，是否更新？`
         : `BISHENG${version} is available. Update now?`
-    case 'downloading': {
-      const percent = Math.round(status.percent ?? 0)
-      return zh ? `正在下载更新 ${percent}%` : `Downloading update ${percent}%`
-    }
-    case 'downloaded':
-      return zh ? `BISHENG${version} 已下载完成` : `BISHENG${version} is ready to install`
+    case 'external-download':
+      return zh ? '已在浏览器中打开下载' : 'Download opened in your browser'
     case 'up-to-date':
       return zh ? 'BISHENG 已是最新版本' : 'BISHENG is up to date'
     case 'unsupported':
       return zh ? '当前构建不支持在线更新。' : 'Online updates are unavailable in this build.'
     case 'error':
-      return zh ? '无法检查或下载更新' : 'Unable to check for or download updates'
+      return zh ? '无法检查更新或打开下载链接' : 'Unable to check for updates or open the download link'
     case 'idle':
       return ''
   }

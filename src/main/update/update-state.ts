@@ -3,8 +3,7 @@ import type { UpdateStatus } from '../../shared/contracts'
 export type UpdateStateEvent =
   | { type: 'check'; manual: boolean; source?: UpdateStatus['source'] }
   | { type: 'available'; version: string; releaseNotes?: string }
-  | { type: 'progress'; percent: number }
-  | { type: 'downloaded'; version: string }
+  | { type: 'external-download' }
   | { type: 'not-available' }
   | { type: 'error'; message: string }
   | { type: 'unsupported'; message: string }
@@ -36,10 +35,8 @@ export function reduceUpdateStatus(
         availableVersion: event.version,
         ...(event.releaseNotes === undefined ? {} : { releaseNotes: event.releaseNotes })
       }
-    case 'progress':
-      return { ...current, phase: 'downloading', percent: clampPercent(event.percent) }
-    case 'downloaded':
-      return { ...base, phase: 'downloaded', availableVersion: event.version }
+    case 'external-download':
+      return { ...current, phase: 'external-download' }
     case 'not-available':
       return { ...base, phase: 'up-to-date' }
     case 'error':
@@ -51,11 +48,6 @@ export function reduceUpdateStatus(
     case 'reset':
       return initialUpdateStatus(current.currentVersion)
   }
-}
-
-function clampPercent(value: number): number {
-  if (!Number.isFinite(value)) return 0
-  return Math.round(Math.min(100, Math.max(0, value)) * 10) / 10
 }
 
 /** Adapt untrusted updater metadata to a bounded, serializable plain-text value. */

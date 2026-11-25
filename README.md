@@ -42,7 +42,7 @@ We offer stable and preview releases: download the **stable release**, recommend
 
 Preview releases include our newest features and closely track the latest official DeepSeek Harness versions. They may be incompatible with community plugins and are **not recommended for general users**. Early adopters are welcome to try them and share feedback in our community; we roll out updates to the wider community only after validation by early adopters.
 
-Installed builds check for updates shortly after startup and every six hours. When a new version is available, DSH Desktop asks before downloading it; installation begins only after you choose **Restart and install**. You can also check manually from the application menu or skip one version without hiding future releases.
+Installed production builds with a configured update source check for updates shortly after startup and every six hours. On macOS and Windows, clicking **Update** opens the matching installer in your default browser. After downloading, save your work, quit the app, and run the installer manually. You can also check from the application menu or skip one version without hiding future releases.
 
 ## Community
 

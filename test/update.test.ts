@@ -21,7 +21,7 @@ afterEach(async () => {
 })
 
 describe('desktop update policy', () => {
-  it('only installs a downloaded update after explicit user confirmation', () => {
+  it('keeps automatic installation disabled for browser updates', () => {
     expect(AUTO_INSTALL_ON_APP_QUIT).toBe(false)
   })
 

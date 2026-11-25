@@ -6,7 +6,6 @@ import {
   shouldShowUpdate,
   updateHeadline,
   updateDownloadLabel,
-  updateInstallLabel,
   comparePreloadVersions,
   rollbackReleases,
   rollbackEmptyMessage,
@@ -23,7 +22,6 @@ let currentStatus: UpdateStatus | undefined
 let dismissedVersion: string | null = null
 let dismissedPresentationId: number | undefined
 let dismissedTransientPhase: UpdateStatus['phase'] | null = null
-let installing = false
 let accepting = false
 let versionPickerOpen = false
 let versionPickerLoading = false
@@ -66,7 +64,7 @@ function mount(): void {
   render()
 }
 
-// Retain snapshot request identity so later progress for that same historical
+// Retain snapshot request identity so later events for that same historical
 // request cannot reopen a manual dialog after a renderer or Harness restart.
 function applyStatus(status: UpdateStatus, delivery: 'event' | 'snapshot' = 'event'): void {
   if (status.locale) locale = status.locale
@@ -80,10 +78,10 @@ function applyStatus(status: UpdateStatus, delivery: 'event' | 'snapshot' = 'eve
     detailOpen = true
   }
   const failedActiveUpdate = delivery === 'event' && status.phase === 'error' &&
-    (accepting || installing || currentStatus?.phase === 'downloading' || currentStatus?.phase === 'downloaded')
+    (accepting || currentStatus?.phase === 'external-download')
   if (failedActiveUpdate) {
-    // A live failure is actionable even when the download was restored from a
-    // snapshot or its progress card was dismissed. Historical errors stay quiet.
+    // A live failure is actionable even when the browser handoff was restored
+    // from a snapshot or its card was dismissed. Historical errors stay quiet.
     dismissedPresentationId = undefined
     dismissedVersion = null
     dismissedTransientPhase = null
@@ -95,11 +93,9 @@ function applyStatus(status: UpdateStatus, delivery: 'event' | 'snapshot' = 'eve
     host.dataset.updatePhase = status.phase
     host.dataset.updateManual = String(status.manual)
   }
-  if (status.phase === 'error') installing = false
-  if (['error', 'downloading', 'downloaded', 'up-to-date'].includes(status.phase)) {
+  if (['error', 'external-download', 'up-to-date'].includes(status.phase)) {
     installingVersion = null
   }
-  if (status.phase !== 'available') accepting = false
   render()
 }
 
@@ -150,73 +146,36 @@ function render(): void {
     status.phase === 'error' && status.message ? status.message : status.phase === 'up-to-date' ? (locale === 'zh' ? '当前已是最新版本' : 'You’re on the latest version') : !centered && status.phase === 'available' ? (status.releaseNotes?.split('\n').find(line => line.trim()) || headline.description) : headline.description
   if (description.textContent) body.appendChild(description)
 
-  if (centered && status.phase === 'available') {
+  if (centered && (status.phase === 'available' || status.phase === 'external-download')) {
     const label = element('p', 'notes-label')
     label.textContent = locale === 'zh' ? '更新日志' : 'What’s new'
     const notes = element('p', 'release-notes')
     notes.textContent = status.releaseNotes || (locale === 'zh' ? '此版本暂无更新日志。' : 'No release notes for this version.')
     body.append(label, notes)
   }
-  if (!centered && status.phase === 'available') {
+  if (!centered && (status.phase === 'available' || status.phase === 'external-download')) {
     const details = button(locale === 'zh' ? '查看详情' : 'View details', 'details')
     details.addEventListener('click', () => { detailOpen = true; render() })
     body.appendChild(details)
   }
-  if (status.phase === 'downloading') {
-    const progress = element('div', 'progress')
-    progress.setAttribute('role', 'progressbar')
-    progress.setAttribute('aria-valuemin', '0')
-    progress.setAttribute('aria-valuemax', '100')
-    progress.setAttribute('aria-valuenow', String(Math.round(status.percent ?? 0)))
-    const value = element('div', 'progressValue')
-    value.style.width = `${status.percent ?? 0}%`
-    progress.appendChild(value)
-    body.appendChild(progress)
-  }
-
-  if (status.phase === 'available') {
+  if (status.phase === 'available' || status.phase === 'external-download') {
     const actions = element('div', 'actions')
-    const accept = button(updateDownloadLabel(status, locale), 'primary')
+    const accept = button(updateDownloadLabel(status, locale, accepting), 'primary')
     accept.disabled = accepting
     accept.addEventListener('click', () => {
+      if (accepting) return
       accepting = true
       render()
-      void ipcRenderer.invoke('updates:download').catch((error: unknown) => {
-        accepting = false
+      void ipcRenderer.invoke('updates:open-download').catch((error: unknown) => {
         showActionError(error)
-        console.error('[updater] unable to download update', error)
+        console.error('[updater] unable to open update download', error)
+      }).finally(() => {
+        accepting = false
         render()
       })
     })
     if (!centered) actions.appendChild(skipButton(status))
     actions.appendChild(accept)
-    if (centered) body.appendChild(actions)
-    else row.appendChild(actions)
-  }
-
-  if (status.phase === 'downloading') {
-    const actions = element('div', 'actions')
-    if (!centered) actions.appendChild(skipButton(status))
-    if (centered) body.appendChild(actions)
-    else row.appendChild(actions)
-  }
-
-  if (status.phase === 'downloaded') {
-    const actions = element('div', 'actions')
-    const install = button(updateInstallLabel(status, locale, installing), 'primary')
-    install.disabled = installing
-    install.addEventListener('click', () => {
-      installing = true
-      render()
-      void ipcRenderer.invoke('updates:install').catch((error: unknown) => {
-        installing = false
-        showActionError(error)
-        console.error('[updater] unable to install update', error)
-        render()
-      })
-    })
-    actions.appendChild(install)
-    if (!centered) actions.appendChild(skipButton(status))
     if (centered) body.appendChild(actions)
     else row.appendChild(actions)
   }
@@ -464,7 +423,7 @@ function selectVersionFromAbout(release: AvailableRelease, currentVersion: strin
 }
 
 function dismissCurrent(): void {
-  if (!currentStatus || installing || accepting) return
+  if (!currentStatus || accepting) return
   detailOpen = false
   dismissedPresentationId = currentStatus.presentationId
   previousFocus?.focus()
@@ -546,8 +505,6 @@ const styles = `
   .version-group-title,.version-status-text { margin:6px; font-size:12px; line-height:18px; color:var(--dsw-alias-label-secondary,#666b73); }
   .version-tag-btn { display:block; width:100%; padding:6px 8px; text-align:left; background:transparent; color:inherit; font-size:13px; }
   .version-tag-btn:hover { background:var(--dsw-alias-interactive-bg-hover,#f0f2f5); }
-  .progress { height:5px; background:var(--dsw-alias-bg-layer-2,#e5e7eb); border-radius:4px; overflow:hidden; margin:12px 0; }
-  .progressValue { height:100%; background:var(--dsw-alias-button-primary-fill,#000); }
   .spinner { position:absolute; inset:16px; border:2px solid #fff; border-top-color:transparent; border-radius:50%; animation:spin .75s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
   @media (prefers-color-scheme:dark) {
@@ -558,7 +515,6 @@ const styles = `
     .primary:hover:not(:disabled) { background:var(--dsw-alias-button-primary-hover,#e6e8eb); }
     button:focus-visible { outline-color:var(--dsw-alias-label-primary,#f3f4f6); }
     .details { color:var(--dsw-alias-label-primary,#f3f4f6); }
-    .progressValue { background:var(--dsw-alias-button-primary-fill,#f9fafb); }
   }
   @media (prefers-reduced-motion:reduce) { .spinner { animation:none; } }
 `

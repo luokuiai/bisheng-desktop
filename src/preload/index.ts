@@ -11,7 +11,6 @@ import {
   shouldShowUpdate,
   updateHeadline,
   updateDownloadLabel,
-  updateInstallLabel,
   type UpdateLocale
 } from './update-view'
 import { isPluginLoadError } from './plugin-error-view'
@@ -55,7 +54,6 @@ let content: HTMLDivElement | undefined
 let currentStatus: UpdateStatus | undefined
 let dismissedVersion: string | null = null
 let dismissedTransientPhase: UpdateStatus['phase'] | null = null
-let installing = false
 let accepting = false
 
 const ROOT_ID = 'dsh-desktop-update-root'
@@ -745,13 +743,16 @@ function mount(): void {
 }
 
 function applyStatus(status: UpdateStatus): void {
+  if (status.phase === 'error' && accepting) {
+    dismissedVersion = null
+    dismissedTransientPhase = null
+    status = { ...status, manual: true }
+  }
   currentStatus = status
   if (host) {
     host.dataset.updatePhase = status.phase
     host.dataset.updateManual = String(status.manual)
   }
-  if (status.phase === 'error') installing = false
-  if (status.phase !== 'available') accepting = false
   render()
 }
 
@@ -792,55 +793,23 @@ function render(): void {
     status.phase === 'error' && status.message ? status.message : headline.description
   if (description.textContent) body.appendChild(description)
 
-  if (status.phase === 'downloading') {
-    const progress = element('div', 'progress')
-    progress.setAttribute('role', 'progressbar')
-    progress.setAttribute('aria-valuemin', '0')
-    progress.setAttribute('aria-valuemax', '100')
-    progress.setAttribute('aria-valuenow', String(Math.round(status.percent ?? 0)))
-    const value = element('div', 'progressValue')
-    value.style.width = `${status.percent ?? 0}%`
-    progress.appendChild(value)
-    body.appendChild(progress)
-  }
-
-  if (status.phase === 'available') {
+  if (status.phase === 'available' || status.phase === 'external-download') {
     const actions = element('div', 'actions')
-    const accept = button(status.installationMode === 'manual' ? updateDownloadLabel(status, locale) : locale === 'zh' ? '同意更新' : 'Update now', 'primary')
+    const accept = button(updateDownloadLabel(status, locale, accepting), 'primary')
     accept.disabled = accepting
     accept.addEventListener('click', () => {
+      if (accepting) return
       accepting = true
       render()
-      void ipcRenderer.invoke('updates:download').catch((error: unknown) => {
+      void ipcRenderer.invoke('updates:open-download').catch((error: unknown) => {
+        applyStatus({ ...(currentStatus ?? status), phase: 'error', manual: true, message: error instanceof Error ? error.message : (locale === 'zh' ? '操作失败，请重试。' : 'The update action failed. Please try again.') })
+        console.error('[updater] unable to open update download', error)
+      }).finally(() => {
         accepting = false
-        console.error('[updater] unable to download update', error)
         render()
       })
     })
     actions.append(accept, skipButton(status))
-    body.appendChild(actions)
-  }
-
-  if (status.phase === 'downloading') {
-    const actions = element('div', 'actions')
-    actions.appendChild(skipButton(status))
-    body.appendChild(actions)
-  }
-
-  if (status.phase === 'downloaded') {
-    const actions = element('div', 'actions')
-    const install = button(updateInstallLabel(status, locale, installing), 'primary')
-    install.disabled = installing
-    install.addEventListener('click', () => {
-      installing = true
-      render()
-      void ipcRenderer.invoke('updates:install').catch((error: unknown) => {
-        installing = false
-        console.error('[updater] unable to install update', error)
-        render()
-      })
-    })
-    actions.append(install, skipButton(status))
     body.appendChild(actions)
   }
 
@@ -973,7 +942,7 @@ function dismissCurrent(): void {
 }
 
 function isBusy(status: UpdateStatus): boolean {
-  return status.phase === 'checking' || status.phase === 'downloading'
+  return status.phase === 'checking' || accepting
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -1043,20 +1012,6 @@ const styles = `
     opacity: 0.85;
     animation: spin 0.75s linear infinite;
   }
-  .progress {
-    height: 5px;
-    margin-top: 11px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: var(--dsw-alias-bg-layer-2, rgba(32, 33, 36, 0.1));
-  }
-  .progressValue {
-    height: 100%;
-    min-width: 2px;
-    border-radius: inherit;
-    background: #2ea043;
-    transition: width 180ms ease;
-  }
   .actions { display: flex; gap: 8px; margin-top: 13px; }
   button {
     appearance: none;
@@ -1116,7 +1071,6 @@ const styles = `
   }
   @media (prefers-reduced-motion: reduce) {
     .spinner { animation: none; }
-    .progressValue { transition: none; }
   }
 `
 
