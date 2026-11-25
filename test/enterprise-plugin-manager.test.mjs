@@ -10,7 +10,7 @@ const roots = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
 const id = 'a'.repeat(32), key = 'b'.repeat(64)
 
-async function fixture(displayName) {
+async function fixture(displayName, description) {
   const root = await mkdtemp(join(tmpdir(), 'enterprise-manager-'))
   roots.push(root)
   await mkdir(root, { recursive: true })
@@ -23,7 +23,8 @@ async function fixture(displayName) {
       if (input.action === 'uninstall') state.installed = []
       else if (input.action === 'install') state.installed = [{
         plugin_id: id, name: 'company-demo', version: '1.0.0', enabled: true, status: 'enabled',
-        ...(displayName === undefined ? {} : { display_name: displayName })
+        ...(displayName === undefined ? {} : { display_name: displayName }),
+        ...(description === undefined ? {} : { description })
       }]
       else state.installed[0].status = input.action === 'enable' ? 'enabled' : 'disabled'
       return market.state()
@@ -43,18 +44,19 @@ async function fixture(displayName) {
 
 describe('enterprise source through the real Plugin Manager methods', () => {
   it.each([
-    ['企业示例插件', '企业示例插件'],
-    [undefined, 'company-demo']
-  ])('lists title %2$s and manages the bundle without ordinary Profile projection', async (displayName, title) => {
-    const { manager, source, market, events, root } = await fixture(displayName)
+    { displayName: '企业示例插件', description: '企业内部报表', meta: { title: '企业示例插件', description: '企业内部报表' } },
+    { displayName: undefined, description: undefined, meta: { title: 'company-demo' } },
+    { displayName: '企业示例插件', description: '  ', meta: { title: '企业示例插件' } }
+  ])('lists metadata $meta and manages the bundle without ordinary Profile projection', async ({ displayName, description, meta }) => {
+    const { manager, source, market, events, root } = await fixture(displayName, description)
     const before = await readFile(join(root, 'package.json'), 'utf8')
     const installed = await performMarketAction(manager, source, market, { action: 'install', plugin_id: id })
     expect(installed.result).toMatchObject({ application: 'applied', stage: 'enable', changed: true })
     expect(installed.result.restartReason).toBeUndefined()
     const target = `enterprise:${key}:${id}`
-    expect((await manager.listBundles()).find(row => row.name === target)).toMatchObject({
-      installed: true, enabled: true, meta: { title }
-    })
+    const bundle = (await manager.listBundles()).find(row => row.name === target)
+    expect(bundle).toMatchObject({ installed: true, enabled: true })
+    expect(bundle?.meta).toEqual(meta)
     expect(await manager.setBundleEnabled(target, false)).toMatchObject({ application: 'applied', enabled: false })
     expect(await manager.setBundleEnabled(target, true)).toMatchObject({ application: 'applied', enabled: true })
     expect(await manager.removeBundle(target)).toMatchObject({ application: 'applied', stage: 'remove', changed: true })
