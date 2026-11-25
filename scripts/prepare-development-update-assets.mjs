@@ -13,7 +13,7 @@ export async function prepareDevelopmentUpdateAssets(directory, target, version)
   assert(Object.hasOwn(PLATFORMS, target), `Unknown development target: ${target}`)
   const platform = PLATFORMS[target]
   const assets = await developmentAssets(directory, platform)
-  const updatePackage = assets.find(file => file.endsWith(platform === 'windows' ? '.exe' : '.zip'))
+  const updatePackage = assets.find(file => file.endsWith(platform === 'windows' ? '.exe' : '.dmg'))
   assert(updatePackage, `Missing development update package: ${target}`)
   const hash = createHash('sha512')
   for await (const chunk of createReadStream(updatePackage)) hash.update(chunk)

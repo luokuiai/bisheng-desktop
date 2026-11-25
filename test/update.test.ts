@@ -70,12 +70,12 @@ describe('macOS update metadata', () => {
     }
     expect(merged.version).toBe('0.2.0')
     expect(merged.files.map((file) => file.url)).toEqual([
-      'bisheng-mac-arm64.dmg',
-      'bisheng-mac-arm64.zip',
-      'bisheng-mac-x64.dmg',
-      'bisheng-mac-x64.zip'
+      'luokui-ai-mac-arm64.dmg',
+      'luokui-ai-mac-arm64.zip',
+      'luokui-ai-mac-x64.dmg',
+      'luokui-ai-mac-x64.zip'
     ])
-    expect(merged.path).toBe('bisheng-mac-arm64.zip')
+    expect(merged.path).toBe('luokui-ai-mac-arm64.zip')
     expect(merged.releaseDate).toBe('2026-08-14T02:00:00.000Z')
   })
 })
@@ -85,12 +85,12 @@ function metadata(architecture: 'arm64' | 'x64', releaseDate: string) {
     version: '0.2.0',
     files: [
       {
-        url: `bisheng-mac-${architecture}.zip`,
+        url: `luokui-ai-mac-${architecture}.zip`,
         sha512: `zip-${architecture}`,
         size: 100
       },
       {
-        url: `bisheng-mac-${architecture}.dmg`,
+        url: `luokui-ai-mac-${architecture}.dmg`,
         sha512: `dmg-${architecture}`,
         size: 200
       }

@@ -18,16 +18,16 @@ async function writeFixture(root, name, content) {
 }
 
 async function createFixture(root) {
-  const armZip = await writeFixture(root, 'bisheng-mac-arm64.zip', Buffer.from('PK-arm'))
-  const x64Zip = await writeFixture(root, 'bisheng-mac-x64.zip', Buffer.from('PK-x64'))
-  const windows = await writeFixture(root, 'bisheng-windows-x64-setup.exe', Buffer.from('MZ-win'))
+  const armZip = await writeFixture(root, 'luokui-ai-mac-arm64.zip', Buffer.from('PK-arm'))
+  const x64Zip = await writeFixture(root, 'luokui-ai-mac-x64.zip', Buffer.from('PK-x64'))
+  const windows = await writeFixture(root, 'luokui-ai-windows-x64-setup.exe', Buffer.from('MZ-win'))
   const dmg = Buffer.concat([Buffer.alloc(512), Buffer.from('koly')])
-  const armDmg = await writeFixture(root, 'bisheng-mac-arm64.dmg', dmg)
-  const x64Dmg = await writeFixture(root, 'bisheng-mac-x64.dmg', dmg)
+  const armDmg = await writeFixture(root, 'luokui-ai-mac-arm64.dmg', dmg)
+  const x64Dmg = await writeFixture(root, 'luokui-ai-mac-x64.dmg', dmg)
   await Promise.all([
-    writeFile(path.join(root, 'bisheng-mac-arm64.zip.blockmap'), 'blockmap'),
-    writeFile(path.join(root, 'bisheng-mac-x64.zip.blockmap'), 'blockmap'),
-    writeFile(path.join(root, 'bisheng-windows-x64-setup.exe.blockmap'), 'blockmap'),
+    writeFile(path.join(root, 'luokui-ai-mac-arm64.zip.blockmap'), 'blockmap'),
+    writeFile(path.join(root, 'luokui-ai-mac-x64.zip.blockmap'), 'blockmap'),
+    writeFile(path.join(root, 'luokui-ai-windows-x64-setup.exe.blockmap'), 'blockmap'),
     writeFile(path.join(root, 'latest-mac.yml'), stringify({ version: '1.2.3', files: [armZip, x64Zip, armDmg, x64Dmg] })),
     writeFile(path.join(root, 'latest.yml'), stringify({ version: '1.2.3', files: [windows] }))
   ])
@@ -38,7 +38,7 @@ describe('release asset verification', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'dsh-release-assets-'))
     try {
       await createFixture(root)
-      await writeFile(path.join(root, `bisheng-mac-${architecture}.dmg`), Buffer.concat([Buffer.alloc(512, 1), Buffer.from('koly')]))
+      await writeFile(path.join(root, `luokui-ai-mac-${architecture}.dmg`), Buffer.concat([Buffer.alloc(512, 1), Buffer.from('koly')]))
       await expect(verifyReleaseAssets(root, '1.2.3', { minimumBytes })).rejects.toThrow('latest-mac.yml checksum or size does not match')
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -69,10 +69,10 @@ describe('release asset verification', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'dsh-release-assets-'))
     try {
       await createFixture(root)
-      await rm(path.join(root, 'bisheng-mac-x64.dmg'))
+      await rm(path.join(root, 'luokui-ai-mac-x64.dmg'))
       await expect(
         verifyReleaseAssets(root, '1.2.3', { minimumBytes })
-      ).rejects.toThrow('Missing required release asset: bisheng-mac-x64.dmg')
+      ).rejects.toThrow('Missing required release asset: luokui-ai-mac-x64.dmg')
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -82,7 +82,7 @@ describe('release asset verification', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'dsh-release-assets-'))
     try {
       await createFixture(root)
-      await writeFile(path.join(root, 'bisheng-windows-x64-setup.exe'), 'not-an-exe')
+      await writeFile(path.join(root, 'luokui-ai-windows-x64-setup.exe'), 'not-an-exe')
       await expect(
         verifyReleaseAssets(root, '1.2.3', { minimumBytes })
       ).rejects.toThrow('is not a PE executable')
@@ -101,7 +101,7 @@ describe('release asset verification', () => {
           version: '1.2.3',
           files: [
             {
-              url: 'bisheng-windows-x64-setup.exe',
+              url: 'luokui-ai-windows-x64-setup.exe',
               size: 6,
               sha512: 'wrong-digest'
             }

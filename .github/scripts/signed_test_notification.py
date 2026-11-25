@@ -15,10 +15,10 @@ from feishu_release_notes import send_feishu_notification
 
 INSTALLERS = {
     "macos": [
-        ("macOS Apple Silicon", "bisheng-mac-arm64.dmg"),
-        ("macOS Intel", "bisheng-mac-x64.dmg"),
+        ("macOS Apple Silicon", "luokui-ai-mac-arm64.dmg"),
+        ("macOS Intel", "luokui-ai-mac-x64.dmg"),
     ],
-    "windows": [("Windows x64", "bisheng-windows-x64-setup.exe")],
+    "windows": [("Windows x64", "luokui-ai-windows-x64-setup.exe")],
 }
 
 

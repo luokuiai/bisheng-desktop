@@ -74,9 +74,9 @@ it('builds Windows only for release tags or an explicit manual platform selectio
 })
 
 const releaseAssets = [
-  'bisheng-mac-arm64.dmg',
-  'bisheng-mac-x64.dmg',
-  'bisheng-windows-x64-setup.exe'
+  'luokui-ai-mac-arm64.dmg',
+  'luokui-ai-mac-x64.dmg',
+  'luokui-ai-windows-x64-setup.exe'
 ]
 
 /** The exact Harness build every `@deepseek-ai/dsh-*` production dep is pinned to. */
@@ -258,7 +258,7 @@ describe('GitHub release contract', () => {
       'utf8'
     )
 
-    expect(packageJson.build.artifactName).toBe('bisheng-${os}-${arch}.${ext}')
+    expect(packageJson.build.artifactName).toBe('luokui-ai-${os}-${arch}.${ext}')
     expect(packageJson.build.extraResources).toContainEqual({
       from: 'build/app-icon.png',
       to: 'icon.png'
@@ -316,7 +316,7 @@ describe('GitHub release contract', () => {
       to: 'web-import.html'
     })
     expect(packageJson.build.nsis.artifactName).toBe(
-      'bisheng-windows-${arch}-setup.${ext}'
+      'luokui-ai-windows-${arch}-setup.${ext}'
     )
     expect(packageJson.build.nsis.include).toBe('build/installer.nsh')
     expect(packageJson.build.win.target).toEqual([{ target: 'nsis', arch: ['x64'] }])
@@ -374,9 +374,9 @@ describe('GitHub release contract', () => {
       'latest-mac-x64.yml',
       'latest-mac.yml',
       'latest.yml',
-      'bisheng-mac-arm64.zip.blockmap',
-      'bisheng-mac-x64.zip.blockmap',
-      'bisheng-windows-x64-setup.exe.blockmap'
+      'luokui-ai-mac-arm64.zip.blockmap',
+      'luokui-ai-mac-x64.zip.blockmap',
+      'luokui-ai-windows-x64-setup.exe.blockmap'
     ]) {
       expect(workflow).toContain(asset)
     }
@@ -445,8 +445,8 @@ describe('GitHub release contract', () => {
     ])
     expect(developmentConfig.directories.output).toBe('dist-dev')
     expect(developmentConfig.extraMetadata.dshDesktopChannel).toBe('development')
-    expect(developmentConfig.artifactName).toBe('bisheng-${os}-${arch}.${ext}')
-    expect(developmentConfig.nsis.artifactName).toBe('bisheng-windows-${arch}-setup.${ext}')
+    expect(developmentConfig.artifactName).toBe('luokui-ai-${os}-${arch}.${ext}')
+    expect(developmentConfig.nsis.artifactName).toBe('luokui-ai-windows-${arch}-setup.${ext}')
   })
 
   it('builds and publishes every supported platform', async () => {
@@ -509,8 +509,8 @@ describe('GitHub release contract', () => {
   it('stages unsigned Windows installers directly before publication', async () => {
     const workflow = await readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
     expect(workflow).toContain('Stage unsigned Windows assets in draft release')
-    expect(workflow).toContain('dist/bisheng-windows-x64-setup.exe')
-    expect(workflow).toContain('dist/bisheng-windows-x64-setup.exe.blockmap')
+    expect(workflow).toContain('dist/luokui-ai-windows-x64-setup.exe')
+    expect(workflow).toContain('dist/luokui-ai-windows-x64-setup.exe.blockmap')
     expect(workflow).toContain('dist/latest.yml')
     expect(workflow).not.toMatch(/sign-windows:|DESKTOP_WINDOWS_SIGNING_PIN|JSIGN_JAR|win-unpacked\.tar\.gz/)
     expect(workflow).toContain('verify-release-staging.mjs')

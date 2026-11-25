@@ -479,7 +479,7 @@
       }
     ],
     "detectUpdateChannel": false,
-    "artifactName": "bisheng-${os}-${arch}.${ext}",
+    "artifactName": "luokui-ai-${os}-${arch}.${ext}",
     "mac": {
       "notarize": false,
       "identity": "-",
@@ -518,7 +518,7 @@
       ]
     },
     "nsis": {
-      "artifactName": "bisheng-windows-${arch}-setup.${ext}",
+      "artifactName": "luokui-ai-windows-${arch}-setup.${ext}",
       "include": "build/installer.nsh",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

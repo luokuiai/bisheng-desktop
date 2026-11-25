@@ -219,9 +219,9 @@ print(json.dumps(cards, ensure_ascii=False))
     ])
     expect(cards.every(card => card.elements[0]?.text.content === 'notes')).toBe(true)
     const downloadNames = [
-      'bisheng-windows-x64-setup.exe',
-      'bisheng-mac-arm64.dmg',
-      'bisheng-mac-x64.dmg'
+      'luokui-ai-windows-x64-setup.exe',
+      'luokui-ai-mac-arm64.dmg',
+      'luokui-ai-mac-x64.dmg'
     ]
     for (const [index, releasePath] of [
       'archive/1.0.1',

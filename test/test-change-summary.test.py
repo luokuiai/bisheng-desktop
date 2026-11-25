@@ -128,7 +128,7 @@ class TestChangeSummary(unittest.TestCase):
         text = summary.render_summary(json.dumps(VALID))
         with tempfile.TemporaryDirectory() as work:
             directory = Path(work)
-            (directory / "bisheng-windows-x64-setup.exe").write_bytes(b"installer")
+            (directory / "luokui-ai-windows-x64-setup.exe").write_bytes(b"installer")
             with patch.object(notification, "build_test_changes", return_value=text), patch.object(notification, "verify_download"), patch.object(notification, "send_feishu_notification") as send:
                 notification.notify(directory, "windows", "1.1.0-test.1", "example/desktop", "fixture")
             notes = send.call_args.args[2]

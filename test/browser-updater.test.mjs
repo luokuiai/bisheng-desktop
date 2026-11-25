@@ -12,17 +12,20 @@ import { BrowserUpdater, selectUpdateInstaller } from '../src/main/update/browse
 
 const originalArchitecture = process.arch
 const originalPlatform = process.platform
-const files = ['arm64', 'x64'].flatMap(architecture => ['dmg', 'zip'].map(extension => ({
-  url: new URL(`https://updates.example.test/bisheng-mac-${architecture}.${extension}`),
-  info: { url: `bisheng-mac-${architecture}.${extension}`, sha512: `${architecture}-${extension}-digest`, size: 120 }
-}))).concat({
-  url: new URL('https://updates.example.test/bisheng-windows-x64-setup.exe'),
-  info: { url: 'bisheng-windows-x64-setup.exe', sha512: 'windows-digest', size: 120 }
-})
+const files = ['bisheng', 'luokui-ai'].flatMap(brand => [
+  ...['arm64', 'x64'].flatMap(architecture => ['dmg', 'zip'].map(extension => `${brand}-mac-${architecture}.${extension}`)),
+  `${brand}-windows-x64-setup.exe`
+]).map(filename => ({
+  url: new URL(filename, 'https://updates.example.test/'),
+  info: { url: filename, sha512: `${filename}-digest`, size: 120 }
+}))
 
-function offeredUpdater() {
+function offeredUpdater(brand = 'luokui-ai') {
   const updater = new BrowserUpdater()
-  updater.updateInfoAndProvider = { info: { version: '1.3.0' }, provider: { resolveFiles: () => files } }
+  updater.updateInfoAndProvider = {
+    info: { version: '1.3.0' },
+    provider: { resolveFiles: () => files.filter(file => file.info.url.startsWith(`${brand}-`)) }
+  }
   return updater
 }
 
@@ -38,14 +41,14 @@ afterEach(() => {
   Object.defineProperty(process, 'platform', { value: originalPlatform })
 })
 
-it.each([
-  ['darwin', 'arm64', 'bisheng-mac-arm64.dmg'],
-  ['darwin', 'x64', 'bisheng-mac-x64.dmg'],
-  ['win32', 'x64', 'bisheng-windows-x64-setup.exe']
-])('opens the %s/%s installer in the browser only on request', async (platform, architecture, installer) => {
+it.each(['bisheng', 'luokui-ai'].flatMap(brand => [
+  ['darwin', 'arm64', brand, `${brand}-mac-arm64.dmg`],
+  ['darwin', 'x64', brand, `${brand}-mac-x64.dmg`],
+  ['win32', 'x64', brand, `${brand}-windows-x64-setup.exe`]
+]))('opens the %s/%s installer for the %s feed only on request', async (platform, architecture, brand, installer) => {
   Object.defineProperty(process, 'platform', { value: platform })
   Object.defineProperty(process, 'arch', { value: architecture })
-  const updater = offeredUpdater()
+  const updater = offeredUpdater(brand)
   expect(mocks.openExternal).not.toHaveBeenCalled()
   await updater.openDownload()
   expect(mocks.openExternal).toHaveBeenCalledWith(`https://updates.example.test/${installer}`)
@@ -56,7 +59,7 @@ it.each([
 it('selects Apple Silicon installers under Rosetta', async () => {
   mocks.rosetta = true
   await offeredUpdater().openDownload()
-  expect(mocks.openExternal).toHaveBeenCalledWith('https://updates.example.test/bisheng-mac-arm64.dmg')
+  expect(mocks.openExternal).toHaveBeenCalledWith('https://updates.example.test/luokui-ai-mac-arm64.dmg')
 })
 
 it.each(['file:', 'javascript:', 'ftp:'])('rejects %s installer URLs before invoking the system handler', protocol => {

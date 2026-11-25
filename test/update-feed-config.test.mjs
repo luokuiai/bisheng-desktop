@@ -70,7 +70,7 @@ it.each(feedCases)('embeds the build-time feed and enablement for $platform with
     url: value?.trim() ? 'https://updates.example.com/desktop/' : '',
     updaterCacheDirName: 'desktop-updater'
   })
-  const assetName = platform === 'darwin' ? 'bisheng-mac-x64.dmg' : 'bisheng-windows-x64-setup.exe'
+  const assetName = platform === 'darwin' ? 'luokui-ai-mac-x64.dmg' : 'luokui-ai-windows-x64-setup.exe'
   const content = Buffer.from('release-metadata-fixture')
   const file = path.join(directory, assetName)
   await writeFile(file, content)
