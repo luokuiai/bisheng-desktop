@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import os from 'node:os'
@@ -39,7 +40,12 @@ it.each([
 
 it('keeps release handoff on draft Releases', async () => {
   const source = await readFile(path.resolve(import.meta.dirname, '../.github/workflows/release.yml'), 'utf8')
-  expect(source).not.toMatch(/actions\/(?:upload|download)-artifact@|gh\s+run\s+download|\/actions\/artifacts/)
+  expect(source).not.toMatch(/actions\/download-artifact@|gh\s+run\s+download|\/actions\/artifacts/)
+  const { jobs } = YAML.parse(source)
+  for (const name of ['macos', 'windows-x64']) {
+    expect(jobs[name].steps.some(step => step.uses?.startsWith('actions/upload-artifact@'))).toBe(false)
+    expect(jobs[name].steps.some(step => step.run?.includes('gh release upload'))).toBe(true)
+  }
 })
 
 it.each([
@@ -92,27 +98,14 @@ it('exports artifact step outputs and reads the application version in the CLI',
   expect(metadata.version).toBe(application.version)
 })
 
-it.each([
-  [undefined, '-', 'false'],
-  ['', '-', 'false'],
-  ['  ', '-', 'false'],
-  ['test-cert.p12', undefined, 'true']
-])('selects macOS Dev signing for CSC_LINK=%j', async (certificate, identity, discovery) => {
+it.each([undefined, '', '  ', 'test-cert.p12'])('uses ad-hoc macOS signing regardless of CSC_LINK=%j', certificate => {
   const configPath = path.resolve(import.meta.dirname, '../electron-builder.dev.cjs')
-  const source = await readFile(configPath, 'utf8')
+  const source = readFileSync(configPath, 'utf8')
   const require = createRequire(configPath)
-  const env = { CSC_IDENTITY_AUTO_DISCOVERY: discovery === 'true' ? 'false' : 'true' }
-  if (certificate !== undefined) env.CSC_LINK = certificate
   const module = { exports: {} }
-  runInNewContext(source, { require, module, process: { platform: 'darwin', env } })
-
-  expect(module.exports.mac).toMatchObject({
-    ...require('./package.json').build.mac,
-    identity,
-    forceCodeSigning: true
-  })
-  expect(env.CSC_IDENTITY_AUTO_DISCOVERY).toBe(discovery)
-  expect(env.CSC_LINK).toBe(identity === '-' ? undefined : certificate)
+  runInNewContext(source, { require, module, process: { platform: 'darwin', env: { CSC_LINK: certificate } } })
+  expect(module.exports.mac).toMatchObject({ identity: '-', forceCodeSigning: true, notarize: false })
+  expect(module.exports.afterSign).toBeUndefined()
 })
 
 it('packages PRs and develop pushes, and uploads original-format assets only on develop pushes', async () => {
@@ -129,15 +122,14 @@ it('packages PRs and develop pushes, and uploads original-format assets only on 
     ['package:dev:win', 'bisheng-windows-x64-setup.exe']
   ])
   const packageStep = build.steps.findIndex(step => step.run === 'npm run ${{ matrix.script }}')
-  const verifyStep = build.steps.findIndex(step => step.name === 'Verify app signature inside the macOS installer')
   const artifactStep = build.steps.findIndex(step => step.uses?.startsWith('actions/upload-artifact@'))
   expect(packageStep).toBeGreaterThanOrEqual(0)
   expect(build.steps[packageStep].if).toBeUndefined()
-  expect(verifyStep).toBeGreaterThan(packageStep)
-  expect(build.steps[verifyStep].if).toBe("runner.os == 'macOS'")
-  expect(build.steps[verifyStep].run).toContain('codesign --verify --deep --strict')
-  expect(build.steps[verifyStep].run).toContain('"$mount_point/BISHENG.app"')
-  expect(artifactStep).toBeGreaterThan(verifyStep)
+  expect(build.steps[packageStep].env).toEqual({
+    CSC_FOR_PULL_REQUEST: "${{ runner.os == 'macOS' && github.event_name == 'pull_request' && 'true' || 'false' }}"
+  })
+  expect(source).not.toMatch(/codesign\s+--(?:verify|display)|Signature=adhoc/)
+  expect(artifactStep).toBeGreaterThan(packageStep)
   const upload = build.steps[artifactStep]
   expect(upload.uses).toBe('actions/upload-artifact@v7')
   expect(upload.with).toMatchObject({
@@ -162,7 +154,7 @@ it('only adds update YAML artifacts with the installer retention rules', async (
   expect(shouldPrepare({ event_name: 'pull_request', ref: 'refs/pull/1/merge' })).toBe(false)
   expect(shouldPrepare({ event_name: 'push', ref: 'refs/heads/develop' })).toBe(true)
   expect(shouldPrepare({ event_name: 'push', ref: 'refs/heads/main' })).toBe(false)
-  expect(steps.indexOf(prepare)).toBeGreaterThan(steps.findIndex(step => step.name === 'Verify app signature inside the macOS installer'))
+  expect(steps.indexOf(prepare)).toBeGreaterThan(steps.findIndex(step => step.run === 'npm run ${{ matrix.script }}'))
   const uploads = steps.filter(step => step.uses === 'actions/upload-artifact@v7')
   expect(uploads).toHaveLength(2)
   for (const upload of uploads) {
@@ -178,39 +170,13 @@ it('only adds update YAML artifacts with the installer retention rules', async (
   expect(uploads.map(step => step.with.path)).toEqual(['dist-dev/${{ matrix.installer }}', 'dist-dev/${{ steps.updates.outputs.metadata }}'])
 })
 
-it('only supplies macOS certificate secrets to develop push packaging', async () => {
+it('does not expose commercial signing secrets to PR or develop packaging', async () => {
   const source = await readFile(path.resolve(import.meta.dirname, '../.github/workflows/desktop-build.yml'), 'utf8')
   const { steps } = YAML.parse(source).jobs.build
-  const { env } = steps.find(step => step.run === 'npm run ${{ matrix.script }}')
-  const secrets = { DESKTOP_CSC_LINK: 'test-cert.p12', DESKTOP_CSC_KEY_PASSWORD: 'fixture' }
-  function signingEnvironment(os, event_name, ref) {
-    return Object.fromEntries(Object.entries(env).map(([key, expression]) => [
-      key,
-      new Function('runner', 'github', 'secrets', `return (${expression.slice(3, -2)})`)(
-        { os }, { event_name, ref }, secrets
-      )
-    ]))
-  }
-  expect(signingEnvironment('macOS', 'push', 'refs/heads/develop')).toEqual({
-    CSC_LINK: secrets.DESKTOP_CSC_LINK,
-    CSC_KEY_PASSWORD: secrets.DESKTOP_CSC_KEY_PASSWORD,
-    CSC_FOR_PULL_REQUEST: 'false'
-  })
-  expect(signingEnvironment('macOS', 'pull_request', 'refs/pull/1/merge')).toEqual({
-    CSC_LINK: '',
-    CSC_KEY_PASSWORD: '',
-    CSC_FOR_PULL_REQUEST: 'true'
-  })
-  expect(signingEnvironment('macOS', 'push', 'refs/heads/main')).toEqual({
-    CSC_LINK: '',
-    CSC_KEY_PASSWORD: '',
-    CSC_FOR_PULL_REQUEST: 'false'
-  })
-  expect(signingEnvironment('Windows', 'push', 'refs/heads/develop')).toEqual({
-    CSC_LINK: '',
-    CSC_KEY_PASSWORD: '',
-    CSC_FOR_PULL_REQUEST: 'false'
-  })
+  const env = steps.find(step => step.run === 'npm run ${{ matrix.script }}').env
+  expect(env.CSC_LINK).toBeUndefined()
+  expect(env.CSC_KEY_PASSWORD).toBeUndefined()
+  expect(source).not.toMatch(/secrets\.DESKTOP_(CSC|APPLE|WINDOWS_SIGNING)/)
 })
 
 it.skipIf(process.platform === 'win32').each([
@@ -267,9 +233,7 @@ it('stages every signed and prerelease target before Windows signing', async () 
       expect(evaluate(prepare.if, mode, target)).toBe(true)
       for (const [job, name] of [
         ['windows-x64', 'Stage unsigned Windows assets in draft release'],
-        ['sign-windows', 'Download unsigned Windows assets from draft release'],
-        ['sign-windows', 'Stage signed Windows assets in draft release'],
-        ['macos', 'Stage signed ${{ matrix.label }} assets in draft release']
+        ['macos', 'Stage ad-hoc ${{ matrix.label }} assets in draft release']
       ]) {
         expect(evaluate(jobs[job].steps.find(step => step.name === name).if, mode, target)).toBe(mode !== 'development')
       }

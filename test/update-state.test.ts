@@ -6,28 +6,13 @@ import {
 } from '../src/main/update/update-state'
 
 describe('desktop update state', () => {
-  it('tracks an automatic download from discovery through completion', () => {
+  it('tracks the browser handoff without claiming package download completion', () => {
     let status = initialUpdateStatus('1.0.0')
     status = reduceUpdateStatus(status, { type: 'check', manual: false })
     status = reduceUpdateStatus(status, { type: 'available', version: '1.1.0' })
-    status = reduceUpdateStatus(status, { type: 'progress', percent: 52.37 })
-
+    status = reduceUpdateStatus(status, { type: 'external-download' })
     expect(status).toEqual({
-      phase: 'downloading',
-      currentVersion: '1.0.0',
-      availableVersion: '1.1.0',
-      percent: 52.4,
-      manual: false,
-      source: 'runtime'
-    })
-
-    status = reduceUpdateStatus(status, { type: 'downloaded', version: '1.1.0' })
-    expect(status).toEqual({
-      phase: 'downloaded',
-      currentVersion: '1.0.0',
-      availableVersion: '1.1.0',
-      manual: false,
-      source: 'runtime'
+      phase: 'external-download', currentVersion: '1.0.0', availableVersion: '1.1.0', manual: false, source: 'runtime'
     })
   })
 
@@ -39,30 +24,15 @@ describe('desktop update state', () => {
     expect(status.phase).toBe('up-to-date')
     expect(status.manual).toBe(true)
   })
-
-  it('clamps invalid download percentages', () => {
-    const status = {
-      ...initialUpdateStatus('1.0.0'),
-      availableVersion: '1.1.0'
-    }
-
-    expect(reduceUpdateStatus(status, { type: 'progress', percent: -5 }).percent).toBe(0)
-    expect(reduceUpdateStatus(status, { type: 'progress', percent: 140 }).percent).toBe(100)
-    expect(
-      reduceUpdateStatus(status, { type: 'progress', percent: Number.NaN }).percent
-    ).toBe(0)
-  })
 })
 
-
-it('preserves startup source and release notes through download completion', () => {
+it('preserves startup source and release notes after opening the browser', () => {
   let status = reduceUpdateStatus(initialUpdateStatus('1.0.0'), { type: 'check', manual: false, source: 'startup' })
   status = reduceUpdateStatus(status, { type: 'available', version: '1.1.0', releaseNotes: 'Fixes' })
-  status = reduceUpdateStatus(status, { type: 'progress', percent: 20 })
-  status = reduceUpdateStatus(status, { type: 'downloaded', version: '1.1.0' })
+  status = reduceUpdateStatus(status, { type: 'external-download' })
   expect(status.source).toBe('startup')
   expect(status.releaseNotes).toBe('Fixes')
-  expect(reduceUpdateStatus(status, { type: 'present-manual' })).toMatchObject({ phase: 'downloaded', source: 'manual', manual: true, releaseNotes: 'Fixes' })
+  expect(reduceUpdateStatus(status, { type: 'present-manual' })).toMatchObject({ phase: 'external-download', source: 'manual', manual: true, releaseNotes: 'Fixes' })
 })
 
 it('normalizes only supported release notes and bounds external text', () => {

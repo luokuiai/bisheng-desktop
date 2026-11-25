@@ -128,7 +128,7 @@ export function installWindowsDirectoryInstaller() {
     const { executable, licenseDirectory } = await windows7zipTool()
     const tool = join(directory, '7za.exe')
     await copyFile(executable, tool)
-    await signWindowsPeWithJsign(tool)
+    if (this.packager.platformSpecificBuildOptions.signExecutable !== false) await signWindowsPeWithJsign(tool)
     let adapted = replaceOnce(source, '!include "installSection.nsh"', `!include "${section}"`)
     for (const helper of ['allowOnlyOneInstallerInstance.nsh', 'installUtil.nsh']) {
       const path = join(directory, helper)

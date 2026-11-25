@@ -1,5 +1,7 @@
-import { app, BrowserWindow, ipcMain, powerMonitor } from 'electron'
-import electronUpdater from 'electron-updater'
+import { app, BrowserWindow, ipcMain, powerMonitor, type IpcMainInvokeEvent } from 'electron'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { BrowserUpdater } from './browser-updater'
 import type { UpdateStatus } from '../../shared/contracts'
 import {
   AUTO_INSTALL_ON_APP_QUIT,
@@ -22,18 +24,17 @@ import {
   writeSkippedVersion
 } from './skipped-version'
 
-const { autoUpdater } = electronUpdater
+let autoUpdater: BrowserUpdater
+let updaterReady = Promise.resolve()
 const TRANSIENT_STATUS_MS = 8_000
 const UPDATES_UNAVAILABLE_MESSAGE = 'Online updates are unavailable in this build.'
 
 let status = initialUpdateStatus(app.getVersion())
-let prepareToInstall: (() => Promise<void>) | undefined
 let startupTimer: NodeJS.Timeout | undefined
 let intervalTimer: NodeJS.Timeout | undefined
 let checkPromise: Promise<unknown> | undefined
 let lastCheckedAt = 0
-let installing = false
-let downloading = false
+let openingDownload = false
 let started = false
 let handlersRegistered = false
 let updateLocale: (() => 'en' | 'zh') | undefined
@@ -41,20 +42,24 @@ let skippedVersion: string | undefined
 let skipLoaded = false
 let manualCheck = false
 let manualCheckRequested = false
+let packagedFeedEnabled: boolean | undefined
 
 export function getUpdateStatus(): UpdateStatus {
   return { ...status, locale: updateLocale?.() }
 }
 
-export function registerUpdateHandlers(options: { locale?: () => 'en' | 'zh' } = {}): void {
+export function registerUpdateHandlers(options: { locale?: () => 'en' | 'zh'; assertTrusted?: (event: IpcMainInvokeEvent) => void } = {}): void {
   updateLocale = options.locale ?? updateLocale
   if (handlersRegistered) return
   handlersRegistered = true
   ipcMain.handle('updates:status', () => getUpdateStatus())
   ipcMain.handle('updates:check', () => checkForUpdates(true))
-  ipcMain.handle('updates:install', () => installDownloadedUpdate())
+  ipcMain.handle('updates:open-download', event => {
+    if (!options.assertTrusted) throw new Error('The update download handler requires a trusted main-window sender.')
+    options.assertTrusted(event)
+    return openUpdateDownload()
+  })
   ipcMain.handle('updates:skip', (_event, version: unknown) => skipUpdate(version))
-  ipcMain.handle('updates:download', () => downloadAvailableUpdate())
 }
 
 function skipFile(): string {
@@ -76,6 +81,7 @@ function currentSkippedVersion(): string | undefined {
  * version they skipped.
  */
 export function skipUpdate(version: unknown): UpdateStatus {
+  if (openingDownload) return getUpdateStatus()
   if (typeof version !== 'string' || !version) return getUpdateStatus()
   skippedVersion = version
   skipLoaded = true
@@ -84,8 +90,7 @@ export function skipUpdate(version: unknown): UpdateStatus {
   return getUpdateStatus()
 }
 
-export function startUpdateManager(options: { prepareToInstall: () => Promise<void> }): void {
-  prepareToInstall = options.prepareToInstall
+export function startUpdateManager(): void {
   if (started) return
   started = true
 
@@ -97,7 +102,11 @@ export function startUpdateManager(options: { prepareToInstall: () => Promise<vo
     return
   }
 
-  configureUpdater()
+  updaterReady = (async () => {
+    const { BrowserUpdater } = await import('./browser-updater')
+    autoUpdater = new BrowserUpdater()
+    configureUpdater()
+  })().catch(error => transition({ type: 'error', message: errorMessage(error) }))
   startupTimer = setTimeout(
     () => void checkForUpdates(false, 'startup'),
     UPDATE_STARTUP_DELAY_MS + Math.random() * UPDATE_STARTUP_JITTER_MS
@@ -120,6 +129,9 @@ export async function checkForUpdates(manual = false, source: UpdateStatus['sour
     return getUpdateStatus()
   }
 
+  await updaterReady
+  if (!autoUpdater) return getUpdateStatus()
+
   if (checkPromise) {
     if (manual) {
       manualCheckRequested = true
@@ -128,7 +140,7 @@ export async function checkForUpdates(manual = false, source: UpdateStatus['sour
     await checkPromise
     return getUpdateStatus()
   }
-  if (['downloading', 'downloaded'].includes(status.phase) || (!manual && status.phase === 'available')) {
+  if (openingDownload || (!manual && status.phase === 'available')) {
     if (manual) {
       manualCheck = true
       transition({ type: 'present-manual' })
@@ -154,43 +166,23 @@ export async function checkForUpdates(manual = false, source: UpdateStatus['sour
   return getUpdateStatus()
 }
 
-/**
- * Start the download the user just accepted. Consent and download are one
- * action — an update sits at `available` until it is taken.
- */
-export async function downloadAvailableUpdate(): Promise<UpdateStatus> {
-  if (status.phase !== 'available' || downloading) return getUpdateStatus()
+/** Open only the installer offered by the checked feed, after an explicit click. */
+export async function openUpdateDownload(): Promise<UpdateStatus> {
+  const canOpen = (): boolean => ['available', 'external-download'].includes(status.phase)
+  if (!canOpen() || openingDownload) return getUpdateStatus()
   const expectedVersion = status.availableVersion
-  // A queued manual check can replace an automatic offer. Consent to A must
-  // not download B; history installs already own this lock and cannot await it.
   if (checkPromise) await checkPromise
-  if (status.phase !== 'available' || status.availableVersion !== expectedVersion || downloading) {
-    return getUpdateStatus()
-  }
-  downloading = true
-
+  if (!canOpen() || status.availableVersion !== expectedVersion || openingDownload) return getUpdateStatus()
+  openingDownload = true
   try {
-    await autoUpdater.downloadUpdate()
+    await autoUpdater.openDownload()
+    transition({ type: 'external-download' })
   } catch (error) {
-    transition({ type: 'error', message: errorMessage(error) })
-  } finally {
-    downloading = false
-  }
-
-  return getUpdateStatus()
-}
-
-export async function installDownloadedUpdate(): Promise<void> {
-  if (status.phase !== 'downloaded' || installing) return
-  installing = true
-
-  try {
-    await prepareToInstall?.()
-    autoUpdater.quitAndInstall(false, true)
-  } catch (error) {
-    installing = false
     transition({ type: 'error', message: errorMessage(error) }, true)
+  } finally {
+    openingDownload = false
   }
+  return getUpdateStatus()
 }
 
 export function stopUpdateManager(): void {
@@ -202,8 +194,7 @@ export function stopUpdateManager(): void {
 }
 
 function configureUpdater(): void {
-  // The download is ours to start: an update the user skipped should not be
-  // fetched at all, and update-available is the only place that is known.
+  // Feed checks never launch the browser or start an internal package download.
   autoUpdater.autoDownload = false
   autoUpdater.allowDowngrade = false
   autoUpdater.autoInstallOnAppQuit = AUTO_INSTALL_ON_APP_QUIT
@@ -224,19 +215,12 @@ function configureUpdater(): void {
       transition({ type: 'reset' })
       return
     }
-    // Offered, not fetched: nothing leaves the network until the user accepts
-    // the update, which is the same click that starts the download.
+    // Offer metadata first; opening the browser requires an explicit user action.
     transition({ type: 'available', version: info.version, releaseNotes: normalizeReleaseNotes(info.releaseNotes) })
   })
-  autoUpdater.on('download-progress', (progress) =>
-    transition({ type: 'progress', percent: progress.percent })
-  )
   autoUpdater.on('update-not-available', () => {
     transition({ type: 'not-available' })
   })
-  autoUpdater.on('update-downloaded', (info) =>
-    transition({ type: 'downloaded', version: info.version })
-  )
   autoUpdater.on('error', (error) => {
     transition({ type: 'error', message: errorMessage(error) })
   })
@@ -246,7 +230,7 @@ function transition(event: UpdateStateEvent, manualOverride?: boolean): void {
   status = reduceUpdateStatus(status, event)
   if (manualOverride !== undefined) status.manual = manualOverride
 
-  console.info('[updater] status', status.phase, status.percent ?? '')
+  console.info('[updater] status', status.phase)
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.webContents.send('updates:status-changed', getUpdateStatus())
   }
@@ -257,7 +241,18 @@ function checkAfterResume(): void {
 }
 
 function supportsUpdates(): boolean {
-  return supportsAutoUpdates(app.isPackaged, process.platform)
+  if (!supportsAutoUpdates(app.isPackaged, process.platform)) return false
+  if (packagedFeedEnabled === undefined) {
+    try {
+      const metadata: unknown = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8'))
+      packagedFeedEnabled = typeof metadata === 'object' && metadata !== null &&
+        'dshDesktopUpdatesEnabled' in metadata && metadata.dshDesktopUpdatesEnabled === true
+    } catch (error) {
+      console.warn('[updater] Could not read packaged update policy; online updates disabled.', error)
+      packagedFeedEnabled = false
+    }
+  }
+  return packagedFeedEnabled
 }
 
 function errorMessage(error: unknown): string {

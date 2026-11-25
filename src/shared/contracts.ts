@@ -24,8 +24,7 @@ export type UpdatePhase =
   | 'idle'
   | 'checking'
   | 'available'
-  | 'downloading'
-  | 'downloaded'
+  | 'external-download'
   | 'up-to-date'
   | 'error'
   | 'unsupported'
@@ -34,7 +33,6 @@ export interface UpdateStatus {
   phase: UpdatePhase
   currentVersion: string
   availableVersion?: string
-  percent?: number
   message?: string
   manual: boolean
   source?: 'startup' | 'runtime' | 'manual'

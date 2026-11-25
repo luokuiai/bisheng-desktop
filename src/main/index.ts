@@ -146,8 +146,7 @@ import {
 } from './state/plugin-removal'
 import {
   appBundlePathFromExecutable,
-  auditLaunchAgents,
-  quarantineAppBundleLaunchAgents
+  auditLaunchAgents
 } from './state/launch-agent-audit'
 import {
   clearStaleHarnessAuthCookies,
@@ -1243,32 +1242,6 @@ async function auditInstalledLaunchAgents(dshHome: string): Promise<void> {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     runtime.note(`[desktop] launch agent audit failed: ${detail}`)
-  }
-}
-
-/**
- * A LaunchAgent executing anything from inside this application bundle races
- * an in-place update even when it is correctly configured as Node. Harness is
- * already stopped by the caller, so quarantine is durable for the update
- * window. Any failure aborts the install instead of risking a partial bundle.
- */
-async function quarantineInstalledLaunchAgentsForUpdate(dshHome: string): Promise<void> {
-  const appBundlePath = appBundlePathFromExecutable(process.execPath)
-  if (appBundlePath === undefined) return
-  const result = await quarantineAppBundleLaunchAgents({
-    dshHome,
-    appBundlePath,
-    log: (message) => runtime.note(message)
-  })
-  for (const finding of result.findings) {
-    const owner = finding.owner === undefined ? '' : ` installed by ${finding.owner}`
-    runtime.note(
-      `[desktop] quarantined the background service ${finding.label}${owner} before update`
-    )
-  }
-  if (result.failures.length > 0) {
-    for (const failure of result.failures) runtime.note(`[desktop] pre-update launch agent: ${failure}`)
-    throw new Error('Unable to stop background services before replacing BISHENG.')
   }
 }
 
@@ -3415,7 +3388,7 @@ async function bootstrap(): Promise<void> {
   installDesktopProtocol(desktopResourcePath)
   if (process.platform === 'darwin') app.dock?.setIcon(desktopIconPath())
   launchDirectory = await ensureLaunchRoot(app.getPath('userData'))
-  registerUpdateHandlers({ locale: harnessLocale })
+  registerUpdateHandlers({ locale: harnessLocale, assertTrusted: assertTrustedMainWindowEvent })
   nativeTheme.themeSource = harnessThemePreference()
   ensureTray()
   const dshHome = join(app.getPath('userData'), 'harness')
@@ -3800,20 +3773,7 @@ async function bootstrap(): Promise<void> {
   } else {
     await launchHarness()
   }
-  if (!developmentBuild) {
-    startUpdateManager({
-      prepareToInstall: async () => {
-        await Promise.all([runtime.stop(), enterpriseDesktop?.stop()])
-        const dshHome = join(app.getPath('userData'), 'harness')
-        await quarantineInstalledLaunchAgentsForUpdate(dshHome)
-        quitting = true
-        // NSIS may force-kill before will-quit; clear the marker so the next
-        // launch does not treat this intentional update as an unclean-exit.
-        desktopDiagnostics?.markCleanExit()
-        stopUpdateManager()
-      }
-    })
-  }
+  if (!developmentBuild) startUpdateManager()
 }
 
 if (isDaemonLaunch(process.env, process.platform)) {

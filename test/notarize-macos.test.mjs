@@ -73,10 +73,10 @@ describe('macOS app notarization', () => {
     }
   })
 
-  it('uses the explicit hook with built-in notarization disabled to avoid duplicate submissions', async () => {
+  it('keeps commercial notarization disconnected from packaged builds', async () => {
     const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
     expect(pkg.build.mac.notarize).toBe(false)
-    expect(pkg.build.afterSign).toBe('scripts/notarize-macos.mjs')
+    expect(pkg.build.afterSign).toBeUndefined()
     expect(pkg.devDependencies['@electron/notarize']).toBe('2.5.0')
   })
 })

@@ -90,6 +90,8 @@ When upgrading Harness:
 
 Harness includes architecture-specific native dependencies. Build each installer on the operating system and architecture where it will run.
 
+To enable updates in a production package, set `BISHENG_UPDATE_URL` to the public HTTP(S) update directory containing `latest-mac.yml`, `latest.yml`, and their referenced packages. On macOS use `export BISHENG_UPDATE_URL="https://updates.example.com/desktop/"`; on Windows PowerShell use `$env:BISHENG_UPDATE_URL = "https://updates.example.com/desktop/"`. The URL is embedded in `resources/app-update.yml` during packaging. Missing, empty, or whitespace-only values allow packaging but disable online checks, with no upstream fallback. Nonempty invalid URLs fail packaging. Release YAML is still generated when the URL is blank; its existence does not enable updates in that build. `package:dev:*` commands require no update URL and keep online updates disabled. For GitHub builds, set the repository Actions variable of the same name; see the [release runbook](release-runbook.md).
+
 ```bash
 # macOS Apple Silicon, on an Apple Silicon Mac or runner
 npm run package:mac:arm64
@@ -103,11 +105,11 @@ npm run package:win
 
 Do not invoke `electron-builder --win` from macOS or Linux for a distributable Windows package. The target verification scripts intentionally reject host/target mismatches.
 
-For local development packages, use the corresponding `package:dev:*` command. macOS uses the certificate supplied by `CSC_LINK` with `CSC_KEY_PASSWORD`. With `CSC_LINK` absent or empty, it signs ad hoc.
+For local development packages, use the corresponding `package:dev:*` command. Production packages use app ID `com.luokuiai.bisheng`; development packages use `com.luokuiai.bisheng.dev`. Both use ad-hoc signing on macOS and unsigned NSIS installers on Windows. Windows resource editing remains enabled so the icon and product metadata are included. Apple certificate, notarization, and Windows UKey credentials are not required.
 
-Packages run Harness and package commands through the packaged Electron runtime (a utility process and the Helper in Node mode on macOS, the executable in Node mode on Windows); no standalone `node_modules/node` may be present under `app.asar.unpacked`. Verify the packaged native-module, pnpm and Harness smokes, then the final signed installer's separate installed-app smoke before handoff. Office preparation is included in dev, build and test: it fetches hash-locked native Python and wheels into `.build/office-runtime`, outside ASAR, and ships no second Node runtime. See [Office runtime](office-runtime.md). The locked Electron 43.0.0 must remain compatible with the native loader: `scripts/verify-target.mjs` fails packaging when Electron in Node mode cannot load it, and changing Electron still requires a new Windows package qualification. Before packaging, `node scripts/probe-electron-node-runtime.mjs` boots Harness from the repository through Electron Node mode with a disposable `DSH_HOME` and checks an authenticated HTTP response; the Windows CI job runs it on every build.
+Packages run Harness and package commands through the packaged Electron runtime (a utility process and the Helper in Node mode on macOS, the executable in Node mode on Windows); no standalone `node_modules/node` may be present under `app.asar.unpacked`. Verify the packaged native-module, pnpm and Harness smokes, then the final installer's separate installed-app smoke before handoff. Office preparation is included in dev, build and test: it fetches hash-locked native Python and wheels into `.build/office-runtime`, outside ASAR, and ships no second Node runtime. See [Office runtime](office-runtime.md). The locked Electron 43.0.0 must remain compatible with the native loader: `scripts/verify-target.mjs` fails packaging when Electron in Node mode cannot load it, and changing Electron still requires a new Windows package qualification. Before packaging, `node scripts/probe-electron-node-runtime.mjs` boots Harness from the repository through Electron Node mode with a disposable `DSH_HOME` and checks an authenticated HTTP response; the Windows CI job runs it on every build.
 
-Formal release artifacts are built, signed, and published by the tag workflow. A local build or pull-request check is not formal release evidence.
+Formal release artifacts are built and published by the tag workflow using the same signing policy. A local build or pull-request check is not formal release evidence.
 
 ## Contribution hygiene
 

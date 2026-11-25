@@ -6,28 +6,31 @@ import {
   rollbackEmptyMessage,
   isNewManualPresentation,
   shouldShowUpdate,
+  updateDownloadLabel,
   updateHeadline,
   updateMessage
 } from '../src/preload/update-view'
 
-const downloading: UpdateStatus = {
-  phase: 'downloading',
-  currentVersion: '1.0.0',
-  availableVersion: '1.1.0',
-  percent: 42.2,
-  manual: false
+const browserDownload: UpdateStatus = {
+  phase: 'external-download', currentVersion: '1.0.0', availableVersion: '1.1.0', manual: false
 }
 
-const downloaded: UpdateStatus = {
-  phase: 'downloaded',
-  currentVersion: '1.0.0',
-  availableVersion: '1.1.0',
-  manual: false
-}
+describe('browser update copy', () => {
+  it.each(['zh', 'en'] as const)('labels initial, busy, and repeated browser actions in %s', locale => {
+    const available: UpdateStatus = { ...browserDownload, phase: 'available' }
+    expect(updateDownloadLabel(available, locale)).toBe(locale === 'zh' ? '更新' : 'Update')
+    expect(updateDownloadLabel(available, locale, true)).toBe(locale === 'zh' ? '正在打开浏览器…' : 'Opening browser…')
+    expect(updateDownloadLabel(browserDownload, locale)).toBe(locale === 'zh' ? '重新下载' : 'Download again')
+    const headline = updateHeadline(browserDownload, locale)
+    expect(headline.title).toBe(locale === 'zh' ? '已打开浏览器下载' : 'Download opened in browser')
+    expect(headline.description).toContain(locale === 'zh' ? '下载完成后保存工作并退出' : 'When it finishes, save your work and quit')
+    expect(headline.description).not.toContain(locale === 'zh' ? '已下载完成' : 'has downloaded')
+  })
+})
 
 describe('desktop update card visibility', () => {
-  it('shows automatic downloads but keeps automatic background checks quiet', () => {
-    expect(shouldShowUpdate(downloading)).toBe(true)
+  it('shows a browser handoff but keeps automatic background checks quiet', () => {
+    expect(shouldShowUpdate(browserDownload)).toBe(true)
     expect(
       shouldShowUpdate({ phase: 'checking', currentVersion: '1.0.0', manual: false })
     ).toBe(false)
@@ -36,26 +39,26 @@ describe('desktop update card visibility', () => {
     ).toBe(true)
   })
 
-  it('keeps a dismissed version hidden while its download phase changes', () => {
-    expect(isUpdateDismissed(downloading, '1.1.0')).toBe(true)
-    expect(isUpdateDismissed({ ...downloading, availableVersion: '1.2.0' }, '1.1.0')).toBe(
+  it('keeps a dismissed version hidden after the browser handoff', () => {
+    expect(isUpdateDismissed(browserDownload, '1.1.0')).toBe(true)
+    expect(isUpdateDismissed({ ...browserDownload, availableVersion: '1.2.0' }, '1.1.0')).toBe(
       false
     )
   })
 
-  it('dismisses a downloaded update when the user closes the card', () => {
-    expect(isUpdateDismissed(downloaded, null)).toBe(false)
-    expect(isUpdateDismissed(downloaded, '1.0.0')).toBe(false)
-    expect(isUpdateDismissed(downloaded, '1.1.0')).toBe(true)
+  it('dismisses the browser handoff when the user closes the card', () => {
+    expect(isUpdateDismissed(browserDownload, null)).toBe(false)
+    expect(isUpdateDismissed(browserDownload, '1.0.0')).toBe(false)
+    expect(isUpdateDismissed(browserDownload, '1.1.0')).toBe(true)
   })
 
-  it('formats localized progress copy', () => {
-    expect(updateMessage(downloading, 'zh')).toBe('正在下载更新 42%')
-    expect(updateMessage(downloading, 'en')).toBe('Downloading update 42%')
+  it('describes the browser handoff without claiming download completion', () => {
+    expect(updateMessage(browserDownload, 'zh')).toBe('已在浏览器中打开下载')
+    expect(updateMessage(browserDownload, 'en')).toBe('Download opened in your browser')
   })
 })
 
-describe('accepting an update is what starts the download', () => {
+describe('an explicit action opens the browser download', () => {
   it('asks rather than announcing a download already under way', () => {
     const available: UpdateStatus = {
       phase: 'available',

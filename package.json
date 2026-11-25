@@ -324,7 +324,7 @@
     "koffi": "3.1.5"
   },
   "build": {
-    "appId": "io.bisheng",
+    "appId": "com.luokuiai.bisheng",
     "productName": "BISHENG",
     "asar": true,
     "asarUnpack": [
@@ -475,13 +475,15 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://dshdesktop.com/work/updates/latest/"
+        "url": "${env.BISHENG_UPDATE_URL}"
       }
     ],
     "detectUpdateChannel": false,
     "artifactName": "bisheng-${os}-${arch}.${ext}",
     "mac": {
       "notarize": false,
+      "identity": "-",
+      "forceCodeSigning": true,
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns",
       "hardenedRuntime": true,
@@ -502,13 +504,8 @@
     },
     "win": {
       "icon": "build/icon.ico",
-      "verifyUpdateCodeSignature": true,
-      "signtoolOptions": {
-        "publisherName": "Beijing Shuju Xiangsu Intelligence Technology Co., Ltd.",
-        "signingHashAlgorithms": [
-          "sha256"
-        ]
-      },
+      "signExecutable": false,
+      "verifyUpdateCodeSignature": false,
       "requestedExecutionLevel": "asInvoker",
       "target": [
         {
@@ -527,6 +524,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
+    "beforePack": "scripts/configure-update-feed.cjs",
     "afterPack": "scripts/after-pack.cjs",
     "protocols": [
       {
@@ -536,7 +534,5 @@
         ]
       }
     ]
-,
-    "afterSign": "scripts/notarize-macos.mjs"
   }
 }

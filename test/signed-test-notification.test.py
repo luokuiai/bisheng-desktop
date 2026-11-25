@@ -54,6 +54,7 @@ class SignedNotificationTest(unittest.TestCase):
                     self.assertEqual("mac-arm64" in links, target != "windows")
                     self.assertNotIn("/releases/latest/", links)
                     self.assertNotIn("smoke", send.call_args.args[2])
+                    self.assertNotIn("签名测试安装包", send.call_args.args[2])
             with patch.object(module, "verify_download", side_effect=RuntimeError("not public")), patch.object(module, "send_feishu_notification") as send:
                 with self.assertRaises(RuntimeError):
                     module.notify(directory, "all", "1.0.2", "owner/product", "hook")
