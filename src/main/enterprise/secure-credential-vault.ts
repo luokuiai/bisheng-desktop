@@ -9,6 +9,7 @@ export interface EnterpriseIdentity {
   id?: string
   username?: string
   display_name?: string
+  avatar_url?: string
   name?: string
 }
 
@@ -60,6 +61,7 @@ function parseIdentity(value: unknown): EnterpriseIdentity | undefined {
     ...(optionalString(value.id) ? { id: value.id as string } : {}),
     ...(optionalString(value.username) ? { username: value.username as string } : {}),
     ...(optionalString(value.display_name) ? { display_name: value.display_name as string } : {}),
+    ...(optionalString(value.avatar_url) ? { avatar_url: value.avatar_url as string } : {}),
     ...(optionalString(value.name) ? { name: value.name as string } : {})
   }
 }

@@ -67,13 +67,19 @@ function requiredTimestamp(value, field) {
   return text
 }
 
-function identity(value, kind) {
+function identity(value, kind, base) {
   if (!isObject(value)) throw new Error(`BiSheng response is missing ${kind}.`)
   if (kind === 'user') {
+    const photo = typeof value.avatar_url === 'string' && value.avatar_url.trim() && value.avatar_url.length <= 4096
+      ? URL.parse(value.avatar_url, base) : null
+    const avatarUrl = photo && !photo.username && !photo.password &&
+      (photo.protocol === 'https:' || (photo.protocol === 'http:' && photo.origin === URL.parse(base)?.origin))
+      ? photo.href : undefined
     return {
       id: requiredString(value.id, 'user id', 256),
       username: requiredString(value.username, 'username', 256),
-      display_name: requiredString(value.display_name, 'display name', 256)
+      display_name: requiredString(value.display_name, 'display name', 256),
+      ...(avatarUrl ? { avatar_url: avatarUrl } : {})
     }
   }
   return {
@@ -154,7 +160,7 @@ export function parseToken(value, base, receivedAt = Date.now()) {
     refresh_expires_at: new Date(receivedAt + refreshExpiresIn * 1000).toISOString(),
     session_id: requiredString(value.session_id, 'session id', 256),
     session_expires_at: requiredTimestamp(value.session_expires_at, 'session expiry'),
-    user: identity(value.user, 'user'),
+    user: identity(value.user, 'user', base),
     tenant: identity(value.tenant, 'tenant')
   }
 }
