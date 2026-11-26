@@ -59,10 +59,9 @@ function isFirstInstallEligible(dshHome = process.env.DSH_HOME) {
 }
 
 export function apply(ctx, config) {
-  // The install marker is machine-owned state, not an editable preference.
-  // Re-derive it whenever the plugin mounts instead of trusting a profile
-  // override that may have been copied from another installation.
-  config.eligible = isFirstInstallEligible()
+  // Temporarily skip the notice for all installations without recording an
+  // acknowledgment. Restore marker-based eligibility when the notice returns.
+  config.eligible = false
 
   const dshHome = process.env.DSH_HOME
   ctx.connection.fetch.register({

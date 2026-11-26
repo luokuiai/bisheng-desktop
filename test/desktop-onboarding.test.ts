@@ -105,7 +105,7 @@ function createPrimitiveStub() {
   } as const
 }
 
-function loadPlugin(fetchImpl?: typeof fetch, showNotice = false) {
+function loadPlugin(fetchImpl?: typeof fetch, showNotice = false, configureReact?: (react: ReturnType<typeof createReactStub>) => void) {
   const source = readFileSync(
     path.join(projectRoot, 'packages', 'dsh-desktop-onboarding', 'client.js'),
     'utf8'
@@ -139,6 +139,7 @@ function loadPlugin(fetchImpl?: typeof fetch, showNotice = false) {
   if (!definition) throw new Error('client.js did not register a plugin definition')
   const React = createReactStub()
   if (showNotice) Object.assign(React, { useState: (initial: unknown) => [initial === 'loading' ? 'show' : initial, () => undefined] })
+  configureReact?.(React)
   const primitives = createPrimitiveStub()
   return {
     plugin: definition.factory((id) => {
@@ -384,7 +385,7 @@ describe('DSH Desktop onboarding host eligibility', () => {
     }
   }
 
-  it('publishes eligible only for a valid new-install marker', async () => {
+  it('temporarily skips the notice even for a valid new-install marker without acknowledging it', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'dsh-onboarding-host-'))
     const previous = process.env.DSH_HOME
     try {
@@ -398,7 +399,35 @@ describe('DSH Desktop onboarding host eligibility', () => {
       const first = createHostHarness()
       const firstConfig = { eligible: false }
       applyHost(first.ctx, firstConfig)
-      expect(firstConfig.eligible).toBe(true)
+      expect(firstConfig.eligible).toBe(false)
+      const request = vi.fn<typeof fetch>()
+      let decision: unknown = 'loading'
+      const effects: Array<() => unknown> = []
+      const { plugin } = loadPlugin(request, false, (react) => {
+        Object.assign(react, {
+          useState: (initial: unknown) => initial === 'loading'
+            ? [decision, (value: unknown) => { decision = value }]
+            : [initial, () => undefined],
+          useEffect: (effect: () => unknown) => { effects.push(effect) }
+        })
+      })
+      const { ctx, registrations } = createCtx({
+        configForms: {
+          get: () => ({ getSnapshot: () => ({ mode: 'memory', value: firstConfig }), subscribe: () => () => undefined }),
+          describe: () => ({})
+        }
+      })
+      plugin.apply(ctx)
+      const entry = registrations[0]!
+      const complete = vi.fn()
+      const props = { ...entry.config.inject?.(), complete }
+      expect(entry.component(props)).toBeNull()
+      effects.splice(0).forEach(effect => effect())
+      expect(entry.component(props)).toBeNull()
+      effects.splice(0).forEach(effect => effect())
+      expect(complete).toHaveBeenCalledOnce()
+      expect(request).not.toHaveBeenCalled()
+      await expect(readFile(path.join(root, '.desktop-onboarding-state.json'))).rejects.toMatchObject({ code: 'ENOENT' })
       expect(first.configure).toHaveBeenCalledWith({ auto: false }, first.fiber)
 
       await writeFile(path.join(root, '.desktop-install-state.json'), '{broken')
@@ -453,7 +482,7 @@ describe('DSH Desktop onboarding host eligibility', () => {
       await writeFile(path.join(root, '.desktop-onboarding-state.json'), '{broken')
       const brokenAck = { eligible: false }
       applyHost(createHostHarness().ctx, brokenAck)
-      expect(brokenAck.eligible).toBe(true)
+      expect(brokenAck.eligible).toBe(false)
     } finally {
       if (previous === undefined) delete process.env.DSH_HOME
       else process.env.DSH_HOME = previous
@@ -478,7 +507,7 @@ describe('DSH Desktop onboarding host eligibility', () => {
     }
   })
 
-  it('cleans up a failed acknowledgment write and keeps the installation eligible', async () => {
+  it('cleans up a failed explicit acknowledgment write while the notice is disabled', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'dsh-onboarding-write-failure-'))
     const previous = process.env.DSH_HOME
     try {
@@ -491,10 +520,10 @@ describe('DSH Desktop onboarding host eligibility', () => {
       const host = createHostHarness()
       const config = { eligible: false }
       applyHost(host.ctx, config)
-      expect(config.eligible).toBe(true)
+      expect(config.eligible).toBe(false)
       const route = host.ctx.connection.fetch.register.mock.calls[0]?.[0] as unknown as { fetch: () => Promise<Response> }
       expect((await route.fetch()).status).toBe(500)
-      expect(config.eligible).toBe(true)
+      expect(config.eligible).toBe(false)
       expect((await readdir(root)).some(name => name.endsWith('.tmp'))).toBe(false)
     } finally {
       if (previous === undefined) delete process.env.DSH_HOME
