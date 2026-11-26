@@ -172,7 +172,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   const botBack = registrations.get('desktop-bot-sidebar-back')
   await act(async () => root.render(React.createElement(React.Fragment, null,
     botBack && React.createElement(botBack.component, { ...botBack.props, t: key => dictionaries.get('desktop.chatWork')[activeLocale][key] }),
-    React.createElement('aside', { 'data-dsh-sidebar-root': navigationOptions.wide === false ? '' : undefined }, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: navigationOptions.wide ?? true, expandSidebar: navigationOptions.expandSidebar, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }, ...(navigationOptions.panels || [])], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection }), React.createElement(SidebarFooter)),
+    React.createElement('aside', { className: navigationOptions.wide === false ? 'pI_x6G_sidebarCol' : undefined, 'data-dsh-sidebar-root': navigationOptions.wide === false ? '' : undefined }, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: navigationOptions.wide ?? true, expandSidebar: navigationOptions.expandSidebar, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }, ...(navigationOptions.panels || [])], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection }), React.createElement(SidebarFooter)),
     React.createElement(content.component, { ...content.props, rightbarWidth: 420, work: React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }) })
   )))
   return {
@@ -1095,6 +1095,25 @@ it('switches DS Bot between its existing icon rail and expanded sidebar in both 
   }
 })
 
+it('keeps the Chat layout bounds when the floating sidebar opens and closes', async () => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+    if (this.id === 'dsh-panel-chat') return new DOMRect(0, 56, 960, 700)
+    if (this.classList.contains('pI_x6G_sidebarCol') && this.parentElement.hasAttribute('data-dsh-sidebar-preview')) {
+      return new DOMRect(8, 46, 280, 700)
+    }
+    return new DOMRect()
+  })
+  await mount(true, {}, false, undefined, false, { wide: false })
+  const presentation = window.dshEnterpriseChat.present
+  const initial = presentation.mock.lastCall[0]
+  expect(initial).toMatchObject({ visible: true, bounds: { x: 0, y: 56, width: 960, height: 700 } })
+  await act(async () => container.setAttribute('data-dsh-sidebar-preview', ''))
+  expect(presentation.mock.lastCall[0]).toMatchObject({ bounds: initial.bounds, coveredLeft: 294 })
+  await act(async () => container.removeAttribute('data-dsh-sidebar-preview'))
+  expect(presentation.mock.lastCall[0].bounds).toEqual(initial.bounds)
+  expect(presentation.mock.lastCall[0]).not.toHaveProperty('coveredLeft')
+})
+
 it('reserves the hosted app toolbar, yields to host overlays and returns to the existing app directory', async () => {
   const sidebar = document.createElement('div')
   sidebar.className = 'bt-leftcol'
@@ -1153,6 +1172,24 @@ it('reserves the hosted app toolbar, yields to host overlays and returns to the 
     expect(bridge.present.mock.lastCall[0]).not.toHaveProperty('hostedAppBounds')
     expect(ui.draft()).toBe(draft)
   } finally { geometry.mockRestore(); sidebar.remove() }
+})
+
+it('reserves the docked Bot sidebar layout width while its visual edge is sliding', async () => {
+  const rail = document.createElement('aside')
+  rail.className = 'bt-leftcol'
+  rail.dataset.left = 'open'
+  Object.defineProperties(rail, { offsetLeft: { value: 8 }, offsetWidth: { value: 280 } })
+  rail.getBoundingClientRect = () => new DOMRect(-160, 0, 280, 700)
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+    const inset = Number.parseFloat(this.closest('.dshModes')?.style.getPropertyValue('--dsh-plugin-rail-inset')) || 0
+    return new DOMRect(inset, 56, 960 - inset, 700)
+  })
+  await mount(true)
+  try {
+    await act(async () => document.body.append(rail))
+    expect(container.querySelector('.dshModes').style.getPropertyValue('--dsh-plugin-rail-inset')).toBe('300px')
+    expect(window.dshEnterpriseChat.present.mock.lastCall[0].bounds.x).toBe(300)
+  } finally { await act(async () => rail.remove()) }
 })
 
 it('retries a hosted app and routes closing through the destination owner', async () => {

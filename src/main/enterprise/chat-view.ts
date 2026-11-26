@@ -425,7 +425,7 @@ export class EnterpriseChatView {
 
   private layout(): void {
     if (!this.view || !this.owner || this.owner.isDestroyed() || !this.presentation) return
-    const { bounds, visible, theme, hostedAppBounds } = this.presentation
+    const { bounds, visible, theme, hostedAppBounds, coveredLeft } = this.presentation
     const hosted = !this.presentation.settings && !!this.hostedApp.snapshot()
     const onSettingsPath = /\/workspace\/settings\//u.test(this.view.webContents.getURL())
     const surfaceReady = this.presentation.settings ? this.settingsSection === this.presentation.settings && this.isSettingsReady() : !onSettingsPath
@@ -442,14 +442,21 @@ export class EnterpriseChatView {
     const contentBounds = windowBounds(bounds, zoom, width, height, Math.ceil)
     const { x, y } = contentBounds
     const windowDialog = this.modalOpen && !this.presentation.settings
-    this.view.setBounds(windowDialog ? { x: 0, y: 0, width, height } : contentBounds)
+    const crop = !windowDialog && !this.presentation.settings && coveredLeft
+      ? Math.min(contentBounds.width, Math.max(0, Math.round((bounds.x + coveredLeft) * zoom) - x))
+      : 0
+    this.view.setBounds(windowDialog ? { x: 0, y: 0, width, height } : {
+      ...contentBounds, x: x + crop, width: contentBounds.width - crop
+    })
     // The host card is drawn by the desktop skin; the native view must not
     // paint square corners over it. Dialogs fill the window and stay square.
-    this.view.setBorderRadius(windowDialog ? 0 : this.presentation.radius ?? 0)
+    const radius = this.presentation.radius ?? 0
+    this.view.setBorderRadius(windowDialog || crop ? 0 : radius)
     const viewZoom = this.view.webContents.getZoomFactor()
-    const viewportScript = chatDialogViewportScript(windowDialog ? {
-      x: x / viewZoom, y: y / viewZoom, width: contentBounds.width / viewZoom, height: contentBounds.height / viewZoom
-    } : undefined)
+    const viewportScript = chatDialogViewportScript(windowDialog || crop ? {
+      x: (windowDialog ? x : -crop) / viewZoom, y: windowDialog ? y / viewZoom : 0,
+      width: contentBounds.width / viewZoom, height: contentBounds.height / viewZoom
+    } : undefined, crop ? { radius: radius / viewZoom } : undefined)
     if (this.state.phase === 'ready' && viewportScript !== this.dialogViewport) {
       this.dialogViewport = viewportScript
       void this.view.webContents.executeJavaScript(viewportScript).catch(() => {
@@ -462,7 +469,7 @@ export class EnterpriseChatView {
     const surface = new RegExp(MODULE_ROUTE_PATTERN, 'u').test(new URL(this.view.webContents.getURL() || 'about:blank').pathname)
       ? this.presentation.palette?.surface
       : undefined
-    this.view.setBackgroundColor(windowDialog ? '#00000000' : surface ? `#${surface.map((channel) => channel.toString(16).padStart(2, '0')).join('')}` : theme === 'dark' ? '#141416' : '#ffffff')
+    this.view.setBackgroundColor(windowDialog || crop ? '#00000000' : surface ? `#${surface.map((channel) => channel.toString(16).padStart(2, '0')).join('')}` : theme === 'dark' ? '#141416' : '#ffffff')
     if (this.state.phase === 'ready') this.applyTheme()
   }
 

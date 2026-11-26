@@ -1,14 +1,17 @@
 interface ContentBounds { x: number; y: number; width: number; height: number }
 
-/** The app keeps its chat-region geometry while body portals use the full native window. */
-export function chatDialogViewportScript(bounds: ContentBounds | undefined): string {
+/** Keep the app's geometry when the native view is expanded for a dialog or cropped by the sidebar. */
+export function chatDialogViewportScript(bounds: ContentBounds | undefined, crop?: { radius: number }): string {
+  const selector = crop ? 'html[data-dsh-sidebar-cropped]' : 'html[data-dsh-window-dialog]'
   const css = bounds ? `
-    html[data-dsh-window-dialog] { --dsh-chat-viewport-width: ${bounds.width}px; --dsh-chat-viewport-height: ${bounds.height}px; }
-    html[data-dsh-window-dialog], html[data-dsh-window-dialog] body { background: transparent !important; }
-    html[data-dsh-window-dialog] #root {
+    ${selector} { --dsh-chat-viewport-width: ${bounds.width}px; --dsh-chat-viewport-height: ${bounds.height}px; }
+    ${selector}, ${selector} body { background: transparent !important; }
+    ${selector} #root {
       position: fixed; left: ${bounds.x}px; top: ${bounds.y}px;
       width: ${bounds.width}px; height: ${bounds.height}px; overflow: hidden;
+      ${crop ? `border-radius: ${crop.radius}px;` : ''}
     }
+    ${selector} .dsh-web-chat { width: var(--dsh-chat-viewport-width) !important; }
   ` : ''
   return `(() => {
     const root = document.documentElement;
@@ -17,8 +20,11 @@ export function chatDialogViewportScript(bounds: ContentBounds | undefined): str
     if (css) {
       if (!style) { style = document.createElement('style'); style.id = 'dsh-window-dialog-viewport'; document.head.appendChild(style); }
       if (style.textContent !== css) style.textContent = css;
-      root.dataset.dshWindowDialog = 'open';
+      root.toggleAttribute('data-dsh-sidebar-cropped', ${!!crop});
+      if (${!!crop}) delete root.dataset.dshWindowDialog;
+      else root.dataset.dshWindowDialog = 'open';
     } else {
+      root.removeAttribute('data-dsh-sidebar-cropped');
       delete root.dataset.dshWindowDialog;
       style?.remove();
     }

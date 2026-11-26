@@ -921,6 +921,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         const railSelector = '.bt-leftcol'
         let observedLeading
         let observedBotSidebar
+        let sidebarPreviewColumn
         let railInset = 0
         let railFrame = null
         const rails = new Set()
@@ -945,7 +946,8 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
               if (rail === botSidebar && !botSidebarDocked) continue
               const bounds = rail.getBoundingClientRect()
               if (!bounds.width || !bounds.height) continue
-              nextInset = Math.max(nextInset, bounds.right + (Number.isFinite(railGap) ? railGap : 12) - baseLeft)
+              const right = rail === botSidebar ? Math.max(bounds.right, rail.offsetLeft + rail.offsetWidth) : bounds.right
+              nextInset = Math.max(nextInset, Math.ceil(right + (Number.isFinite(railGap) ? railGap : 12) - baseLeft))
             }
             if (nextInset !== railInset) {
               railInset = nextInset
@@ -956,12 +958,11 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           const rect = panel.current?.getBoundingClientRect()
           if (!rect) return
           const sidebar = document.querySelector('[data-dsh-sidebar-root]')
-          // The preview is outside the grid. Give only the native view room for it.
+          // The preview overlays the grid. Crop the native view behind it without
+          // changing the remote page's layout width or moving the Work panel.
           const preview = shellFrame?.hasAttribute('data-dsh-sidebar-preview') && sidebar?.closest('.pI_x6G_sidebarCol')
-          // Reserve the final width while the compositor animates the preview.
-          const sidebarRight = preview
-            ? shellFrame.getBoundingClientRect().left + preview.offsetLeft + preview.offsetWidth
-            : sidebar?.checkVisibility({ checkVisibilityCSS: true }) ? sidebar.getBoundingClientRect().right : 0
+          const previewRight = preview ? preview.getBoundingClientRect().right + 6 : 0
+          const sidebarRight = !preview && sidebar?.checkVisibility({ checkVisibilityCSS: true }) ? sidebar.getBoundingClientRect().right : 0
           // DS Bot folds the shell sidebar and portals its fixed-left replacement
           // to body. Its layout width stays stable during the slide-in animation.
           const botSidebarRight = botSidebarDocked ? botSidebar.getBoundingClientRect().width : 0
@@ -991,20 +992,22 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           const chatVisible = mode === 'chat' && !surfaceOpen && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
           const settingsVisible = remote && !hostOverlayOpen && state.connected && remote.bounds.width > 0 && remote.bounds.height > 0
           const wideSidebar = chatVisible && document.querySelector('[data-dsh-sidebar-root][data-dsh-sidebar-wide="true"]')?.getBoundingClientRect()
-          const overlayBounds = settingsVisible ? remote.bounds : chatVisible ? { x: baseX, y, height: rect.height, wideSidebar } : undefined
+          const overlayBounds = settingsVisible ? remote.bounds : chatVisible ? { x: Math.max(baseX, previewRight), y, height: rect.height, wideSidebar } : undefined
           const floatingRight = overlays.fitBeside(overlayBounds)
-          const x = Math.max(baseX, floatingRight)
+          const visibleLeft = Math.min(rect.right, Math.max(baseX, previewRight, floatingRight))
+          const x = preview ? baseX : visibleLeft
           const remoteBounds = remote && { ...remote.bounds, x: Math.max(remote.bounds.x, floatingRight),
             width: Math.max(0, remote.bounds.width - Math.max(0, floatingRight - remote.bounds.x)) }
           const hostedRect = chatVisible ? hostedSeat.current?.getBoundingClientRect() : undefined
-          if (hostedRect) panel.current.style.setProperty('--dsh-hosted-start-offset', `${x - rect.x}px`)
+          if (hostedRect) panel.current.style.setProperty('--dsh-hosted-start-offset', `${visibleLeft - rect.x}px`)
           void bridge.present({
             visible: remote ? settingsVisible && remoteBounds.width > 0 : chatVisible,
             ...(remote ? { settings: remote.section } : {}),
             ...(palette ? { palette } : {}),
             radius,
             bounds: remote ? remoteBounds : { x, y, width: Math.max(0, rect.right - x), height: Math.max(0, rect.height) },
-            ...(hostedRect ? { hostedAppBounds: { x, y: hostedRect.y, width: Math.max(0, hostedRect.right - x), height: Math.max(0, hostedRect.height) } } : {}),
+            ...(!remote && preview && visibleLeft > x ? { coveredLeft: visibleLeft - x } : {}),
+            ...(hostedRect ? { hostedAppBounds: { x: visibleLeft, y: hostedRect.y, width: Math.max(0, hostedRect.right - visibleLeft), height: Math.max(0, hostedRect.height) } } : {}),
             theme: document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light',
             locale: locale.getSnapshot().active === 'zh' ? 'zh' : 'en'
           }).catch(() => {})
@@ -1021,7 +1024,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           railFrame = requestAnimationFrame(() => {
             railFrame = null
             present()
-            if ([...rails].some(rail => rail.getAnimations?.().some(animation =>
+            if ([...rails, sidebarPreviewColumn].some(rail => rail?.getAnimations?.().some(animation =>
               animation.pending || animation.playState === 'running'))) followRailMotion()
           })
         }
@@ -1034,6 +1037,9 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
             if (observe) rail.addEventListener(event, onRailMotion)
             else rail.removeEventListener(event, onRailMotion)
           }
+        }
+        const onPreviewMotion = event => {
+          if (event.target === sidebarPreviewColumn && event.propertyName === 'translate') followRailMotion()
         }
         const syncRails = () => {
           const current = new Set(document.querySelectorAll(railSelector))
@@ -1067,7 +1073,11 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         if (panel.current) resize.observe(panel.current)
         if (hostedSeat.current) resize.observe(hostedSeat.current)
         const sidebar = document.querySelector('[data-dsh-sidebar-root]')
-        if (sidebar) resize.observe(sidebar)
+        if (sidebar) {
+          resize.observe(sidebar)
+          sidebarPreviewColumn = sidebar.closest('.pI_x6G_sidebarCol')
+          sidebarPreviewColumn?.addEventListener('transitionrun', onPreviewMotion)
+        }
         const botSidebarState = new MutationObserver(present)
         // Watch the leading seat and the portalled sidebar without scanning the
         // conversation subtree or reacting to the temporary palette probe.
@@ -1087,6 +1097,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         present()
         return () => {
           railMount.disconnect()
+          sidebarPreviewColumn?.removeEventListener('transitionrun', onPreviewMotion)
           for (const rail of rails) observeRailMotion(rail, false)
           if (railFrame !== null) cancelAnimationFrame(railFrame)
           modes?.removeAttribute('data-dsh-plugin-rail-inset')
@@ -1512,7 +1523,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           .dshBotSidebarBack:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
           .bt-rail-top .dshBotSidebarBack{width:36px;height:36px;border-radius:var(--dsw-radius-md)}
           .dshBotSidebarBack:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:1px}
-          .bt-side-top>span.bt-brand:has(>.dshBotSidebarTitle)>span:first-child:not([class]){display:none}
+          .bt-side-top span.bt-brand:has(>.dshBotSidebarTitle)>span:first-child:not([class]){display:none}
           .dshBotSidebarTitle{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:14px}
           .bt-account-menu>[data-dsh-bot-menu-hidden]{display:none!important}
           .dshNavigationMenu{display:flex;flex-direction:column;position:relative;width:100%}.dshNavigationMenu .dshNavigationMenuList{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
@@ -1523,7 +1534,8 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           .dshNavigationOrderLabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
           .dshNavigationOrderGrip,.dshNavigationOrderPlacement{color:var(--dsw-alias-label-secondary);font-size:12px;flex:none}
           .dshModes{grid-column:2 / -1;min-width:0;min-height:0;width:100%;height:100%;display:flex;flex-direction:column;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
-          .dshModesHeader{height:56px;flex:none;display:flex;align-items:center;justify-content:center}
+          .dshModes{--dsh-mode-header-height:56px}
+          .dshModesHeader{height:var(--dsh-mode-header-height);flex:none;display:flex;align-items:center;justify-content:center}
           html[data-platform=darwin] .dshModesHeader{-webkit-app-region:drag}
           .dshModesTabs{display:flex;padding:3px;border-radius:24px;background:var(--dsw-alias-bg-layer-2);-webkit-app-region:no-drag}
           html[data-platform=darwin] body[data-dsh-desktop-ui=dsh] .dshModesHeader + .dshWorkContent [data-sidebar-right-expand] {
@@ -1561,6 +1573,36 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           }
           .dshWorkContent{display:grid;grid-template:minmax(0,1fr) / minmax(0,1fr) 0px;isolation:isolate}.dshWorkContent[hidden]{display:none}
           .dshWorkContent>.pI_x6G_handle[data-side=rightbar]{grid-area:auto;right:calc(var(--dsh-work-rightbar-width) - 4px);margin-left:0}
+          .dshModesHeader + .dshWorkContent > [data-rightbar-col] { margin-block-start: calc(-1 * var(--dsh-mode-header-height)); }
+          .dshModesHeader + .dshWorkContent > .pI_x6G_handle[data-side=rightbar] { top: calc(-1 * var(--dsh-mode-header-height)); }
+          .dshWorkContent [data-sidebar-right-panel] { overflow: visible; }
+          .dshWorkContent [data-sidebar-right-panel] [data-dockkit-host="dock"][data-dockkit-column="0"],
+          .dshWorkContent [data-sidebar-right-panel] [data-dockkit-empty] {
+            box-shadow: -3px 0 10px rgb(0 0 0 / 0.08), -12px 0 30px -10px rgb(0 0 0 / 0.16);
+            border-start-start-radius: var(--dsk-card-radius);
+            border-end-start-radius: var(--dsk-card-radius);
+          }
+          .dshWorkContent [data-sidebar-right-panel] [data-dockkit-host="dock"][data-dockkit-column="0"] > [data-dockkit-pane] {
+            border-inline-start: 0;
+            border-start-start-radius: inherit;
+            border-end-start-radius: inherit;
+          }
+          html[data-platform="darwin"] .dshWorkContent [data-sidebar-right-panel] :is([data-dockkit-host="dock"], [data-dockkit-empty]),
+          html[data-platform="darwin"] .dshWorkContent > .pI_x6G_handle[data-side=rightbar] { -webkit-app-region: no-drag; }
+          @media (prefers-reduced-motion: no-preference) {
+            .dshWorkContent [data-sidebar-right-panel] :is([data-dockkit-host="dock"], [data-dockkit-empty], [data-dockkit-divider]) {
+              transition: transform 220ms cubic-bezier(.25,.75,.25,1), visibility 0s linear 220ms;
+            }
+            .dshWorkContent [data-sidebar-right-panel][data-sidebar-right-open] :is([data-dockkit-host="dock"], [data-dockkit-empty], [data-dockkit-divider]) { transition-delay: 0s; }
+            @starting-style {
+              .dshWorkContent [data-sidebar-right-panel][data-sidebar-right-open] :is([data-dockkit-host="dock"], [data-dockkit-empty], [data-dockkit-divider]) {
+                transform: translateX(calc(var(--dsh-sidebar-width) + 24px));
+              }
+            }
+            .dshWorkContent [data-sidebar-right-panel]:not([data-sidebar-right-open]) :is([data-dockkit-host="dock"], [data-dockkit-empty], [data-dockkit-divider]) {
+              transform: translateX(calc(var(--dsh-sidebar-width) + 24px));
+            }
+          }
           .dshWorkContent[data-reveal-controls=true]:not([hidden]) [data-dsh-hero-controls]{clip-path:inset(-8px -8px -8px -8px);transition:clip-path 180ms cubic-bezier(.23,1,.32,1)}
           @starting-style{.dshWorkContent[data-reveal-controls=true]:not([hidden]) [data-dsh-hero-controls]{clip-path:inset(-8px 100% -8px -8px)}}
           @media(prefers-reduced-motion:reduce){.dshWorkContent[data-reveal-controls=true] [data-dsh-hero-controls]{transition:none;clip-path:none}}
@@ -2076,19 +2118,21 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         --dsk-card-radius: 24px;
         --dsk-card-border: 1px solid var(--dsw-alias-border-l2);
         --dsk-card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -24px rgb(0 0 0 / 0.30);
+        --dsk-main-shadow: 0 2px 6px rgb(0 0 0 / 0.10), 0 8px 24px rgb(0 0 0 / 0.12);
         --dsk-card-surface: var(--dsw-alias-bg-layer-1);
         --dsk-page-surface: var(--dsw-alias-bg-module-platform);
         --dsk-content-surface: color-mix(in srgb, var(--dsk-card-surface) 25%, var(--dsk-page-surface));
-        background: var(--dsk-page-surface);
+        --dsk-sidebar-surface: color-mix(in oklab, var(--dsk-content-surface) 97.5%, black);
+        background: var(--dsk-sidebar-surface);
       }
       /* Keep space for the macOS caption inside the sidebar, not outside the panels. */
       html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] {
         --dsk-shell-top: calc(var(--dsh-frame-top-clearance, 48px) + 10px);
       }
 
-      /* Shell: page ground, inset cards, hairline separators. */
+      /* Shell ground and inset panels. */
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame {
-        background: var(--dsk-page-surface);
+        background: var(--dsk-sidebar-surface);
         padding: var(--dsk-shell-top) 12px 12px;
         column-gap: var(--dsk-shell-column-gap);
       }
@@ -2109,10 +2153,10 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       .pI_x6G_frame [data-dsh-sidebar-root] {
         padding-block-start: var(--dsk-shell-top);
       }
-      /* Reserve the traffic lights on the left and leave higher native
-         controls (e.g. the collapsed sidebar opener) clickable. */
+      /* Work owns the empty caption strip. Chat and module pages draw their
+         own top row in a native view, where controls need pointer input. */
       html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
-      .pI_x6G_frame:not(:has(.dshModes > .dshModesHeader))::before {
+      .pI_x6G_frame:not(:has(.dshModes > :is(.dshModesHeader, #dsh-panel-chat:not([hidden]))))::before {
         content: "";
         position: absolute;
         inset: 0 0 auto 88px;
@@ -2147,7 +2191,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       .pI_x6G_frame[data-sidebar-collapsed] [data-dsh-sidebar-wide="false"] {
         padding-block-start: var(--dsk-shell-top);
       }
-      /* In full screen the sidebar owns its toggle in both widths. */
+      /* Fullscreen keeps a sidebar toggle outside the hover preview. */
       html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] [data-dsh-sidebar-root] {
         position: relative;
       }
@@ -2161,7 +2205,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] {
         --dsh-frame-leading-clearance: 84px;
       }
-      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed] .hHd-Xa_topStrip {
+      html[data-platform="darwin"][data-fullscreen="true"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-sidebar-collapsed]:not([data-dsh-sidebar-preview]) .hHd-Xa_topStrip {
         display: flex;
         justify-content: center;
         height: 34px;
@@ -2177,17 +2221,32 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         display: inline;
       }
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol {
-        background: var(--dsk-content-surface);
+        background: var(--dsk-sidebar-surface);
         border: var(--dsk-card-border);
         border-radius: var(--dsk-card-radius);
         box-shadow: var(--dsk-card-shadow);
         overflow: hidden;
       }
       html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol {
+        display: flex;
+        justify-content: flex-end;
         border: 0;
         border-start-end-radius: 0;
         border-end-end-radius: 0;
         box-shadow: none;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_sidebarCol > [data-dsh-sidebar-root] { flex: none; }
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
+      .pI_x6G_frame:not([data-sidebar-collapsed]) > .pI_x6G_sidebarCol {
+        position: relative;
+      }
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
+      .pI_x6G_frame:not([data-sidebar-collapsed]) > .pI_x6G_sidebarCol::before {
+        content: "";
+        position: absolute;
+        inset: 0 4px auto 120px;
+        block-size: var(--dsh-frame-top-clearance, 48px);
+        -webkit-app-region: drag;
       }
       /* DS Bot replaces the collapsed Harness rail with its own docked card. */
       body[data-dsh-desktop-ui="dsh"]:has(> .bt-leftcol:is([data-left="open"], [data-left="rail"]):not([data-leaving], [aria-hidden="true"], [hidden]))
@@ -2200,7 +2259,10 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       }
       html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
       .pI_x6G_frame[data-dsh-sidebar-preview] > .pI_x6G_sidebarCol {
-        position: relative;
+        position: absolute;
+        inset-block: 0;
+        inset-inline-start: 0;
+        grid-area: auto;
         margin-block: 46px 10px;
         margin-inline-start: 8px;
         z-index: 14;
@@ -2211,6 +2273,19 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         box-shadow: var(--dsw-elevation-panel);
       }
       @media (prefers-reduced-motion: no-preference) {
+        html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame:not([data-dragging], [data-rightbar-instant], [data-rightbar-fullscreen]),
+        html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-animating]:not([data-dragging]) {
+          transition: grid-template-columns 150ms cubic-bezier(.25,.75,.25,1);
+        }
+        html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+        .pI_x6G_frame[data-sidebar-collapsed]:not([data-dsh-sidebar-preview]) > .pI_x6G_sidebarCol {
+          transition: visibility 0s linear 150ms;
+          pointer-events: none;
+        }
+        html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] .pI_x6G_frame[data-animating] .hHd-Xa_fading > * {
+          opacity: 1;
+          transition: none;
+        }
         html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
         .pI_x6G_frame[data-dsh-sidebar-preview] > .pI_x6G_sidebarCol {
           translate: 0 0;
@@ -2331,9 +2406,9 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       }
       body[data-dsh-desktop-ui="dsh"] .pI_x6G_centerCol {
         background: var(--dsk-content-surface);
-        border: var(--dsk-card-border);
+        border: 0;
         border-radius: var(--dsk-card-radius);
-        box-shadow: var(--dsk-card-shadow);
+        box-shadow: var(--dsk-main-shadow);
         overflow: hidden;
       }
       /*
@@ -2346,15 +2421,19 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         margin-left: var(--dsh-plugin-rail-inset, 0px);
         width: calc(100% - var(--dsh-plugin-rail-inset, 0px));
         background: var(--dsk-content-surface);
-        border: var(--dsk-card-border);
+        border: 0;
         border-radius: var(--dsk-card-radius);
-        box-shadow: var(--dsk-card-shadow);
+        box-shadow: var(--dsk-main-shadow);
         overflow: hidden;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+      :is(.pI_x6G_frame > .pI_x6G_centerCol, .dshModes) {
+        position: relative;
+        z-index: 1;
       }
       /* Work mode nests the stock center column; the mode panel already carries the card. */
       body[data-dsh-desktop-ui="dsh"] .dshModes[data-dsh-workspace-dock] {
         background: var(--dsk-page-surface);
-        border-color: transparent;
         border-radius: 0;
         box-shadow: none;
       }
@@ -2390,7 +2469,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         --bt-font: var(--dsw-font-family, system-ui, sans-serif);
         --bt-main: var(--dsk-content-surface);
         --bt-card: var(--dsk-card-surface);
-        --bt-sidebar: var(--dsk-content-surface);
+        --bt-sidebar: var(--dsk-sidebar-surface);
         --bt-ink: var(--dsw-alias-label-primary);
         --bt-ink-2: var(--dsw-alias-label-secondary);
         --bt-ink-3: var(--dsw-alias-label-tertiary);
@@ -2409,10 +2488,10 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         top: var(--dsk-shell-top);
         bottom: 12px;
         --bt-lc-clear: 0px;
-        background: var(--dsk-content-surface);
+        background: var(--dsk-sidebar-surface);
         border: 0;
         border-radius: var(--dsk-card-radius);
-        box-shadow: var(--dsk-card-shadow);
+        box-shadow: 3px 0 14px rgb(0 0 0 / 0.10);
       }
       html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] > .bt-leftcol[data-left] {
         inset-block: 0;
@@ -2420,18 +2499,37 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         border-start-end-radius: 0;
         border-end-end-radius: 0;
       }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"] > .bt-leftcol:is([data-left="open"], [data-left="rail"]):not([data-leaving]) {
+        --bt-leftcol-fill: var(--dsk-sidebar-surface);
+        z-index: 0;
+        box-shadow: none;
+      }
+      html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+      .bt-leftcol[data-left="open"] .bt-side-top .bt-side-heading:has(:is(.bt-workbench-back, .dshBotSidebarBack)) {
+        position: static;
+        block-size: auto;
+        min-block-size: 28px;
+        padding-inline: 0;
+        border: 0;
+        background: transparent;
+        -webkit-app-region: no-drag;
+      }
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
+      > .bt-leftcol[data-left="open"]:has(:is(.bt-workbench-back, .dshBotSidebarBack)) {
+        --bt-lc-clear: calc(var(--dsh-frame-top-clearance, 48px) - 10px);
+      }
+      html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"]
+      > .bt-leftcol[data-left="open"]:has(:is(.bt-workbench-back, .dshBotSidebarBack))::before {
+        content: "";
+        position: absolute;
+        inset: 0 4px auto 88px;
+        block-size: var(--bt-lc-clear);
+        -webkit-app-region: drag;
+      }
       html[data-platform="darwin"]:not([data-fullscreen="true"]) body[data-dsh-desktop-ui="dsh"] > .bt-leftcol[data-left] {
         --bt-lc-clear: var(--dsk-shell-top);
       }
-      body[data-dsh-desktop-ui="dsh"] > .bt-leftcol[data-left]::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        z-index: 1;
-        border: var(--dsk-card-border);
-        border-radius: inherit;
-        pointer-events: none;
-      }
+      body[data-dsh-desktop-ui="dsh"] .dshWorkContent :is(.bt-pane, .bt-rightcol) { border: 0; }
       body[data-dsh-desktop-ui="dsh"] .bt-leftcol .bt-leftcol-foot {
         border-top: 1px solid var(--dsw-alias-border-l1);
       }
@@ -2658,11 +2756,40 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         }
         style.textContent = `
           [data-dsh-sidebar-brand-identity] { display:none !important; }
-          :root { --dsh-page-title-top-spacing:56px; }
-          /* Top-level page titles align with the sidebar brand row. Keep
-             conversation chrome and detail/dialog headers in their own layout. */
-          [data-plugin-panel] > header[data-window-drag] {
-            padding-top:var(--dsh-page-title-top-spacing);
+          body[data-dsh-desktop-ui="dsh"] {
+            --dsh-module-gutter: 18px;
+            --dsh-module-top: 12px;
+            --dsh-module-title: 0.875rem;
+          }
+          body[data-dsh-desktop-ui="dsh"] .dshWorkContent :is([data-plugin-panel], [data-testid="task-manager-page"] .t-XoWW_pageContent) {
+            max-inline-size: none;
+            padding-inline: var(--dsh-module-gutter);
+          }
+          body[data-dsh-desktop-ui="dsh"] [data-plugin-panel] > * { max-inline-size: none; }
+          body[data-dsh-desktop-ui="dsh"] .dshWorkContent :is([data-plugin-panel] > header[data-window-drag], [data-testid="task-manager-page"] .t-XoWW_pageHeading, .dshWbMarketHeader) {
+            padding-block-start: var(--dsh-module-top);
+          }
+          body[data-dsh-desktop-ui="dsh"] .dshWorkContent :is([data-plugin-panel] > header[data-window-drag], [data-testid="task-manager-page"] .t-XoWW_pageHeading, .dshWbMarketHeader, .dig-head) h1,
+          body[data-dsh-desktop-ui="dsh"] .dshWorkContent .workspace-template > header strong {
+            font-size: var(--dsh-module-title);
+            line-height: 1.428571;
+            font-weight: 600;
+          }
+          body[data-dsh-desktop-ui="dsh"] .dshWorkContent :is([data-plugin-panel] > header[data-window-drag], .dshWbMarketHeader) h1 {
+            margin-block-start: 6px;
+          }
+          body[data-dsh-desktop-ui="dsh"] .dshWorkContent :is(.dshWbMarketHeader, .workspace-template > header, .dig-head) {
+            padding-inline: var(--dsh-module-gutter);
+          }
+          body[data-dsh-desktop-ui="dsh"] .dshWorkContent [data-testid="task-manager-page"] .t-XoWW_pageHeading {
+            box-sizing: border-box;
+            min-block-size: 44px;
+          }
+          html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
+          .pI_x6G_frame[data-sidebar-collapsed]:has(> [data-shell-leading]) .dshWorkContent :is(
+            [data-plugin-panel] > header[data-window-drag], [data-testid="task-manager-page"] .t-XoWW_pageHeading, .dshWbMarketHeader, .workspace-template > header, .dig-head
+          ) {
+            padding-inline-start: max(var(--dsh-module-gutter), var(--dsh-frame-leading-clearance, 160px));
           }
           [data-dsh-preset-heading] { display:flex; align-items:center; flex-wrap:wrap; gap:12px 16px; }
           [data-dsh-preset-heading] h2 { margin:0; }
