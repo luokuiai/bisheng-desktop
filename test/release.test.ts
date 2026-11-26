@@ -74,9 +74,9 @@ it('builds Windows only for release tags or an explicit manual platform selectio
 })
 
 const releaseAssets = [
-  'bisheng-mac-arm64.dmg',
-  'bisheng-mac-x64.dmg',
-  'bisheng-windows-x64-setup.exe'
+  'luokui-ai-mac-arm64.dmg',
+  'luokui-ai-mac-x64.dmg',
+  'luokui-ai-windows-x64-setup.exe'
 ]
 
 /** The exact Harness build every `@deepseek-ai/dsh-*` production dep is pinned to. */
@@ -239,6 +239,7 @@ describe('GitHub release contract', () => {
     ) as {
       build: {
         artifactName: string
+        dmg: { title: string }
         extraResources: Array<{ from: string; to: string }>
         win: { target: Array<{ target: string; arch: string[] }>; requestedExecutionLevel?: string }
         nsis: { artifactName: string; include: string }
@@ -258,7 +259,8 @@ describe('GitHub release contract', () => {
       'utf8'
     )
 
-    expect(packageJson.build.artifactName).toBe('bisheng-${os}-${arch}.${ext}')
+    expect(packageJson.build.artifactName).toBe('luokui-ai-${os}-${arch}.${ext}')
+    expect(packageJson.build.dmg.title).toBe('${productName} v${version}')
     expect(packageJson.build.extraResources).toContainEqual({
       from: 'build/app-icon.png',
       to: 'icon.png'
@@ -316,7 +318,7 @@ describe('GitHub release contract', () => {
       to: 'web-import.html'
     })
     expect(packageJson.build.nsis.artifactName).toBe(
-      'bisheng-windows-${arch}-setup.${ext}'
+      'luokui-ai-windows-${arch}-setup.${ext}'
     )
     expect(packageJson.build.nsis.include).toBe('build/installer.nsh')
     expect(packageJson.build.win.target).toEqual([{ target: 'nsis', arch: ['x64'] }])
@@ -354,11 +356,11 @@ describe('GitHub release contract', () => {
     )
 
     expect(packageJson.dependencies['electron-updater']).toBeTruthy()
-    expect(packageJson.build.appId).toBe('com.luokuiai.bisheng')
+    expect(packageJson.build.appId).toBe('com.luokuiai.eai')
     expect(packageJson.build.productName).toBe('LUOKUI-AI')
-    expect(packageJson.build.win.executableName).toBe('BISHENG')
+    expect(packageJson.build.win.executableName).toBe('LUOKUI-AI')
     expect(packageJson.build.protocols).toEqual([
-      { name: 'LUOKUI-AI Enterprise Login', schemes: ['bisheng'] }
+      { name: 'LUOKUI-AI Enterprise Login', schemes: ['luokuiai'] }
     ])
     expect(packageJson.build.publish).toEqual([
       {
@@ -374,9 +376,9 @@ describe('GitHub release contract', () => {
       'latest-mac-x64.yml',
       'latest-mac.yml',
       'latest.yml',
-      'bisheng-mac-arm64.zip.blockmap',
-      'bisheng-mac-x64.zip.blockmap',
-      'bisheng-windows-x64-setup.exe.blockmap'
+      'luokui-ai-mac-arm64.zip.blockmap',
+      'luokui-ai-mac-x64.zip.blockmap',
+      'luokui-ai-windows-x64-setup.exe.blockmap'
     ]) {
       expect(workflow).toContain(asset)
     }
@@ -385,15 +387,15 @@ describe('GitHub release contract', () => {
     expect(workflow).toContain('verify-release-assets.mjs release-assets')
     expect(workflow).toContain('Configure isolated macOS output')
     expect(workflow).toContain(
-      'MACOS_OUTPUT_DIR=$RUNNER_TEMP/bisheng-macos-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${{ matrix.arch }}'
+      'MACOS_OUTPUT_DIR=$RUNNER_TEMP/luokui-ai-macos-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${{ matrix.arch }}'
     )
     expect(workflow).toContain('--config.directories.output="$MACOS_OUTPUT_DIR"')
     expect(workflow).toContain(
       'stage-development-assets.mjs ${{ matrix.arch }} "$MACOS_OUTPUT_DIR"'
     )
     expect(workflow).not.toContain('dist/${{ matrix.app-directory }}/BISHENG.app')
-    expect(workflow).toContain('dist\\win-unpacked\\BISHENG.exe')
-    expect(workflow).toContain('--title "BISHENG $release_tag"')
+    expect(workflow).toContain('dist\\win-unpacked\\LUOKUI-AI.exe')
+    expect(workflow).toContain('--title "LUOKUI-AI $release_tag"')
   })
 
   it('keeps builder jobs from attempting implicit tag publishing', async () => {
@@ -437,16 +439,16 @@ describe('GitHub release contract', () => {
     expect(packageJson.scripts['package:dev:win']).toContain('verify-target.mjs win32 x64')
     expect(packageJson.scripts['package:dev:win']).toContain('electron-builder.dev.cjs')
     expect(packageJson.scripts['package:dev:win']).toContain('--publish never')
-    expect(developmentConfig.appId).toBe('com.luokuiai.bisheng.dev')
+    expect(developmentConfig.appId).toBe('com.luokuiai.eai.dev')
     expect(developmentConfig.productName).toBe('LUOKUI-AI')
     expect(developmentConfig.extraMetadata.productName).toBe('LUOKUI-AI')
     expect(developmentConfig.protocols).toEqual([
-      { name: 'LUOKUI-AI Enterprise Login', schemes: ['bisheng-dev'] }
+      { name: 'LUOKUI-AI Enterprise Login', schemes: ['luokuiai-dev'] }
     ])
     expect(developmentConfig.directories.output).toBe('dist-dev')
     expect(developmentConfig.extraMetadata.dshDesktopChannel).toBe('development')
-    expect(developmentConfig.artifactName).toBe('bisheng-${os}-${arch}.${ext}')
-    expect(developmentConfig.nsis.artifactName).toBe('bisheng-windows-${arch}-setup.${ext}')
+    expect(developmentConfig.artifactName).toBe('luokui-ai-${os}-${arch}.${ext}')
+    expect(developmentConfig.nsis.artifactName).toBe('luokui-ai-windows-${arch}-setup.${ext}')
   })
 
   it('builds and publishes every supported platform', async () => {
@@ -467,7 +469,7 @@ describe('GitHub release contract', () => {
     expect(workflow).toContain('$executable = Join-Path $isolatedApp $sourceExecutable.Name')
     expect(workflow).toContain('-WorkingDirectory $isolatedApp')
     expect(workflow).toContain('Packaged koffi native binding failed (exit code')
-    expect(workflow).toContain("'dist-dev\\win-unpacked\\BISHENG.exe'")
+    expect(workflow).toContain("'dist-dev\\win-unpacked\\LUOKUI-AI.exe'")
     expect(workflow).toContain('if (-not [string]::IsNullOrEmpty($log))')
     expect(workflow).toContain("dsh web: (http://127\\.0\\.0\\.1:\\d+/\\?token=[^\\s]+)")
     expect(workflow).toContain('-SessionVariable harnessSession')
@@ -509,8 +511,8 @@ describe('GitHub release contract', () => {
   it('stages unsigned Windows installers directly before publication', async () => {
     const workflow = await readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')
     expect(workflow).toContain('Stage unsigned Windows assets in draft release')
-    expect(workflow).toContain('dist/bisheng-windows-x64-setup.exe')
-    expect(workflow).toContain('dist/bisheng-windows-x64-setup.exe.blockmap')
+    expect(workflow).toContain('dist/luokui-ai-windows-x64-setup.exe')
+    expect(workflow).toContain('dist/luokui-ai-windows-x64-setup.exe.blockmap')
     expect(workflow).toContain('dist/latest.yml')
     expect(workflow).not.toMatch(/sign-windows:|DESKTOP_WINDOWS_SIGNING_PIN|JSIGN_JAR|win-unpacked\.tar\.gz/)
     expect(workflow).toContain('verify-release-staging.mjs')
@@ -519,12 +521,16 @@ describe('GitHub release contract', () => {
 
   it('gates publication on both native platform builds', async () => {
     const { jobs } = createRequire(import.meta.url)('js-yaml').load(await readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')) as {
-      jobs: Record<string, { needs?: string | string[]; if?: string }>
+      jobs: Record<string, { needs?: string | string[]; if?: string; steps?: Array<{ run?: string }> }>
     }
     expect(jobs['sign-windows']).toBeUndefined()
     for (const name of ['publish', 'publish-prerelease', 'publish-signed']) {
       expect(jobs[name]?.needs).toEqual(['macos', 'windows-x64'])
       expect(jobs[name]?.if).toContain("needs.windows-x64.result == 'success'")
+    }
+    for (const name of ['publish', 'publish-prerelease']) {
+      const download = jobs[name]?.steps?.find((step) => step.run?.includes('gh release download'))
+      expect(download?.run).toContain("--pattern 'luokui-ai-*'")
     }
     expect(jobs['windows-x64']?.needs).toBe('windows-preflight')
     expect(jobs['windows-preflight']?.if).not.toContain('needs.macos')
@@ -652,7 +658,7 @@ describe('prerelease parity workflow', () => {
   })
 })
 
-describe('BISHENG release publication', () => {
+describe('LUOKUI-AI release publication', () => {
   it('does not configure the DSH version index or rollout', async () => {
     const yml = await readFile(
       path.join(projectRoot, '.github/workflows/release.yml'),

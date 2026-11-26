@@ -122,12 +122,6 @@ jobs:
           MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
         run: |
           test -n "$MODELSCOPE_TOKEN" || { echo "::error::Missing secret MODELSCOPE_TOKEN"; exit 1; }
-      - name: Require Feishu webhook for test builds
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'signed'
-        env:
-          FEISHU_RELEASE_WEBHOOK: ${{ secrets.FEISHU_RELEASE_WEBHOOK }}
-        run: |
-          test -n "$FEISHU_RELEASE_WEBHOOK" || { echo "::error::Missing secret FEISHU_RELEASE_WEBHOOK"; exit 1; }
       - name: Prepare draft release for verified publication
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:
@@ -161,7 +155,7 @@ jobs:
             }
           else
             gh release create "$release_tag" --draft "${tag_args[@]}" \
-              --title "BISHENG $release_tag" \
+              --title "LUOKUI-AI $release_tag" \
               "${note_args[@]}" \
               --repo "$GITHUB_REPOSITORY"
           fi
@@ -228,7 +222,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Configure isolated macOS output
-        run: echo "MACOS_OUTPUT_DIR=$RUNNER_TEMP/bisheng-macos-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${{ matrix.arch }}" >> "$GITHUB_ENV"
+        run: echo "MACOS_OUTPUT_DIR=$RUNNER_TEMP/luokui-ai-macos-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${{ matrix.arch }}" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         if: matrix.arch == 'arm64'
         timeout-minutes: 5
@@ -283,9 +277,9 @@ jobs:
           RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || (inputs.mode == 'signed' && inputs.signed_version || inputs.prerelease_tag) }}
         run: |
           gh release upload "$RELEASE_TAG" \
-            "$MACOS_OUTPUT_DIR/bisheng-mac-${{ matrix.arch }}.dmg" \
-            "$MACOS_OUTPUT_DIR/bisheng-mac-${{ matrix.arch }}.zip" \
-            "$MACOS_OUTPUT_DIR/bisheng-mac-${{ matrix.arch }}.zip.blockmap" \
+            "$MACOS_OUTPUT_DIR/luokui-ai-mac-${{ matrix.arch }}.dmg" \
+            "$MACOS_OUTPUT_DIR/luokui-ai-mac-${{ matrix.arch }}.zip" \
+            "$MACOS_OUTPUT_DIR/luokui-ai-mac-${{ matrix.arch }}.zip.blockmap" \
             "$MACOS_OUTPUT_DIR/latest-mac-${{ matrix.arch }}.yml" \
             --clobber --repo "$GITHUB_REPOSITORY"
       - name: Store macos-${{ matrix.arch }}-dev in draft release
@@ -396,10 +390,11 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         env:
-          SMOKE_EXE: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.mode == 'signed' || inputs.mode == 'prerelease'))) && 'dist\win-unpacked\BISHENG.exe' || 'dist-dev\win-unpacked\BISHENG.exe' }}
-          SMOKE_USERDATA: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.mode == 'signed' || inputs.mode == 'prerelease'))) && 'bisheng' || 'bisheng-dev' }}
+          SMOKE_EXE: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.mode == 'signed' || inputs.mode == 'prerelease'))) && 'dist\win-unpacked\LUOKUI-AI.exe' || 'dist-dev\win-unpacked\LUOKUI-AI.exe' }}
+          SMOKE_USERDATA: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && (inputs.mode == 'signed' || inputs.mode == 'prerelease'))) && 'luokuiai-eai' || 'luokuiai-dev' }}
         run: |
           $userData = Join-Path $env:APPDATA $env:SMOKE_USERDATA
+          $env:BISHENG_DEV_USER_DATA = $userData
           $logPath = Join-Path $userData 'logs\harness.log'
           # Run outside the checkout: otherwise Node can silently resolve a
           # missing packaged dependency from the repository's node_modules.
@@ -447,7 +442,7 @@ jobs:
             $endpoint = $null
             while ((Get-Date) -lt $deadline) {
               if ($desktop.HasExited) {
-                throw "BISHENG exited before Harness was ready (exit code $($desktop.ExitCode))."
+                throw "LUOKUI-AI exited before Harness was ready (exit code $($desktop.ExitCode))."
               }
               if (Test-Path $logPath) {
                 $log = Get-Content -Raw $logPath
@@ -517,7 +512,7 @@ jobs:
               throw 'Harness process exited after workspace and session creation.'
             }
             if ($desktop.HasExited) {
-              throw "BISHENG exited after workspace and session creation (exit code $($desktop.ExitCode))."
+              throw "LUOKUI-AI exited after workspace and session creation (exit code $($desktop.ExitCode))."
             }
             Write-Host 'Packaged Windows Harness smoke test passed.'
           } finally {
@@ -549,8 +544,8 @@ jobs:
           RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || (inputs.mode == 'signed' && inputs.signed_version || inputs.prerelease_tag) }}
         run: |
           gh release upload "$env:RELEASE_TAG" `
-            dist/bisheng-windows-x64-setup.exe `
-            dist/bisheng-windows-x64-setup.exe.blockmap `
+            dist/luokui-ai-windows-x64-setup.exe `
+            dist/luokui-ai-windows-x64-setup.exe.blockmap `
             dist/latest.yml `
             --clobber --repo "$env:GITHUB_REPOSITORY"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -589,17 +584,17 @@ jobs:
           set -euo pipefail
           mkdir -p release-assets
           gh release download "$GITHUB_REF_NAME" \
-            --pattern 'bisheng-*' \
+            --pattern 'luokui-ai-*' \
             --pattern 'latest*.yml' \
             --dir release-assets \
             --repo "$GITHUB_REPOSITORY"
           node scripts/verify-release-staging.mjs "$GITHUB_REF_NAME" release-assets \
-            bisheng-mac-arm64.dmg bisheng-mac-arm64.zip \
-            bisheng-mac-arm64.zip.blockmap latest-mac-arm64.yml \
-            bisheng-mac-x64.dmg bisheng-mac-x64.zip \
-            bisheng-mac-x64.zip.blockmap latest-mac-x64.yml \
-            bisheng-windows-x64-setup.exe \
-            bisheng-windows-x64-setup.exe.blockmap latest.yml
+            luokui-ai-mac-arm64.dmg luokui-ai-mac-arm64.zip \
+            luokui-ai-mac-arm64.zip.blockmap latest-mac-arm64.yml \
+            luokui-ai-mac-x64.dmg luokui-ai-mac-x64.zip \
+            luokui-ai-mac-x64.zip.blockmap latest-mac-x64.yml \
+            luokui-ai-windows-x64-setup.exe \
+            luokui-ai-windows-x64-setup.exe.blockmap latest.yml
       - name: Merge macOS update metadata
         run: |
           set -euo pipefail
@@ -617,8 +612,8 @@ jobs:
       - name: Upload macOS ARM64 update ZIP
         uses: actions/upload-artifact@v7
         with:
-          name: bisheng-mac-arm64.zip
-          path: release-assets/bisheng-mac-arm64.zip
+          name: luokui-ai-mac-arm64.zip
+          path: release-assets/luokui-ai-mac-arm64.zip
           if-no-files-found: error
           retention-days: 1
           archive: false
@@ -626,8 +621,8 @@ jobs:
       - name: Upload macOS ARM64 update DMG
         uses: actions/upload-artifact@v7
         with:
-          name: bisheng-mac-arm64.dmg
-          path: release-assets/bisheng-mac-arm64.dmg
+          name: luokui-ai-mac-arm64.dmg
+          path: release-assets/luokui-ai-mac-arm64.dmg
           if-no-files-found: error
           retention-days: 1
           archive: false
@@ -635,8 +630,8 @@ jobs:
       - name: Upload macOS Intel update ZIP
         uses: actions/upload-artifact@v7
         with:
-          name: bisheng-mac-x64.zip
-          path: release-assets/bisheng-mac-x64.zip
+          name: luokui-ai-mac-x64.zip
+          path: release-assets/luokui-ai-mac-x64.zip
           if-no-files-found: error
           retention-days: 1
           archive: false
@@ -644,8 +639,8 @@ jobs:
       - name: Upload macOS Intel update DMG
         uses: actions/upload-artifact@v7
         with:
-          name: bisheng-mac-x64.dmg
-          path: release-assets/bisheng-mac-x64.dmg
+          name: luokui-ai-mac-x64.dmg
+          path: release-assets/luokui-ai-mac-x64.dmg
           if-no-files-found: error
           retention-days: 1
           archive: false
@@ -715,66 +710,6 @@ jobs:
           gh release edit "$GITHUB_REF_NAME" --draft=false \
             --notes-file .github/release-artifacts/github-release-notes.md \
             --repo "$GITHUB_REPOSITORY"
-      - name: Build Feishu release note prompt
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          mkdir -p .github/release-artifacts
-          python3 .github/scripts/feishu_release_notes.py build-prompt \
-            --tag "$RELEASE_TAG" \
-            --output .github/release-artifacts/feishu-release-prompt.txt
-
-      - name: Generate bilingual Feishu release note
-        env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.MODELS_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          if [ -n "${COPILOT_GITHUB_TOKEN:-}" ]; then
-            echo "Generating release notes via Copilot CLI with $RELEASE_NOTES_MODEL..."
-            prompt="$(cat .github/release-artifacts/feishu-release-prompt.txt)"
-            out=.github/release-artifacts/feishu-release-notes.md
-            error_log="$(mktemp)"
-            if copilot -p "$prompt" -s --model "$RELEASE_NOTES_MODEL" --no-ask-user > "$out" 2>"$error_log"; then
-              if python3 .github/scripts/feishu_release_notes.py validate --tag "$RELEASE_TAG" --input "$out"; then
-                echo "✅ AI release notes generated and validated with $RELEASE_NOTES_MODEL."
-              else
-                echo "::warning::Copilot generated release notes that failed validation; using the deterministic fallback."
-                python3 .github/scripts/feishu_release_notes.py generate-fallback \
-                  --tag "$RELEASE_TAG" \
-                  --output "$out"
-              fi
-            else
-              echo "::warning::Copilot failed to generate release notes with $RELEASE_NOTES_MODEL; using the deterministic fallback."
-              sed -n '1,20{s/^/copilot: /;p;}' "$error_log"
-              python3 .github/scripts/feishu_release_notes.py generate-fallback \
-                --tag "$RELEASE_TAG" \
-                --output "$out"
-            fi
-            rm -f "$error_log"
-          else
-            echo "Generating release notes from git evidence..."
-            python3 .github/scripts/feishu_release_notes.py generate-fallback \
-              --tag "$RELEASE_TAG" \
-              --output .github/release-artifacts/feishu-release-notes.md
-          fi
-
-      - name: Send Feishu release success notification
-        if: success()
-        env:
-          FEISHU_RELEASE_WEBHOOK: ${{ secrets.FEISHU_RELEASE_WEBHOOK }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          if [ -z "${FEISHU_RELEASE_WEBHOOK:-}" ]; then
-            echo "⚠️ FEISHU_RELEASE_WEBHOOK secret not set; skipping notification."
-            exit 0
-          fi
-          python3 .github/scripts/feishu_release_notes.py send \
-            --tag "$RELEASE_TAG" \
-            --notes .github/release-artifacts/feishu-release-notes.md \
-            --webhook "$FEISHU_RELEASE_WEBHOOK"
 
   publish-prerelease:
     name: Publish pre-release to ModelScope and GitHub
@@ -807,17 +742,17 @@ jobs:
           set -euo pipefail
           mkdir -p release-assets
           gh release download "$RELEASE_TAG" \
-            --pattern 'bisheng-*' \
+            --pattern 'luokui-ai-*' \
             --pattern 'latest*.yml' \
             --dir release-assets \
             --repo "$GITHUB_REPOSITORY"
           node scripts/verify-release-staging.mjs "$RELEASE_TAG" release-assets \
-            bisheng-mac-arm64.dmg bisheng-mac-arm64.zip \
-            bisheng-mac-arm64.zip.blockmap latest-mac-arm64.yml \
-            bisheng-mac-x64.dmg bisheng-mac-x64.zip \
-            bisheng-mac-x64.zip.blockmap latest-mac-x64.yml \
-            bisheng-windows-x64-setup.exe \
-            bisheng-windows-x64-setup.exe.blockmap latest.yml
+            luokui-ai-mac-arm64.dmg luokui-ai-mac-arm64.zip \
+            luokui-ai-mac-arm64.zip.blockmap latest-mac-arm64.yml \
+            luokui-ai-mac-x64.dmg luokui-ai-mac-x64.zip \
+            luokui-ai-mac-x64.zip.blockmap latest-mac-x64.yml \
+            luokui-ai-windows-x64-setup.exe \
+            luokui-ai-windows-x64-setup.exe.blockmap latest.yml
       - name: Merge macOS update metadata
         run: |
           set -euo pipefail
@@ -890,77 +825,11 @@ jobs:
           set -euo pipefail
           node scripts/prune-github-release-assets.mjs "$RELEASE_TAG"
           gh release edit "$RELEASE_TAG" --draft=false --prerelease \
-            --title "BISHENG $RELEASE_TAG（预发布）" \
+            --title "LUOKUI-AI $RELEASE_TAG（预发布）" \
             --repo "$GITHUB_REPOSITORY"
           base="https://modelscope.cn/models/alexyaojin/bisheng-work/resolve/master/releases/prerelease/$RELEASE_TAG"
           echo "## Pre-release downloads" >> "$GITHUB_STEP_SUMMARY"
-          echo "[Windows x64 installer]($base/bisheng-windows-x64-setup.exe) · [macOS Apple Silicon DMG]($base/bisheng-mac-arm64.dmg) · [macOS Intel DMG]($base/bisheng-mac-x64.dmg)" >> "$GITHUB_STEP_SUMMARY"
-      - name: Build Feishu prerelease note prompt
-        env:
-          RELEASE_TAG: ${{ inputs.prerelease_tag }}
-        run: |
-          set -euo pipefail
-          mkdir -p .github/release-artifacts
-          python3 .github/scripts/feishu_release_notes.py build-prompt \
-            --tag "$RELEASE_TAG" \
-            --prerelease \
-            --output .github/release-artifacts/feishu-release-prompt.txt
-
-      - name: Generate bilingual Feishu prerelease note
-        env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.MODELS_TOKEN }}
-          RELEASE_TAG: ${{ inputs.prerelease_tag }}
-        run: |
-          set -euo pipefail
-          if [ -n "${COPILOT_GITHUB_TOKEN:-}" ]; then
-            echo "Generating prerelease notes via Copilot CLI with $RELEASE_NOTES_MODEL..."
-            npm install -g @github/copilot@latest || true
-            prompt="$(cat .github/release-artifacts/feishu-release-prompt.txt)"
-            out=.github/release-artifacts/feishu-release-notes.md
-            error_log="$(mktemp)"
-            if copilot -p "$prompt" -s --model "$RELEASE_NOTES_MODEL" --no-ask-user > "$out" 2>"$error_log"; then
-              if python3 .github/scripts/feishu_release_notes.py validate --tag "$RELEASE_TAG" --prerelease --input "$out"; then
-                echo "✅ AI prerelease notes generated and validated with $RELEASE_NOTES_MODEL."
-              else
-                echo "::warning::Copilot generated prerelease notes that failed validation; using the deterministic fallback."
-                python3 .github/scripts/feishu_release_notes.py generate-fallback \
-                  --tag "$RELEASE_TAG" \
-                  --prerelease \
-                  --output "$out"
-              fi
-            else
-              echo "::warning::Copilot failed to generate prerelease notes with $RELEASE_NOTES_MODEL; using the deterministic fallback."
-              sed -n '1,20{s/^/copilot: /;p;}' "$error_log"
-              python3 .github/scripts/feishu_release_notes.py generate-fallback \
-                --tag "$RELEASE_TAG" \
-                --prerelease \
-                --output "$out"
-            fi
-            rm -f "$error_log"
-          else
-            echo "Generating prerelease notes from git evidence..."
-            python3 .github/scripts/feishu_release_notes.py generate-fallback \
-              --tag "$RELEASE_TAG" \
-              --prerelease \
-              --output .github/release-artifacts/feishu-release-notes.md
-          fi
-
-      - name: Send Feishu prerelease success notification
-        if: success()
-        env:
-          FEISHU_RELEASE_WEBHOOK: ${{ secrets.FEISHU_RELEASE_WEBHOOK }}
-          RELEASE_TAG: ${{ inputs.prerelease_tag }}
-        run: |
-          set -euo pipefail
-          if [ -z "${FEISHU_RELEASE_WEBHOOK:-}" ]; then
-            echo "⚠️ FEISHU_RELEASE_WEBHOOK secret not set; skipping notification."
-            exit 0
-          fi
-          python3 .github/scripts/feishu_release_notes.py send \
-            --tag "$RELEASE_TAG" \
-            --prerelease \
-            --notes .github/release-artifacts/feishu-release-notes.md \
-            --webhook "$FEISHU_RELEASE_WEBHOOK"
+          echo "[Windows x64 installer]($base/luokui-ai-windows-x64-setup.exe) · [macOS Apple Silicon DMG]($base/luokui-ai-mac-arm64.dmg) · [macOS Intel DMG]($base/luokui-ai-mac-x64.dmg)" >> "$GITHUB_STEP_SUMMARY"
 
   publish-signed:
     name: Publish test build to ModelScope
@@ -998,20 +867,20 @@ jobs:
           assets=()
           if [ "$TARGET" = "all" ] || [ "$TARGET" = "macos" ]; then
             assets+=(
-              bisheng-mac-arm64.dmg
-              bisheng-mac-arm64.zip
-              bisheng-mac-arm64.zip.blockmap
+              luokui-ai-mac-arm64.dmg
+              luokui-ai-mac-arm64.zip
+              luokui-ai-mac-arm64.zip.blockmap
               latest-mac-arm64.yml
-              bisheng-mac-x64.dmg
-              bisheng-mac-x64.zip
-              bisheng-mac-x64.zip.blockmap
+              luokui-ai-mac-x64.dmg
+              luokui-ai-mac-x64.zip
+              luokui-ai-mac-x64.zip.blockmap
               latest-mac-x64.yml
             )
           fi
           if [ "$TARGET" = "all" ] || [ "$TARGET" = "windows" ]; then
             assets+=(
-              bisheng-windows-x64-setup.exe
-              bisheng-windows-x64-setup.exe.blockmap
+              luokui-ai-windows-x64-setup.exe
+              luokui-ai-windows-x64-setup.exe.blockmap
               latest.yml
             )
           fi
@@ -1106,41 +975,21 @@ jobs:
               fi
             done
           done
-      - name: Record test downloads
-        env:
-          RELEASE_TAG: ${{ inputs.signed_version }}
-          TARGET: ${{ inputs.target }}
-        run: |
-          set -euo pipefail
-          base="https://modelscope.cn/models/alexyaojin/bisheng-work/resolve/master/releases/test/$RELEASE_TAG"
-          echo "## Test downloads" >> "$GITHUB_STEP_SUMMARY"
-          case "$TARGET" in
-            all)
-              echo "[Windows x64 installer]($base/bisheng-windows-x64-setup.exe) · [macOS Apple Silicon DMG]($base/bisheng-mac-arm64.dmg) · [macOS Intel DMG]($base/bisheng-mac-x64.dmg)" >> "$GITHUB_STEP_SUMMARY"
-              ;;
-            macos)
-              echo "[macOS Apple Silicon DMG]($base/bisheng-mac-arm64.dmg) · [macOS Intel DMG]($base/bisheng-mac-x64.dmg)" >> "$GITHUB_STEP_SUMMARY"
-              ;;
-            windows)
-              echo "[Windows x64 installer]($base/bisheng-windows-x64-setup.exe)" >> "$GITHUB_STEP_SUMMARY"
-              ;;
-          esac
       - name: Prepare Chinese test summary tooling
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.MODELS_TOKEN }}
         run: |
           if [ -n "${COPILOT_GITHUB_TOKEN:-}" ]; then
-            npm install -g @github/copilot@latest || echo "::warning::提测总结工具安装失败，将发送明确的降级说明。"
+            npm install -g @github/copilot@latest || echo "::warning::提测总结工具安装失败，将在 Actions 摘要中显示降级说明。"
           fi
-      - name: Verify test downloads and send Feishu notification
+      - name: Verify public test downloads and record summary
         if: success()
         env:
-          FEISHU_RELEASE_WEBHOOK: ${{ secrets.FEISHU_RELEASE_WEBHOOK }}
           COPILOT_GITHUB_TOKEN: ${{ secrets.MODELS_TOKEN }}
           MODELSCOPE_REPO_ID: alexyaojin/bisheng-work
           RELEASE_TAG: ${{ inputs.signed_version }}
           TARGET: ${{ inputs.target }}
         run: |
           set -euo pipefail
-          python3 .github/scripts/signed_test_notification.py \
+          python3 .github/scripts/signed_test_downloads.py \
             --directory release-assets --target "$TARGET" --version "$RELEASE_TAG"

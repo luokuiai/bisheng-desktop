@@ -1,5 +1,5 @@
-export declare const ENTERPRISE_LOGIN_PROTOCOL = "bisheng"
-export declare const ENTERPRISE_LOGIN_DEV_PROTOCOL = "bisheng-dev"
+export declare const ENTERPRISE_LOGIN_PROTOCOL = "luokuiai"
+export declare const ENTERPRISE_LOGIN_DEV_PROTOCOL = "luokuiai-dev"
 export interface EnterpriseLoginDeepLink {
   url: string
   serverUrl: string

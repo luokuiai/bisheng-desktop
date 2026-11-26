@@ -8,26 +8,33 @@ import {
 describe('BiSheng enterprise deep link', () => {
   it('accepts only the fixed login destination and one server origin', () => {
     const parsed = parseEnterpriseLoginDeepLink(
-      'bisheng://login?server=https%3A%2F%2Fbisheng.example.com'
+      'luokuiai://login?server=https%3A%2F%2Fplatform.example.com'
     )
-    expect(parsed.serverUrl).toBe('https://bisheng.example.com')
-    expect(parsed.url).toBe('bisheng://login?server=https%3A%2F%2Fbisheng.example.com')
+    expect(parsed.serverUrl).toBe('https://platform.example.com')
+    expect(parsed.url).toBe('luokuiai://login?server=https%3A%2F%2Fplatform.example.com')
   })
 
   it('accepts the development login scheme without changing the server origin', () => {
     const parsed = parseEnterpriseLoginDeepLink(
-      'bisheng-dev://login?server=https%3A%2F%2Fbisheng.example.com'
+      'luokuiai-dev://login?server=https%3A%2F%2Fplatform.example.com'
     )
-    expect(parsed.serverUrl).toBe('https://bisheng.example.com')
-    expect(parsed.url).toBe('bisheng-dev://login?server=https%3A%2F%2Fbisheng.example.com')
+    expect(parsed.serverUrl).toBe('https://platform.example.com')
+    expect(parsed.url).toBe('luokuiai-dev://login?server=https%3A%2F%2Fplatform.example.com')
+    expect(enterpriseLoginDeepLinkFromArgv([parsed.url])).toEqual(parsed)
+  })
+
+  it('rejects the previous production scheme in both link and command-line handling', () => {
+    const link = 'bisheng://login?server=https%3A%2F%2Fplatform.example.com'
+    expect(() => parseEnterpriseLoginDeepLink(link)).toThrow('unsupported destination')
+    expect(enterpriseLoginDeepLinkFromArgv([link])).toBeUndefined()
   })
 
   it('rejects remote HTTP origins and localhost, even in development', () => {
     expect(() => parseEnterpriseLoginDeepLink(
-      'bisheng://login?server=http%3A%2F%2Fbisheng.example.com%3A8080'
+      'luokuiai://login?server=http%3A%2F%2Fplatform.example.com%3A8080'
     )).toThrow('must use HTTPS')
     expect(() => parseEnterpriseLoginDeepLink(
-      'bisheng://login?server=http%3A%2F%2Fbisheng.example.com%3A8080',
+      'luokuiai://login?server=http%3A%2F%2Fplatform.example.com%3A8080',
       { allowInsecureLoopback: true }
     )).toThrow('127.0.0.1 or [::1]')
     expect(() => normalizeEnterpriseServerUrl('http://localhost:17860', { allowInsecureLoopback: true }))
@@ -40,13 +47,13 @@ describe('BiSheng enterprise deep link', () => {
     expect(normalizeEnterpriseServerUrl('http://[::1]:17860', { allowInsecureLoopback: true }))
       .toBe('http://[::1]:17860')
     expect(parseEnterpriseLoginDeepLink(
-      'bisheng://login?server=http%3A%2F%2F127.0.0.1%3A17860',
+      'luokuiai://login?server=http%3A%2F%2F127.0.0.1%3A17860',
       { allowInsecureLoopback: true }
     ).serverUrl).toBe('http://127.0.0.1:17860')
   })
 
   it('requires HTTPS when insecure loopback is not allowed', () => {
-    expect(normalizeEnterpriseServerUrl('https://bisheng.example.com')).toBe('https://bisheng.example.com')
+    expect(normalizeEnterpriseServerUrl('https://platform.example.com')).toBe('https://platform.example.com')
     expect(() => normalizeEnterpriseServerUrl('http://127.0.0.1:17860')).toThrow('must use HTTPS')
   })
 
@@ -56,7 +63,7 @@ describe('BiSheng enterprise deep link', () => {
       .toThrow('explicit confirmation')
     expect(() => normalizeEnterpriseServerUrl('http://8.8.8.8', { allowInsecurePrivateHttp: true }))
       .toThrow('must use HTTPS')
-    expect(() => normalizeEnterpriseServerUrl('http://bisheng.internal', { allowInsecurePrivateHttp: true }))
+    expect(() => normalizeEnterpriseServerUrl('http://platform.internal', { allowInsecurePrivateHttp: true }))
       .toThrow('must use HTTPS')
     expect(normalizeEnterpriseServerUrl('http://192.168.106.119:30006', { allowInsecurePrivateHttp: true }))
       .toBe('http://192.168.106.119:30006')
@@ -71,18 +78,18 @@ describe('BiSheng enterprise deep link', () => {
     expect(normalizeEnterpriseServerUrl('http://[fd12:3456::1]', { allowInsecurePrivateHttp: true }))
       .toBe('http://[fd12:3456::1]')
     expect(parseEnterpriseLoginDeepLink(
-      'bisheng://login?server=http%3A%2F%2F192.168.106.119%3A30006',
+      'luokuiai://login?server=http%3A%2F%2F192.168.106.119%3A30006',
       { allowInsecurePrivateHttp: true }
     ).serverUrl).toBe('http://192.168.106.119:30006')
   })
 
   it.each([
-    'bisheng://login?server=https%3A%2F%2Fbisheng.example.com&code=legacy',
-    'bisheng://login?server=https%3A%2F%2Fbisheng.example.com&server=https%3A%2F%2Fother.example.com',
-    'bisheng://login/path?server=https%3A%2F%2Fbisheng.example.com',
-    'bisheng://other?server=https%3A%2F%2Fbisheng.example.com',
-    'bisheng://login?server=https%3A%2F%2Fuser%3Asecret%40bisheng.example.com',
-    'bisheng://login?server=ftp%3A%2F%2Fbisheng.example.com'
+    'luokuiai://login?server=https%3A%2F%2Fplatform.example.com&code=legacy',
+    'luokuiai://login?server=https%3A%2F%2Fplatform.example.com&server=https%3A%2F%2Fother.example.com',
+    'luokuiai://login/path?server=https%3A%2F%2Fplatform.example.com',
+    'luokuiai://other?server=https%3A%2F%2Fplatform.example.com',
+    'luokuiai://login?server=https%3A%2F%2Fuser%3Asecret%40platform.example.com',
+    'luokuiai://login?server=ftp%3A%2F%2Fplatform.example.com'
   ])('rejects an unsafe or legacy link: %s', (link) => {
     expect(() => parseEnterpriseLoginDeepLink(link)).toThrow()
   })
@@ -90,8 +97,8 @@ describe('BiSheng enterprise deep link', () => {
   it('finds a valid login argument without accepting a malformed one', () => {
     expect(enterpriseLoginDeepLinkFromArgv([
       '/Applications/DSH Desktop.app',
-      'bisheng://login?server=https%3A%2F%2Fbisheng.example.com&code=legacy',
-      'bisheng://login?server=https%3A%2F%2Fbisheng.example.com'
-    ])?.serverUrl).toBe('https://bisheng.example.com')
+      'luokuiai://login?server=https%3A%2F%2Fplatform.example.com&code=legacy',
+      'luokuiai://login?server=https%3A%2F%2Fplatform.example.com'
+    ])?.serverUrl).toBe('https://platform.example.com')
   })
 })

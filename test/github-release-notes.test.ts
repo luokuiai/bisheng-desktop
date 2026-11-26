@@ -52,6 +52,42 @@ describe('github_release_notes build-prompt', () => {
     expect(prompt).toContain('## 升级说明')
     expect(prompt).toContain('## 说明')
   })
+
+  it('collects changes from the previous stable tag through the requested tag', { timeout: 15_000 }, async () => {
+    const dir = await work()
+    const git = (...args: string[]) => execFile('git', args, {
+      cwd: dir,
+      env: {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: '/dev/null',
+        GIT_CONFIG_SYSTEM: '/dev/null',
+        GIT_AUTHOR_NAME: 'Test',
+        GIT_AUTHOR_EMAIL: 'test@example.com',
+        GIT_COMMITTER_NAME: 'Test',
+        GIT_COMMITTER_EMAIL: 'test@example.com'
+      }
+    })
+    await git('init', '-q')
+    for (const [subject, tag] of [
+      ['stable baseline', 'v1.0.0'],
+      ['preview feature', '1.1.0-rc.1'],
+      ['release feature', 'v1.1.0'],
+      ['later change', '']
+    ] as const) {
+      await writeFile(path.join(dir, `${subject}.txt`), `${subject}\n`)
+      await git('add', '.')
+      await git('commit', '-qm', subject)
+      if (tag) await git('tag', tag)
+    }
+    const output = path.join(dir, 'prompt.txt')
+    await execFile('python3', [script, 'build-prompt', '--tag', 'v1.1.0', '--output', output], { cwd: dir })
+    const prompt = await readFile(output, 'utf8')
+    expect(prompt).toContain('Subject: preview feature')
+    expect(prompt).toContain('Subject: release feature')
+    expect(prompt).toContain('+preview feature')
+    expect(prompt).not.toContain('stable baseline')
+    expect(prompt).not.toContain('later change')
+  })
 })
 
 describe('github_release_notes validate', () => {

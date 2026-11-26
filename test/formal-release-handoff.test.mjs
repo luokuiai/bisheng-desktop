@@ -9,8 +9,8 @@ it('exports each verified formal ZIP, manual-install DMG and YAML in its origina
   const steps = jobs.publish.steps
   const uploads = steps.filter(step => step.uses === 'actions/upload-artifact@v7')
   expect(uploads.map(step => step.with.name)).toEqual([
-    'bisheng-mac-arm64.zip', 'bisheng-mac-arm64.dmg',
-    'bisheng-mac-x64.zip', 'bisheng-mac-x64.dmg', 'latest-mac.yml', 'latest.yml'
+    'luokui-ai-mac-arm64.zip', 'luokui-ai-mac-arm64.dmg',
+    'luokui-ai-mac-x64.zip', 'luokui-ai-mac-x64.dmg', 'latest-mac.yml', 'latest.yml'
   ])
   const verified = steps.findIndex(step => step.name === 'Verify release assets before publication')
   const published = steps.findIndex(step => step.name === 'Publish verified GitHub release')
@@ -79,7 +79,7 @@ it('verifies draft handoff before exporting formal artifacts and publishing othe
   for (const job of ['publish', 'publish-prerelease', 'publish-signed']) {
     expect(jobs[job].needs).toEqual(['macos', 'windows-x64'])
   }
-  for (const asset of ['bisheng-windows-x64-setup.exe', 'bisheng-windows-x64-setup.exe.blockmap', 'latest.yml']) {
+  for (const asset of ['luokui-ai-windows-x64-setup.exe', 'luokui-ai-windows-x64-setup.exe.blockmap', 'latest.yml']) {
     expect(step('windows-x64', 'Stage unsigned Windows assets in draft release').run)
       .toContain(`dist/${asset}`)
   }
@@ -110,12 +110,13 @@ it('verifies draft handoff before exporting formal artifacts and publishing othe
   expect(step('publish-prerelease', 'Mirror pre-release assets to ModelScope').run)
     .toContain('releases/prerelease/latest')
   const signedNames = jobs['publish-signed'].steps.map(item => item.name)
+  const verifyTestDownloads = 'Verify public test downloads and record summary'
   expect(signedNames).toEqual(expect.arrayContaining([
     'Download verified test assets from draft release',
     'Verify test assets before publication',
     'Mirror test assets to ModelScope',
     'Verify public ModelScope test metadata',
-    'Record test downloads'
+    verifyTestDownloads
   ]))
   expect(signedNames.indexOf('Download verified test assets from draft release'))
     .toBeLessThan(signedNames.indexOf('Verify test assets before publication'))
@@ -124,7 +125,7 @@ it('verifies draft handoff before exporting formal artifacts and publishing othe
   expect(signedNames.indexOf('Mirror test assets to ModelScope'))
     .toBeLessThan(signedNames.indexOf('Verify public ModelScope test metadata'))
   expect(signedNames.indexOf('Verify public ModelScope test metadata'))
-    .toBeLessThan(signedNames.indexOf('Record test downloads'))
+    .toBeLessThan(signedNames.indexOf(verifyTestDownloads))
   expect(step('publish-signed', 'Mirror test assets to ModelScope').run)
     .toContain('releases/test/{tag}')
   expect(step('publish-signed', 'Mirror test assets to ModelScope').run)

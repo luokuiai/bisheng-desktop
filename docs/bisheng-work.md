@@ -1,8 +1,8 @@
-# BISHENG 私有仓库开发说明
+# LUOKUI-AI 私有仓库开发说明
 
 ## 定位与基线
 
-BISHENG 基于 DSH Desktop，面向个人、团队及企业工作场景，承载非开源扩展。继续复用 Harness runtime 和 Web UI，遵循仓库 AGENTS.md 及现有模块边界。
+LUOKUI-AI 基于 DSH Desktop，面向个人、团队及企业工作场景，承载非开源扩展。继续复用 Harness runtime 和 Web UI，遵循仓库 AGENTS.md 及现有模块边界。
 
 - 私有仓库：`https://github.com/dataelement/bisheng-work`
 - 上游仓库：`https://github.com/dataelement/dsh-desktop`
@@ -42,7 +42,9 @@ git merge upstream/main
 
 ## 当前状态与发布前工作
 
-正式版应用 ID 为 `com.luokuiai.bisheng`，开发通道为 `com.luokuiai.bisheng.dev`。两类构建均采用 macOS ad-hoc 签名和 Windows 未签名安装包。应用名称统一为 BISHENG，发布资产文件名统一使用 `bisheng` 前缀。开发通道继续使用独立的应用 ID `com.luokuiai.bisheng.dev`、userData 目录 `bisheng-dev` 和登录协议 `bisheng-dev://login`。生产包更新地址由打包环境变量 `BISHENG_UPDATE_URL` 指定，为空则关闭在线更新，无上游默认值；正式版更新资产导出至 Actions artifacts，由部署方上传到企业更新目录。继承的测试和预发布渠道仍使用 ModelScope。名称修改的源码检查不代表新安装包已发布或完成安装验收。正式版网页唤起桌面使用 `bisheng://login`，网页端需要同步修改。
+应用名称为 LUOKUI-AI，Windows 可执行文件为 `LUOKUI-AI.exe`，发布资产使用 `luokui-ai` 文件名前缀。两类构建均采用 macOS ad-hoc 签名和 Windows 未签名安装包。生产包通过 `BISHENG_UPDATE_URL` 设置更新地址，留空时关闭在线更新。正式版更新资产导出至 Actions artifacts，由部署方上传到企业更新目录。测试和预发布渠道仍使用 ModelScope。安装标识及 Profile 兼容策略见 [发布手册](release-runbook.md)。
+
+企业网页使用 `luokuiai://login?server=https%3A%2F%2Fplatform.example.com` 唤起正式版，使用 `luokuiai-dev://login?server=https%3A%2F%2Fplatform.example.com` 唤起开发版。`server` 为经 URL 编码的平台地址，网页端应同步更新。
 
 初始化时曾关闭 Actions；当前构建及发布配置以 `package.json` 和 `.github/workflows/release.yml` 为准。发布前核对以下隔离边界和组织级 secrets 的访问范围：
 
@@ -52,4 +54,4 @@ git merge upstream/main
 - 独立签名、发布凭据及对应 workflow 权限。
 - 产品文档、支持入口、隐私说明及新增模块的许可范围。
 
-在完成隔离前，不应将沿用上游身份和更新配置的构建作为 BISHENG 正式安装包分发。开发调试使用临时目录或独立开发 Profile，避免影响现有 DSH Desktop 数据。
+在完成隔离前，不应将沿用上游身份和更新配置的构建作为 LUOKUI-AI 正式安装包分发。开发调试使用临时目录或独立开发 Profile，避免影响现有 DSH Desktop 数据。

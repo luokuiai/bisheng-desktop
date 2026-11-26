@@ -162,16 +162,16 @@ describe('enterprise adapter without a Broker', () => {
   it('inspects a deep link locally and rejects login until the Broker exists', async () => {
     const routes = createPluginContext()
     const inspected = await invoke(routes, '/api/enterprise.deep-link.inspect', 'POST', {
-      url: 'bisheng://login?server=https%3A%2F%2Fbisheng.example.com'
+      url: 'luokuiai://login?server=https%3A%2F%2Fplatform.example.com'
     })
     expect(inspected.status).toBe(200)
-    await expect(inspected.json()).resolves.toEqual({ base: 'https://bisheng.example.com' })
+    await expect(inspected.json()).resolves.toEqual({ base: 'https://platform.example.com' })
 
     const inspectedBase = await invoke(routes, '/api/enterprise.base.inspect', 'POST', {
-      base: 'https://bisheng.example.com'
+      base: 'https://platform.example.com'
     })
     expect(inspectedBase.status).toBe(200)
-    await expect(inspectedBase.json()).resolves.toEqual({ base: 'https://bisheng.example.com' })
+    await expect(inspectedBase.json()).resolves.toEqual({ base: 'https://platform.example.com' })
 
     const inspectedPrivate = await invoke(routes, '/api/enterprise.base.inspect', 'POST', {
       base: 'http://192.168.106.119:30006'
@@ -183,7 +183,7 @@ describe('enterprise adapter without a Broker', () => {
     })
 
     const started = await invoke(routes, '/api/enterprise.login.start', 'POST', {
-      base: 'https://bisheng.example.com'
+      base: 'https://platform.example.com'
     })
     expect(started.status).toBe(503)
     await expect(started.json()).resolves.toMatchObject({

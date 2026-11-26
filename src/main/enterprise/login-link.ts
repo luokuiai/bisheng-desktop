@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { app } from 'electron'
+import {
+  ENTERPRISE_LOGIN_DEV_PROTOCOL,
+  ENTERPRISE_LOGIN_PROTOCOL
+} from 'dsh-desktop-enterprise/deep-link'
 import { sameHarnessOrigin } from './harness-origin'
 
 export { sameHarnessOrigin }
-
-export const ENTERPRISE_LOGIN_PROTOCOL = 'bisheng'
-export const ENTERPRISE_LOGIN_DEV_PROTOCOL = 'bisheng-dev'
 
 function packagedDevelopmentChannel(): boolean {
   if (!app.isPackaged) return false
@@ -22,7 +23,7 @@ function packagedDevelopmentChannel(): boolean {
 
 export function enterpriseLoginProtocol(): string {
   // A packaged development build must not claim the production scheme, or it
-  // would take enterprise login links away from the installed BISHENG app.
+  // would take enterprise login links away from the installed LUOKUI-AI app.
   return app.isPackaged && !packagedDevelopmentChannel()
     ? ENTERPRISE_LOGIN_PROTOCOL
     : ENTERPRISE_LOGIN_DEV_PROTOCOL

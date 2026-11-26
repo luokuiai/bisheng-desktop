@@ -6,14 +6,14 @@ import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
 
 const REQUIRED_ASSETS = [
-  'bisheng-mac-arm64.dmg',
-  'bisheng-mac-arm64.zip',
-  'bisheng-mac-arm64.zip.blockmap',
-  'bisheng-mac-x64.dmg',
-  'bisheng-mac-x64.zip',
-  'bisheng-mac-x64.zip.blockmap',
-  'bisheng-windows-x64-setup.exe',
-  'bisheng-windows-x64-setup.exe.blockmap',
+  'luokui-ai-mac-arm64.dmg',
+  'luokui-ai-mac-arm64.zip',
+  'luokui-ai-mac-arm64.zip.blockmap',
+  'luokui-ai-mac-x64.dmg',
+  'luokui-ai-mac-x64.zip',
+  'luokui-ai-mac-x64.zip.blockmap',
+  'luokui-ai-windows-x64-setup.exe',
+  'luokui-ai-windows-x64-setup.exe.blockmap',
   'latest-mac.yml',
   'latest.yml'
 ]
@@ -109,11 +109,11 @@ export async function verifyReleaseAssets(releaseDir, version, options = {}) {
     await assertFileHeader(file, kind, fileStat.size)
   }
 
-  await assertUpdateEntry(root, 'latest.yml', version, 'bisheng-windows-x64-setup.exe')
-  await assertUpdateEntry(root, 'latest-mac.yml', version, 'bisheng-mac-arm64.zip')
-  await assertUpdateEntry(root, 'latest-mac.yml', version, 'bisheng-mac-x64.zip')
-  await assertUpdateEntry(root, 'latest-mac.yml', version, 'bisheng-mac-arm64.dmg')
-  await assertUpdateEntry(root, 'latest-mac.yml', version, 'bisheng-mac-x64.dmg')
+  await assertUpdateEntry(root, 'latest.yml', version, 'luokui-ai-windows-x64-setup.exe')
+  await assertUpdateEntry(root, 'latest-mac.yml', version, 'luokui-ai-mac-arm64.zip')
+  await assertUpdateEntry(root, 'latest-mac.yml', version, 'luokui-ai-mac-x64.zip')
+  await assertUpdateEntry(root, 'latest-mac.yml', version, 'luokui-ai-mac-arm64.dmg')
+  await assertUpdateEntry(root, 'latest-mac.yml', version, 'luokui-ai-mac-x64.dmg')
 }
 
 async function main() {

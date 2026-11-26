@@ -5,9 +5,9 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const PLATFORM_FILES = {
-  arm64: ['bisheng-mac-arm64.dmg', 'bisheng-mac-arm64.zip'],
-  x64: ['bisheng-mac-x64.dmg', 'bisheng-mac-x64.zip'],
-  windows: ['bisheng-windows-x64-setup.exe']
+  arm64: ['luokui-ai-mac-arm64.dmg', 'luokui-ai-mac-arm64.zip'],
+  x64: ['luokui-ai-mac-x64.dmg', 'luokui-ai-mac-x64.zip'],
+  windows: ['luokui-ai-windows-x64-setup.exe']
 }
 
 export async function developmentAssets(directory, platform) {
@@ -22,8 +22,8 @@ export async function developmentAssets(directory, platform) {
   }
   // Development builds disable publishing, so electron-builder may omit updater metadata.
   const optional = platform === 'windows'
-    ? ['bisheng-windows-x64-setup.exe.blockmap', 'latest.yml']
-    : [`bisheng-mac-${platform}.zip.blockmap`]
+    ? ['luokui-ai-windows-x64-setup.exe.blockmap', 'latest.yml']
+    : [`luokui-ai-mac-${platform}.zip.blockmap`]
   for (const name of optional) {
     const file = path.join(directory, name)
     try {

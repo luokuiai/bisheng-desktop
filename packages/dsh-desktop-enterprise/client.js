@@ -1001,7 +1001,7 @@ window.__ModuleLoader__.load({
               inputMode: 'url',
               autoComplete: 'url',
               'aria-describedby': 'dsh-enterprise-platform-help',
-              placeholder: 'https://bisheng.example.com',
+              placeholder: 'https://platform.example.com',
               value: base,
               onChange: (event) => {
                 setBase(event.target.value)

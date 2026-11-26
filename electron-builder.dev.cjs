@@ -2,11 +2,11 @@ const packageJson = require('./package.json')
 
 module.exports = {
   ...packageJson.build,
-  appId: 'com.luokuiai.bisheng.dev',
+  appId: `${packageJson.build.appId}.dev`,
   protocols: [
     {
       name: packageJson.build.protocols[0].name,
-      schemes: ['bisheng-dev']
+      schemes: ['luokuiai-dev']
     }
   ],
   directories: {

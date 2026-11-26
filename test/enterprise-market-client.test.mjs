@@ -51,7 +51,7 @@ async function client(initial, language = 'zh') {
   return { registrations, events, sync, set: value => { account = value }, defer: capture => { resolveState = capture } }
 }
 
-const account = { connected: true, base: 'https://bisheng.example', tenant: { id: '1', name: '企业一' }, user: { id: '20' }, sessionExpiresAt: new Date(Date.now() + 60000).toISOString() }
+const account = { connected: true, base: 'https://platform.example.com', tenant: { id: '1', name: '企业一' }, user: { id: '20' }, sessionExpiresAt: new Date(Date.now() + 60000).toISOString() }
 
 describe('enterprise plugins entry', () => {
   it('adds 来自企业 after login, replaces account context on tenant switch, and removes it on logout', async () => {

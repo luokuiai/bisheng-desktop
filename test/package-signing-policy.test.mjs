@@ -42,7 +42,7 @@ it('skips Authenticode signing for the executable and installer while preserving
     signingQueue: Promise.resolve(),
     _sign: sign
   }
-  for (const file of ['BISHENG.exe', 'bisheng-windows-x64-setup.exe', 'uninstaller.exe']) {
+  for (const file of ['LUOKUI-AI.exe', 'luokui-ai-windows-x64-setup.exe', 'uninstaller.exe']) {
     expect(await WinPackager.prototype.signIf.call(packager, file)).toBe(false)
   }
   expect(sign).not.toHaveBeenCalled()

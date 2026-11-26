@@ -29,6 +29,7 @@ import {
 } from 'electron'
 import { clearStaleLoopbackHttpCache } from './cache-maintenance'
 import { harnessPreferredPort, mobileBridgePort } from './desktop-ports'
+import { resolveDesktopUserData } from './desktop-user-data'
 import {
   extractFailureCause,
   extractPluginFailureReferences,
@@ -557,15 +558,14 @@ function applyWindowChromeTheme(window: BrowserWindow, isDark: boolean): void {
 function configureAppIdentity(): void {
   configureNotificationIdentity(app, process.platform, developmentBuild)
   app.setName('LUOKUI-AI')
-  if (developmentBuild) {
-    app.setPath('userData', process.env.BISHENG_DEV_USER_DATA || join(app.getPath('appData'), 'bisheng-dev'))
-    return
-  }
-
   // Keep this directory explicit. Harness stores workspaces, sessions,
   // credentials, and custom presets below userData, so deriving the path from
   // app.getName() would make a later display-name change look like a fresh install.
-  app.setPath('userData', join(app.getPath('appData'), 'bisheng'))
+  app.setPath('userData', resolveDesktopUserData(
+    app.getPath('appData'),
+    developmentBuild,
+    process.env.BISHENG_DEV_USER_DATA
+  ))
 }
 
 async function syncNativeTheme(window: BrowserWindow): Promise<void> {
@@ -1729,7 +1729,7 @@ function registerHarnessHandlers(): void {
   ipcMain.removeHandler('harness:restart')
   ipcMain.handle('harness:restart', async (event) => {
     if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
-      throw new Error('Harness restart is only available from the BISHENG window.')
+      throw new Error('Harness restart is only available from the LUOKUI-AI window.')
     }
     if (runtime.snapshot().phase !== 'ready') {
       throw new Error('Harness is not ready to restart.')
@@ -1805,7 +1805,7 @@ function registerHarnessHandlers(): void {
   ipcMain.handle('desktop-titlebar:set-theme', (event, isDark: unknown) => {
     assertTrustedMainWindowEvent(event)
     if (typeof isDark !== 'boolean') {
-      throw new Error('The BISHENG titlebar theme must be a boolean.')
+      throw new Error('The LUOKUI-AI titlebar theme must be a boolean.')
     }
     if (mainWindow) {
       applyWindowChromeTheme(mainWindow, isDark)
@@ -1841,7 +1841,7 @@ function assertTrustedMainWindowEvent(event: IpcMainInvokeEvent): void {
     event.sender !== mainWindow.webContents ||
     event.senderFrame !== mainWindow.webContents.mainFrame
   ) {
-    throw new Error('This action is only available from the main BISHENG window.')
+    throw new Error('This action is only available from the main LUOKUI-AI window.')
   }
 }
 

@@ -325,7 +325,7 @@ describe('enterprise service login loop', () => {
       desktopVersion: '0.1.1-beta.2+build.7', activateDesktop
     })
     const started = await service.startLogin(origin)
-    expect(requests[0]).toMatchObject({ client_version: '0.1.1-beta.2+build.7', device_name: 'BISHENG' })
+    expect(requests[0]).toMatchObject({ client_version: '0.1.1-beta.2+build.7', device_name: 'LUOKUI-AI' })
     expect(activateDesktop).not.toHaveBeenCalled()
     await completeBrowserLogin(origin, started.authorizationUrl)
     await waitFor(() => activateDesktop.mock.calls.length === 1)

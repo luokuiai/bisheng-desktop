@@ -20,7 +20,7 @@ it('archives the unpacked Windows application without relying on the platform ta
   const archive = path.join(root, 'handoff', 'win-unpacked.tar.gz')
   const extracted = path.join(root, 'extracted')
   await mkdir(path.join(source, 'resources'), { recursive: true })
-  await writeFile(path.join(source, 'BISHENG.exe'), 'executable')
+  await writeFile(path.join(source, 'LUOKUI-AI.exe'), 'executable')
   await writeFile(path.join(source, 'resources', 'app.asar'), 'archive')
 
   const result = await archiveWindowsUnpacked(source, archive)
@@ -29,7 +29,7 @@ it('archives the unpacked Windows application without relying on the platform ta
   expect(result.size).toBeGreaterThan(0)
   await mkdir(extracted)
   await extractTar({ cwd: extracted, file: archive })
-  await expect(readFile(path.join(extracted, 'win-unpacked', 'BISHENG.exe'), 'utf8'))
+  await expect(readFile(path.join(extracted, 'win-unpacked', 'LUOKUI-AI.exe'), 'utf8'))
     .resolves.toBe('executable')
   await expect(readFile(path.join(extracted, 'win-unpacked', 'resources', 'app.asar'), 'utf8'))
     .resolves.toBe('archive')
