@@ -56,12 +56,10 @@ it('reuses checkout history and installs formal release note tooling once', () =
   const installs = steps.filter(item => item.run?.includes('npm install -g @github/copilot'))
   expect(installs).toHaveLength(1)
   const notes = steps.filter(item => item.name?.startsWith('Generate '))
-  expect(notes).toHaveLength(2)
-  for (const note of notes) {
-    expect(steps.indexOf(note)).toBeGreaterThanOrEqual(steps.indexOf(installs[0]))
-    expect(note.run).toContain('validate --tag')
-    expect(note.run).toContain('generate-fallback')
-  }
+  expect(notes).toHaveLength(1)
+  expect(steps.indexOf(notes[0])).toBeGreaterThanOrEqual(steps.indexOf(installs[0]))
+  expect(notes[0].run).toContain('github_release_notes.py validate --tag')
+  expect(notes[0].run).toContain('github_release_notes.py generate-fallback')
   expect(steps.some(item => item.run?.includes('git fetch --force --tags'))).toBe(false)
 })
 
@@ -107,7 +105,7 @@ const args = process.argv.slice(2)
 const assets = ${JSON.stringify(assets)}
 if (args[1] === 'download') {
   const patterns = args.flatMap((arg, i) => arg === '--pattern' ? [args[i + 1]] : [])
-  if (JSON.stringify(patterns) !== JSON.stringify(['bisheng-*', 'latest*.yml'])) process.exit(2)
+  if (JSON.stringify(patterns) !== JSON.stringify(['luokui-ai-*', 'latest*.yml'])) process.exit(2)
   const directory = args[args.indexOf('--dir') + 1]
   fs.mkdirSync(directory, { recursive: true })
   for (const { name } of assets) fs.copyFileSync('payload', path.join(directory, name))

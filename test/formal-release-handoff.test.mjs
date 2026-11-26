@@ -110,12 +110,13 @@ it('verifies draft handoff before exporting formal artifacts and publishing othe
   expect(step('publish-prerelease', 'Mirror pre-release assets to ModelScope').run)
     .toContain('releases/prerelease/latest')
   const signedNames = jobs['publish-signed'].steps.map(item => item.name)
+  const verifyTestDownloads = 'Verify public test downloads and record summary'
   expect(signedNames).toEqual(expect.arrayContaining([
     'Download verified test assets from draft release',
     'Verify test assets before publication',
     'Mirror test assets to ModelScope',
     'Verify public ModelScope test metadata',
-    'Record test downloads'
+    verifyTestDownloads
   ]))
   expect(signedNames.indexOf('Download verified test assets from draft release'))
     .toBeLessThan(signedNames.indexOf('Verify test assets before publication'))
@@ -124,7 +125,7 @@ it('verifies draft handoff before exporting formal artifacts and publishing othe
   expect(signedNames.indexOf('Mirror test assets to ModelScope'))
     .toBeLessThan(signedNames.indexOf('Verify public ModelScope test metadata'))
   expect(signedNames.indexOf('Verify public ModelScope test metadata'))
-    .toBeLessThan(signedNames.indexOf('Record test downloads'))
+    .toBeLessThan(signedNames.indexOf(verifyTestDownloads))
   expect(step('publish-signed', 'Mirror test assets to ModelScope').run)
     .toContain('releases/test/{tag}')
   expect(step('publish-signed', 'Mirror test assets to ModelScope').run)

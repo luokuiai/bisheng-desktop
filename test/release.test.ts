@@ -521,12 +521,16 @@ describe('GitHub release contract', () => {
 
   it('gates publication on both native platform builds', async () => {
     const { jobs } = createRequire(import.meta.url)('js-yaml').load(await readFile(path.join(projectRoot, '.github/workflows/release.yml'), 'utf8')) as {
-      jobs: Record<string, { needs?: string | string[]; if?: string }>
+      jobs: Record<string, { needs?: string | string[]; if?: string; steps?: Array<{ run?: string }> }>
     }
     expect(jobs['sign-windows']).toBeUndefined()
     for (const name of ['publish', 'publish-prerelease', 'publish-signed']) {
       expect(jobs[name]?.needs).toEqual(['macos', 'windows-x64'])
       expect(jobs[name]?.if).toContain("needs.windows-x64.result == 'success'")
+    }
+    for (const name of ['publish', 'publish-prerelease']) {
+      const download = jobs[name]?.steps?.find((step) => step.run?.includes('gh release download'))
+      expect(download?.run).toContain("--pattern 'luokui-ai-*'")
     }
     expect(jobs['windows-x64']?.needs).toBe('windows-preflight')
     expect(jobs['windows-preflight']?.if).not.toContain('needs.macos')
