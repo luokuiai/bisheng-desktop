@@ -60,6 +60,7 @@ export interface EnterprisePublicIdentity {
   id?: string
   username?: string
   display_name?: string
+  avatar_url?: string
   name?: string
 }
 
@@ -1585,6 +1586,7 @@ function publicIdentity(value?: EnterprisePublicIdentity): EnterprisePublicIdent
     ...(value.id ? { id: value.id } : {}),
     ...(value.username ? { username: value.username } : {}),
     ...(value.display_name ? { display_name: value.display_name } : {}),
+    ...(value.avatar_url ? { avatar_url: value.avatar_url } : {}),
     ...(value.name ? { name: value.name } : {})
   }
   return Object.keys(identity).length > 0 ? identity : undefined

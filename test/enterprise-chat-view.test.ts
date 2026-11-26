@@ -866,6 +866,27 @@ it('retains host-owned settings bounds when an embedded settings page reports a 
   } finally { f.host.dispose() }
 })
 
+it('crops the native Chat view behind the sidebar while keeping the page geometry', async () => {
+  const f = fixture()
+  try {
+    const bounds = { x: 16, y: 56, width: 1000, height: 700 }
+    f.host.present(f.owner, { ...presentation, bounds })
+    await flush()
+    const view = fake.views[0], wc = view.webContents
+    f.host.present(f.owner, { ...presentation, bounds, coveredLeft: 250 })
+    expect(view.setBounds).toHaveBeenLastCalledWith({ x: 266, y: 56, width: 750, height: 700 })
+    expect(wc.executeJavaScript.mock.calls.some(([script]: [string]) =>
+      script.includes('left: -250px; top: 0px') && script.includes('width: 1000px; height: 700px'))).toBe(true)
+
+    f.host.present(f.owner, { ...presentation, bounds })
+    expect(view.setBounds).toHaveBeenLastCalledWith(bounds)
+    const viewportScripts = wc.executeJavaScript.mock.calls.map(([script]: [string]) => script)
+      .filter((script: string) => script.includes('dsh-window-dialog-viewport'))
+    expect(viewportScripts.at(-1)).toContain('const css = ""')
+    expect(() => parseChatPresentation({ ...presentation, bounds, coveredLeft: 1001 })).toThrow('Invalid Chat coverage.')
+  } finally { f.host.dispose() }
+})
+
 it('validates platform cookie names and applies the isolated cookie to embedded Chat', async () => {
   const value = { cookie: 'a'.repeat(40), expires_in: 300, cookie_name: 'bs_credits_3007' }
   expect(parseWebSession(value, 'https://enterprise.example', 'tenant-a').cookieName).toBe('bs_credits_3007')

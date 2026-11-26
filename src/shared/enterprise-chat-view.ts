@@ -8,6 +8,8 @@ export interface EnterpriseViewBounds {
 export interface EnterpriseChatPresentation {
   visible: boolean
   bounds: EnterpriseViewBounds
+  /** Left portion covered by the host sidebar, in CSS pixels. */
+  coveredLeft?: number
   hostedAppBounds?: EnterpriseViewBounds
   theme: 'light' | 'dark'
   locale?: 'zh' | 'en'
@@ -114,6 +116,11 @@ export function parseChatPresentation(value: unknown): EnterpriseChatPresentatio
     throw new Error('Invalid Chat radius.')
   }
   const hostedAppBounds = input.hostedAppBounds === undefined ? undefined : parseViewBounds(input.hostedAppBounds)
+  const bounds = parseViewBounds(input.bounds)
+  const coveredLeft = input.coveredLeft
+  if (coveredLeft !== undefined && (typeof coveredLeft !== 'number' || !Number.isFinite(coveredLeft) || coveredLeft < 0 || coveredLeft > bounds.width)) {
+    throw new Error('Invalid Chat coverage.')
+  }
   return {
     visible: input.visible,
     theme: input.theme as 'light' | 'dark',
@@ -122,7 +129,8 @@ export function parseChatPresentation(value: unknown): EnterpriseChatPresentatio
     ...(radius === undefined ? {} : { radius }),
     ...(palette ? { palette } : {}),
     ...(hostedAppBounds ? { hostedAppBounds } : {}),
-    bounds: parseViewBounds(input.bounds)
+    ...(coveredLeft ? { coveredLeft } : {}),
+    bounds
   }
 }
 
