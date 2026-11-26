@@ -656,6 +656,7 @@ contextBridge.exposeInMainWorld('dshEnterpriseChat', Object.freeze({
   closeHostedApp: (restoreFocus?: boolean): Promise<void> => ipcRenderer.invoke('enterprise-chat:close-hosted-app', restoreFocus),
   retryHostedApp: (): Promise<void> => ipcRenderer.invoke('enterprise-chat:retry-hosted-app'),
   usage: (): Promise<import('../shared/enterprise-usage').EnterpriseUsage> => ipcRenderer.invoke('enterprise-chat:usage'),
+  profile: (): Promise<import('../shared/enterprise-profile').EnterpriseProfile | null> => ipcRenderer.invoke('enterprise-chat:profile'),
   history: (page: number) => ipcRenderer.invoke('enterprise-chat:history', page),
   openPage: (id: string): Promise<void> => ipcRenderer.invoke('enterprise-chat:open-page', id),
   open: (id: string): Promise<void> => ipcRenderer.invoke('enterprise-chat:open', id),
