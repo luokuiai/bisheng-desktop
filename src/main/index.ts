@@ -1701,7 +1701,7 @@ function registerHarnessHandlers(): void {
     }
   })
 
-  for (const channel of ['enterprise-chat:present', 'enterprise-chat:state', 'enterprise-chat:retry', 'enterprise-chat:usage', 'enterprise-chat:history', 'enterprise-chat:open', 'enterprise-chat:remove', 'enterprise-chat:open-page', 'enterprise-chat:focus-settings', 'enterprise-chat:close-hosted-app', 'enterprise-chat:retry-hosted-app']) ipcMain.removeHandler(channel)
+  for (const channel of ['enterprise-chat:present', 'enterprise-chat:state', 'enterprise-chat:retry', 'enterprise-chat:usage', 'enterprise-chat:profile', 'enterprise-chat:history', 'enterprise-chat:open', 'enterprise-chat:remove', 'enterprise-chat:open-page', 'enterprise-chat:focus-settings', 'enterprise-chat:close-hosted-app', 'enterprise-chat:retry-hosted-app']) ipcMain.removeHandler(channel)
   ipcMain.handle('enterprise-chat:focus-settings', (event) => {
     assertTrustedMainWindowEvent(event)
     enterpriseChat?.focusSettings()
@@ -1731,6 +1731,10 @@ function registerHarnessHandlers(): void {
     assertTrustedMainWindowEvent(event)
     if (!enterpriseChat) throw new Error('Enterprise usage unavailable.')
     return enterpriseChat.usage()
+  })
+  ipcMain.handle('enterprise-chat:profile', (event) => {
+    assertTrustedMainWindowEvent(event)
+    return enterpriseChat?.profile() ?? null
   })
   ipcMain.handle('enterprise-chat:history', (event, page: unknown) => {
     assertTrustedMainWindowEvent(event)

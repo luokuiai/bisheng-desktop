@@ -8,6 +8,7 @@ import { chatDialogViewportScript } from './chat-dialog-viewport'
 import { chatLocaleScript } from './chat-locale'
 import { chatLayoutCss } from './chat-layout'
 import { parseUsageSummary, parseUsageStorage, type EnterpriseUsage, type UsageSection } from '../../shared/enterprise-usage'
+import { parseEnterpriseProfile, type EnterpriseProfile } from '../../shared/enterprise-profile'
 import { EnterprisePlatformError, isEnterprisePlatformError } from './enterprise-request'
 import { HostedAppView, hostedApplication } from './hosted-app-view'
 import type { EnterpriseWebSession } from './web-session'
@@ -179,57 +180,61 @@ export class EnterpriseChatView {
     if (this.presentation?.visible && this.presentation.settings === this.settingsSection && this.isSettingsReady()) this.view?.webContents.focus()
   }
 
+  /** One authenticated JSON read over the identity-owned cookie session. */
+  private async readSelfService(path: string): Promise<unknown> {
+    const epoch = this.generation
+    if (this.state.phase !== 'ready') await this.connect()
+    if (epoch !== this.generation || !this.isolated || !this.origin || !this.enterprise.snapshot().connected) throw new Error('Enterprise identity changed.')
+    const isolated = this.isolated, origin = this.origin
+    const assertCurrent = () => {
+      if (epoch !== this.generation || isolated !== this.isolated || !this.enterprise.snapshot().connected) throw new Error('Enterprise identity changed.')
+    }
+    const request = () => {
+      assertCurrent()
+      return isolated.fetch(new URL(path, origin).href, { redirect: 'error', signal: AbortSignal.timeout(15_000) })
+    }
+    let response = await request()
+    if (response.status === 401) {
+      await response.body?.cancel()
+      assertCurrent()
+      await this.connect()
+      assertCurrent()
+      response = await request()
+    }
+    if (!response.ok) {
+      await response.body?.cancel()
+      throw new Error(`Enterprise request failed (${response.status}).`)
+    }
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('Enterprise response is empty.')
+    const chunks: Uint8Array[] = []
+    let length = 0
+    try {
+      while (true) {
+        const next = await reader.read()
+        if (next.done) break
+        length += next.value.byteLength
+        if (length > 512 * 1024) throw new Error('Enterprise response is too large.')
+        chunks.push(next.value)
+      }
+    } finally { await reader.cancel(); reader.releaseLock() }
+    const result: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+    if (!result || typeof result !== 'object' || !('status_code' in result) || result.status_code !== 200 || !('data' in result)) throw new Error('Enterprise data unavailable.')
+    return result.data
+  }
+
   /** Fixed self-service reads reuse the identity-owned cookie session, never renderer URLs. */
   async usage(): Promise<EnterpriseUsage> {
     const epoch = this.generation
-    if (this.state.phase !== 'ready') await this.connect()
-    if (epoch !== this.generation || !this.isolated || !this.origin || !this.enterprise.snapshot().connected) throw new Error('Usage identity changed.')
-    const isolated = this.isolated, origin = this.origin
     const assertCurrent = () => {
-      if (epoch !== this.generation || isolated !== this.isolated || !this.enterprise.snapshot().connected) throw new Error('Usage identity changed.')
-    }
-    let renewal: Promise<void> | undefined
-    const read = async (path: string): Promise<unknown> => {
-      const request = () => {
-        assertCurrent()
-        return isolated.fetch(new URL(path, origin).href, { redirect: 'error', signal: AbortSignal.timeout(15_000) })
-      }
-      let response = await request()
-      if (response.status === 401) {
-        await response.body?.cancel()
-        assertCurrent()
-        renewal ??= this.connect()
-        await renewal
-        assertCurrent()
-        response = await request()
-      }
-      if (!response.ok) {
-        await response.body?.cancel()
-        throw new Error(`Usage request failed (${response.status}).`)
-      }
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('Usage response is empty.')
-      const chunks: Uint8Array[] = []
-      let length = 0
-      try {
-        while (true) {
-          const next = await reader.read()
-          if (next.done) break
-          length += next.value.byteLength
-          if (length > 512 * 1024) throw new Error('Usage response is too large.')
-          chunks.push(next.value)
-        }
-      } finally { await reader.cancel(); reader.releaseLock() }
-      const result: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-      if (!result || typeof result !== 'object' || !('status_code' in result) || result.status_code !== 200 || !('data' in result)) throw new Error('Usage unavailable.')
-      return result.data
+      if (epoch !== this.generation || !this.enterprise.snapshot().connected) throw new Error('Usage identity changed.')
     }
     const section = async <T>(name: 'summary' | 'storage', path: string, parse: (value: unknown) => T): Promise<UsageSection<T>> => {
       try {
-        return { status: 'ready', data: parse(await read(path)) }
+        return { status: 'ready', data: parse(await this.readSelfService(path)) }
       } catch (error) {
         // Fixed host stages retain diagnostics while response bodies stay in the host.
-        const status = error instanceof Error ? error.message.match(/^Usage request failed \((\d{3})\)\.$/u)?.[1] : undefined
+        const status = error instanceof Error ? error.message.match(/^Enterprise request failed \((\d{3})\)\.$/u)?.[1] : undefined
         this.note(`[enterprise-chat] usage_failed section=${name} status=${status ?? 'transport-or-response'}`)
         return { status: 'error' }
       }
@@ -240,6 +245,22 @@ export class EnterpriseChatView {
     ])
     assertCurrent()
     return { summary, storage }
+  }
+
+  /** Optional avatar/department projection; the renderer degrades when either read fails. */
+  async profile(): Promise<EnterpriseProfile | null> {
+    if (this.state.phase !== 'ready') await this.connect()
+    if (!this.enterprise.snapshot().connected) return null
+    const [userInfo, dshProfile] = await Promise.allSettled([
+      this.readSelfService('/api/v1/user/info'),
+      this.readSelfService('/api/v1/dsh/me/profile')
+    ])
+    if (!this.enterprise.snapshot().connected) return null
+    return parseEnterpriseProfile(
+      userInfo.status === 'fulfilled' ? userInfo.value : undefined,
+      dshProfile.status === 'fulfilled' ? dshProfile.value : undefined,
+      this.origin
+    )
   }
 
   /** Fixed read-only endpoint. The isolated cookie stays in the host session. */

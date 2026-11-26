@@ -17,7 +17,7 @@ function fixture(realApi = false) {
   const api = vi.fn(async () => ({}))
   const warn = vi.fn()
   const fetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }))
-  const apiEnd = source.indexOf('    function usageText(', end)
+  const apiEnd = source.indexOf('    function readLastBase(', end)
   const bind = vm.runInNewContext(`${source.slice(start, realApi ? apiEnd : end)}; bindEnterpriseModelSync`, {
     window, document, ...(realApi ? { fetch, CustomEvent: class extends Event {} } : { api }), AbortController, ACCOUNT_CHANGED_EVENT: accountChanged, console: { warn }
   })

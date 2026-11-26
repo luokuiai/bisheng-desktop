@@ -78,63 +78,84 @@ async function fixture(language = 'zh', settingsProtocolVersion = 1, signedIn = 
   return { mount, renderSlot, render, registrations, primitives, update: next => subscribers.forEach(listener => listener(next)), root, dom, unregister, request, subscribers, setAccount: next => { account = next } }
 }
 
-it.each(['zh', 'en'])('renders native usage with enterprise data, switching metrics and clearing identity (%s)', async language => {
+it.each(['zh', 'en'])('renders the enterprise identity, metrics, rolling heatmap and trend (%s)', async language => {
   const f = await fixture(language)
   const totals = { total_tokens: 1200, input_tokens: 1000, output_tokens: 200, message_count: 12, missing_usage_count: 1 }
-  window.dshEnterpriseChat.usage = vi.fn(async () => usageData({ totals, storage: { used: 0.05, limit: -1 }, points: [{ ...totals, start_at: '2026-10-22T00:00:00+08:00', end_at: '2026-10-23T00:00:00+08:00' }] }))
+  const end = Date.parse('2026-11-26T00:00:00+08:00')
+  const points = Array.from({ length: 40 }, (_, index) => {
+    const start = new Date(end - (39 - index) * 86400000).toISOString()
+    return { ...totals, start_at: start, end_at: new Date(Date.parse(start) + 86400000).toISOString() }
+  })
+  const usage = vi.fn(async () => usageData({ totals, storage: { used: 0.05, limit: -1 }, points }))
+  window.dshEnterpriseChat.usage = usage
+  window.dshEnterpriseChat.profile = vi.fn(async () => ({ avatar: 'https://example.test/avatar.png', department_name: '临时访客' }))
   const surface = vi.fn()
   window.addEventListener('dsh-desktop:settings-surface', surface)
   const entry = f.registrations.find(row => row.options.id === 'desktop-usage')
-  await f.mount(entry.Component, entry.options.inject())
-  expect(document.querySelector('[role=tablist]')).not.toBeNull()
+  await f.mount(entry.Component, { ...entry.options.inject(), identity: { username: 'zhangsan', display_name: '张三' } })
   const ownedStyle = document.querySelector('style[data-plugin-css="dsh-desktop-settings"]')
   expect(ownedStyle.dataset.plugin).toBe('dsh-desktop-settings')
-  // Match the module loader's claim + HMR removal behavior for an unrelated lazy factory.
   for (const style of document.querySelectorAll('style:not([data-plugin])')) style.dataset.plugin = 'unrelated-lazy-plugin'
   document.querySelectorAll('style[data-plugin="unrelated-lazy-plugin"]').forEach(style => style.remove())
   expect(ownedStyle.isConnected).toBe(true)
+  expect(ownedStyle.textContent).toContain('prefers-reduced-motion')
+  expect(document.querySelector('[data-usage-identity]')).not.toBeNull()
+  expect(document.querySelector('[data-usage-display-name]').textContent).toBe('zhangsan')
+  expect(document.querySelector('.dshUsageHandle').textContent).toBe('@临时访客')
+  expect(document.querySelector('.dshUsageAvatar img').getAttribute('src')).toBe('https://example.test/avatar.png')
+  expect(document.querySelector('.dshUsageCover').getAttribute('aria-hidden')).toBe('true')
+  expect(document.querySelector('.dshUsageCover img').getAttribute('src').startsWith('data:image/')).toBe(true)
+  expect(document.querySelector('[data-usage-contribution]').textContent).toContain('480')
+  expect([...document.querySelectorAll('[data-usage-metric]')].map(node => node.dataset.usageMetric)).toEqual(language === 'zh'
+    ? ['累计词元', '峰值词元', '最长任务', '最长连续记录']
+    : ['Total tokens', 'Peak tokens', 'Longest task', 'Longest streak'])
+  expect(document.querySelector('[data-usage-metric]:nth-child(3)').textContent).toContain('—')
+  expect(document.querySelectorAll('.dshUsageHeatmap [data-date]')).toHaveLength(266)
+  expect(document.querySelector('.dshUsageHeatmap').style.getPropertyValue('--dsh-usage-columns')).toBe('38')
   expect(document.querySelector('.dshUsageStorage').textContent).toContain('51.2 MB')
-  expect(document.querySelectorAll('.dshUsageOverview dd')[1].textContent).toBe(language === 'zh' ? '0.1万' : '1.2K')
-   expect(entry.options.name).toBe('desktop.account.usage')
-   expect(f.registrations.some(row => row.options.name === 'settings.section' && row.options.id === 'desktop-usage')).toBe(false)
-  const day = document.querySelector('[role=listitem]')
-  await act(async () => day.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })))
-  expect(document.querySelector('[role=tooltip]').textContent).toContain('2026-10-22')
-  expect(document.querySelector('[role=tooltip]').textContent).toContain(language === 'zh' ? '0.1万' : '1.2K')
-  await act(async () => day.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true })))
-  expect(document.querySelector('[role=tooltip]')).toBeNull()
-  const breakdown = document.querySelector('.dshUsageFooter > p')
+  expect(document.body.textContent).not.toContain(language === 'zh' ? '剩余积分' : 'Credits remaining')
+  // Mode switches only re-grid the existing buckets.
+  const modes = () => [...document.querySelectorAll('.dshUsageModeSwitch button')]
+  expect(modes().map(button => button.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true'])
+  await click(modes()[1])
+  expect(modes().map(button => button.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false'])
+  expect(document.querySelectorAll('.dshUsageHeatmap [data-date]')).toHaveLength(42)
+  await click(modes()[0])
+  expect(document.querySelectorAll('.dshUsageHeatmap [data-date]')).toHaveLength(7)
+  expect(usage).toHaveBeenCalledTimes(1)
+  await click(modes()[2])
+  expect(document.querySelectorAll('.dshUsageHeatmap [data-date]')).toHaveLength(266)
+  const observed = document.querySelector('.dshUsageHeatmap [data-state="observed"]')
+  await act(async () => observed.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })))
+  expect(document.querySelector('[role=tooltip]').textContent).toContain(language === 'zh' ? '1,200 Token' : '1,200 tokens')
+  expect(document.querySelector('[role=tooltip]').textContent).toContain(language === 'zh' ? '12 条消息' : '12 messages')
+  const breakdown = document.querySelector('.dshUsageHeatmapFooter .dshUsageNote')
   expect(breakdown.style.visibility).toBe('visible')
-  await click(document.querySelectorAll('[role=tab]')[1])
-  expect(document.querySelector('.dshUsageFooter > p')).toBe(breakdown)
+  await click([...document.querySelectorAll('.dshUsageMetricSwitch button')][1])
   expect(breakdown.style.visibility).toBe('hidden')
   expect(breakdown.getAttribute('aria-hidden')).toBe('true')
-  expect(document.querySelectorAll('.dshUsageOverview dd')[2].textContent).toBe('12')
-  expect(document.querySelector('[role=listitem]').getAttribute('aria-label')).toContain('12')
-  await act(async () => document.querySelector('[role=listitem]').focus())
+  expect(observed.getAttribute('aria-label')).toContain('12')
+  await act(async () => observed.focus())
   expect(document.querySelector('[role=tooltip]').textContent).toContain('12')
-  expect(document.querySelector('[role=tooltip]').textContent).toContain(language === 'zh' ? '消息数' : 'Messages')
+  expect(document.querySelector('[data-usage-trend] svg')).not.toBeNull()
   expect(surface).not.toHaveBeenCalled()
   await act(async () => f.update({ epoch: 2, connected: false }))
-  expect(document.querySelector('.dshUsageOverview')).toBeNull()
+  expect(document.querySelector('[data-usage-identity]')).toBeNull()
   expect(document.body.textContent).toContain(language === 'zh' ? '登录企业账号后可查看' : 'Sign in to view')
 })
 
-it.each(['zh', 'en'])('avoids overlapping month labels for a partial starting week (%s)', async language => {
+it.each(['zh', 'en'])('degrades a missing profile to initials without an organization row (%s)', async language => {
   const f = await fixture(language)
   const totals = { total_tokens: 0, input_tokens: 0, output_tokens: 0, message_count: 0, missing_usage_count: 0 }
-  const start = Date.parse('2025-10-31T00:00:00Z')
-  const points = Array.from({ length: 365 }, (_, index) => ({ ...totals, start_at: new Date(start + index * 86400000).toISOString(), end_at: new Date(start + (index + 1) * 86400000).toISOString() }))
-  window.dshEnterpriseChat.usage = vi.fn(async () => usageData({ totals, storage: null, points }))
+  window.dshEnterpriseChat.usage = vi.fn(async () => usageData({ totals, storage: null, points: [] }))
+  window.dshEnterpriseChat.profile = vi.fn(async () => ({ avatar: null, department_name: null }))
   const entry = f.registrations.find(row => row.options.id === 'desktop-usage')
-  await f.mount(entry.Component, entry.options.inject())
-  const labels = [...document.querySelectorAll('.dshUsageMonths span')]
-  expect(labels[0].textContent).toBe(language === 'zh' ? '11月' : 'Nov')
-  const columns = labels.map(node => Number(node.style.gridColumn.split('/')[0]))
-  expect(columns.every((column, index) => index === 0 || column - columns[index - 1] >= 3)).toBe(true)
-  expect(labels.every(node => node.style.gridRow === '1')).toBe(true)
-  expect(document.querySelectorAll('.dshUsageGrid .dshUsageDay')).toHaveLength(365)
-  expect(document.querySelector('.dshUsageGrid').style.gridTemplateColumns).toContain('minmax(0, 1fr)')
+  await f.mount(entry.Component, { ...entry.options.inject(), identity: { display_name: '张三' } })
+  expect(document.querySelector('.dshUsageAvatar img')).toBeNull()
+  expect(document.querySelector('.dshUsageAvatar').textContent).toBe('张三')
+  expect(document.querySelector('.dshUsageHandle')).toBeNull()
+  expect(document.querySelector('.dshUsageHeatmap')).not.toBeNull()
+  expect(document.body.textContent).not.toContain(language === 'zh' ? '剩余积分' : 'Credits remaining')
 })
 
 it('retries native usage failures and ignores results finishing after identity change', async () => {
@@ -151,7 +172,7 @@ it('retries native usage failures and ignores results finishing after identity c
   await act(async () => f.update({ epoch: 5, connected: false }))
   await act(async () => finish({ totals: {}, points: [], storage: null }))
   expect(document.body.textContent).toContain('登录企业账号后可查看')
-  expect(document.querySelector('.dshUsageGrid')).toBeNull()
+  expect(document.querySelector('.dshUsageHeatmap')).toBeNull()
 })
 
 /** Exercise the installed DSH owners and their real fallbacks without copying their layouts. */
@@ -269,12 +290,13 @@ it('shows enterprise models natively and embeds no account page in Account and s
     await localeContext.fiber.dispose()
   }
   window.dshEnterpriseChat.usage = vi.fn(async () => usageData({ totals: { total_tokens: 900, input_tokens: 800, output_tokens: 100, message_count: 9, missing_usage_count: 0 }, points: [], storage: { used: 0.05, limit: 1 } }))
+  window.dshEnterpriseChat.profile = vi.fn(async () => ({ avatar: null, department_name: '研发部' }))
   const renderSlot = vi.fn((...args) => f.renderSlot(...args))
   await f.mount(EnterpriseSection, { t: key => key, renderSlot })
   expect(document.querySelector('.dshEnterpriseManagedModels').tagName).toBe('SECTION')
   expect(document.querySelector('.dshEnterpriseManagedModels h3').textContent).toBe('managedModels')
   const security = document.querySelector('.dshEnterpriseSecurity')
-  expect(document.querySelector('.dshEnterpriseManagedModels').nextElementSibling).toBe(document.querySelector('.dshUsageStorage'))
+  expect(document.querySelector('.dshUsageModels .dshEnterpriseManagedModels')).not.toBeNull()
   const logout = document.querySelector('.dshEnterpriseLogout')
   expect(document.querySelector('.dshUsage').nextElementSibling).toBe(logout)
   expect(document.querySelectorAll('.dshEnterpriseManagedModels')).toHaveLength(1)
@@ -286,10 +308,12 @@ it('shows enterprise models natively and embeds no account page in Account and s
   expect(renderSlot).toHaveBeenCalledOnce()
   expect(renderSlot.mock.calls[0][0]).toBe('desktop.account.usage')
   expect(document.querySelectorAll('.dshUsage')).toHaveLength(1)
-  expect(document.querySelectorAll('.dshUsageOverview dd')[1].textContent).toBe('0.1万')
+  expect(document.querySelector('[data-usage-display-name]').textContent).toBe('employee')
+  expect(document.querySelector('.dshUsageHandle').textContent).toBe('@研发部')
   expect(window.dshEnterpriseChat.usage).toHaveBeenCalledOnce()
   expect(document.querySelector('.dshUsageProgress').value).toBe(0.05)
-  expect(document.querySelector('.dshEnterpriseIdentity').textContent).toContain('employee')
+  expect(document.querySelector('.dshEnterpriseIdentity')).toBeNull()
+  expect(document.querySelectorAll('[data-usage-identity]')).toHaveLength(1)
   expect(document.querySelector('.dshSettingsRemote')).toBeNull()
   expect(f.registrations.some(row => row.options.name === 'desktop.settings.account')).toBe(false)
   expect(document.querySelector('details')).toBeNull()
@@ -624,16 +648,16 @@ it('retries the failed account read and the failed action from the menu', async 
 })
 
 
-it.each([[0, '0.0万'], [12057, '1.2万'], [1152049, '115.2万'], [99900000, '9990.0万'], [100000000, '1.0亿'], [230000000, '2.3亿']])('formats daily Token usage %s as %s', async (count, expected) => {
+it.each([[12057, '1.21万'], [100000000, '1亿'], [230000000, '2.3亿']])('formats daily Token usage %s as %s', async (count, expected) => {
   const f = await fixture('zh')
   const totals = { total_tokens: count, input_tokens: count, output_tokens: 0, message_count: 3, missing_usage_count: 0 }
   window.dshEnterpriseChat.usage = vi.fn(async () => usageData({ totals, storage: null, points: [{ ...totals, start_at: '2026-10-22T00:00:00+08:00', end_at: '2026-10-23T00:00:00+08:00' }] }))
   const entry = f.registrations.find(row => row.options.id === 'desktop-usage')
   await f.mount(entry.Component, entry.options.inject())
-  const day = document.querySelector('[role=listitem]')
+  const day = document.querySelector('.dshUsageHeatmap [data-state="observed"]')
   await act(async () => day.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })))
-  expect(document.querySelector('[role=tooltip]').textContent).toBe(`2026-10-22 · Token 用量: ${expected}`)
-  expect(document.querySelectorAll('.dshUsageOverview dd')[1].textContent).toBe(expected)
+  expect(document.querySelector('[role=tooltip]').textContent).toContain(new Intl.NumberFormat('zh-CN').format(count))
+  expect(document.querySelector('[data-usage-metric="累计词元"] .dshUsageTileValue').textContent).toBe(expected)
 })
 
 it('retries an errored Chat session through the host usage operation', async () => {
@@ -648,7 +672,7 @@ it('retries an errored Chat session through the host usage operation', async () 
   await click(document.querySelector('.dshSettingsStatus button'))
   expect(usage).toHaveBeenCalledTimes(2)
   expect(document.querySelector('[role=alert]')).toBeNull()
-  expect(document.querySelector('.dshUsageOverview')).not.toBeNull()
+  expect(document.querySelector('[data-usage-identity]')).not.toBeNull()
 })
 
 it('loads after the same account epoch becomes ready and coalesces repeated ready events', async () => {
@@ -672,12 +696,12 @@ it.each(['summary', 'storage'])('keeps the successful section visible when %s fa
   window.dshEnterpriseChat.usage = usage
   const entry = f.registrations.find(row => row.options.id === 'desktop-usage')
   await f.mount(entry.Component, entry.options.inject())
-  expect(document.querySelector(failed === 'storage' ? '.dshUsageOverview' : '.dshUsageStorage')).not.toBeNull()
+  expect(document.querySelector(failed === 'storage' ? '[data-usage-identity]' : '.dshUsageStorage')).not.toBeNull()
   expect(document.querySelector('[role=alert]').textContent).toContain(failed === 'storage' ? '存储空间加载失败' : '用量统计加载失败')
   await click(document.querySelector('[role=alert] button'))
   expect(document.querySelector('[role=alert]')).toBeNull()
   expect(document.querySelector('.dshUsageStorage')).not.toBeNull()
-  expect(document.querySelector('.dshUsageOverview')).not.toBeNull()
+  expect(document.querySelector('[data-usage-identity]')).not.toBeNull()
 })
 
 it('keeps a session failure bounded while the host publishes a new error epoch', async () => {

@@ -10,7 +10,6 @@ window.__ModuleLoader__.load({
     const LAST_BASE_KEY = 'dshDesktopEnterprise.lastBase'
     const MANUAL_FALLBACK_DELAY_MS = 8_000
     const ENTERPRISE_SECTION_ID = 'enterprise-account'
-    const LEARN_MORE_URL = 'https://dshdesktop.com/zh/enterprise/deployment/'
     const OPEN_SETTINGS_SECTION_EVENT = 'dsh-desktop:open-settings-section'
     const NS = 'settings.desktopEnterprise'
     const SAFETY_NS = 'enterprise.contentSafety'
@@ -66,7 +65,6 @@ window.__ModuleLoader__.load({
       nav: '账号与用量',
       title: '账号与用量',
       managedModels: '企业提供的模型',
-      accountLabel: '当前账号',
       platform: '企业平台地址',
       signInTitle: '登录企业账号',
       signInIntro: '登录后可使用聊天，以及企业为你授权的模型、工具和技能。',
@@ -77,11 +75,8 @@ window.__ModuleLoader__.load({
       login: '在浏览器中登录',
       loginAgain: '重新登录',
       loggingIn: '等待浏览器授权…',
-      learnMore: '了解企业版',
       vision: '视觉',
       visionHint: '企业已开启图片输入',
-      usageLabel: '剩余积分',
-      creditsHelp: 'Chat 和 Work 共用积分，每月重置。',
       ticket: '一次性登录码',
       submitTicket: '完成登录',
       refresh: '刷新',
@@ -89,8 +84,6 @@ window.__ModuleLoader__.load({
       models: '可用模型',
       modelAvailable: '可用',
       noModels: '暂无可用模型，请联系管理员授权。',
-      usageUnavailable: '用量暂不可用',
-      limitZero: '剩余 0 分',
       secureUnavailable: '系统安全存储不可用，企业登录已停用。',
       confirmTitle: '确认企业平台',
       confirmLead: '确认后将切换到以下企业平台，并在浏览器中登录。',
@@ -133,7 +126,6 @@ window.__ModuleLoader__.load({
       nav: 'Account and usage',
       title: 'Account and usage',
       managedModels: 'Models provided by your enterprise',
-      accountLabel: 'Current account',
       platform: 'Enterprise platform URL',
       signInTitle: 'Sign in to your enterprise account',
       signInIntro: 'Sign in to use Chat and the models, tools, and skills authorized by your organization.',
@@ -144,11 +136,8 @@ window.__ModuleLoader__.load({
       login: 'Sign in in browser',
       loginAgain: 'Sign in again',
       loggingIn: 'Waiting for browser authorization…',
-      learnMore: 'Learn about Enterprise',
       vision: 'Vision',
       visionHint: 'Image input enabled by your enterprise',
-      usageLabel: 'Credits remaining',
-      creditsHelp: 'Chat and Work share credits, reset monthly.',
       ticket: 'One-time code',
       submitTicket: 'Complete sign-in',
       refresh: 'Refresh',
@@ -156,8 +145,6 @@ window.__ModuleLoader__.load({
       models: 'Available models',
       modelAvailable: 'Available',
       noModels: 'No models are available. Ask your administrator to authorize one.',
-      usageUnavailable: 'Usage unavailable',
-      limitZero: 'Limit is 0; model calls are disabled',
       secureUnavailable: 'Operating-system secure storage is unavailable. Enterprise sign-in is disabled.',
       confirmTitle: 'Confirm enterprise platform',
       confirmLead: 'Continue to switch to this enterprise platform and sign in through your browser.',
@@ -286,53 +273,10 @@ window.__ModuleLoader__.load({
           opacity: .5;
           cursor: default;
         }
-        .dshEnterpriseLearnMoreShell {
-          display: inline-flex;
-        }
-        .dshEnterpriseLearnMore {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          min-height: 32px;
-          padding: 4px 8px;
-          border: 0;
-          border-radius: 6px;
-          color: var(--dsw-alias-label-secondary);
-          background: transparent;
-          font: inherit;
-          font-size: 12px;
-          cursor: pointer;
-          white-space: nowrap;
-        }
-        .dshEnterpriseLearnMore:hover {
-          color: var(--dsw-alias-label-primary);
-          background: var(--dsw-alias-interactive-bg-hover);
-        }
-        .dshEnterpriseLearnMore:focus-visible,
         .dshEnterpriseLogout:focus-visible,
         .dshEnterpriseIconButton:focus-visible {
           outline: 2px solid var(--dsw-alias-label-primary);
           outline-offset: 2px;
-        }
-        .dshEnterpriseIdentity {
-          display: flex;
-          align-items: center;
-          flex-direction: column;
-          gap: 12px;
-          padding: 20px 0 28px;
-          text-align: center;
-        }
-        .dshEnterpriseAvatar {
-          display: grid;
-          place-items: center;
-          flex: none;
-          width: 64px;
-          height: 64px;
-          border-radius: 50%;
-          font-size: 22px;
-          font-weight: 500;
-          color: var(--dsw-alias-label-secondary);
-          background: var(--dsw-alias-interactive-bg-hover);
         }
         /* Keep sign-out as the final, explicitly destructive account action. */
         .dshEnterprise .dshEnterpriseLogout {
@@ -342,17 +286,6 @@ window.__ModuleLoader__.load({
         .dshEnterprise .dshEnterpriseLogout:hover:not(:disabled),
         .dshEnterprise .dshEnterpriseLogout:focus-visible:not(:disabled) {
           background: var(--dsw-alias-interactive-bg-hover-danger);
-        }
-        .dshEnterpriseAccount {
-          display: grid;
-          gap: 4px;
-          min-width: 0;
-          font-size: 14px;
-          overflow-wrap: anywhere;
-        }
-        .dshEnterpriseAccountLabel {
-          color: var(--dsw-alias-label-secondary);
-          font-size: 12px;
         }
         .dshEnterpriseSectionHeader {
           display: flex;
@@ -403,7 +336,6 @@ window.__ModuleLoader__.load({
         }
         .dshEnterpriseModels {
           display: grid;
-          gap: 8px;
           margin: 12px 0 0;
           padding: 0;
           list-style: none;
@@ -411,12 +343,15 @@ window.__ModuleLoader__.load({
         .dshEnterpriseModels li {
           box-sizing: border-box;
           min-width: 0;
-          border: .5px solid var(--dsw-alias-settings-card-stroke);
-          border-radius: var(--dsw-radius-xl);
-          background: var(--dsw-alias-settings-card-fill);
-          padding: 12px 14px;
+          border: 0;
+          border-top: 1px solid var(--dsw-alias-border-l2);
+          background: transparent;
+          padding: 12px 2px;
           font-size: 14px;
           line-height: 22px;
+        }
+        .dshEnterpriseModels li:first-child {
+          border-top: 0;
         }
         .dshEnterpriseModelIdentity {
           display: grid;
@@ -762,16 +697,6 @@ window.__ModuleLoader__.load({
       return payload
     }
 
-    function usageText(usage, language, t) {
-      if (!usage || usage.source === 'unavailable' || usage.quota_state === 'unavailable') {
-        return t('usageUnavailable')
-      }
-      const formatter = new Intl.NumberFormat(language || 'en', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-      if (usage.limit === 0) return formatter.format(0)
-      if (usage.used === null || usage.limit === null) return t('usageUnavailable')
-      return formatter.format(Math.max(0, usage.limit - usage.used) / 1_000_000)
-    }
-
     function readLastBase() {
       try {
         return localStorage.getItem(LAST_BASE_KEY) || ''
@@ -882,15 +807,6 @@ window.__ModuleLoader__.load({
       },
         h('path', { d: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z' }),
         h('circle', { cx: 12, cy: 12, r: 3 }))
-    }
-
-    function renderLearnMoreButton(t) {
-      return h('span', { className: 'dshEnterpriseLearnMoreShell' },
-        h('button', {
-          className: 'dshEnterpriseLearnMore',
-          type: 'button',
-          onClick: () => window.open(LEARN_MORE_URL, '_blank', 'noopener,noreferrer')
-        }, t('learnMore'), h('span', { 'aria-hidden': 'true' }, '↗')))
     }
 
     function modelDisplayParts(displayName) {
@@ -1049,7 +965,6 @@ window.__ModuleLoader__.load({
 
       const connected = state?.connected === true
       const models = Array.isArray(state?.models) ? state.models : []
-      const userLabel = state?.user?.display_name || state?.user?.username || state?.user?.id || '—'
       const language = readUiLanguage()
 
       const logoutButton = connected && h(require('@deepseek-ai/dsh-client-ui-primitives').Button, {
@@ -1061,14 +976,6 @@ window.__ModuleLoader__.load({
           applyAccountState(next)
         })
       }, t('logout'))
-      const status = connected
-        ? h('div', { className: 'dshEnterpriseIdentity' },
-          h('span', { className: 'dshEnterpriseAvatar', 'aria-hidden': 'true' }, String(userLabel).slice(0, 2).toLocaleUpperCase()),
-          h('div', { className: 'dshEnterpriseAccount' },
-            h('strong', null, userLabel),
-            h('span', { className: 'dshEnterpriseAccountLabel' }, state?.user?.username || t('accountLabel'))))
-        : null
-
       const accountContent = connected
         ? h(React.Fragment, null,
           h('div', { className: 'dshEnterpriseSectionHeader' },
@@ -1193,16 +1100,12 @@ window.__ModuleLoader__.load({
 
       return h('section', { className: 'dshEnterprise' },
         h('div', { className: 'dshEnterpriseTitleRow' },
-          h('h2', null, t(connected ? 'title' : 'signInTitle')),
-          renderLearnMoreButton(t)),
+          h('h2', null, t(connected ? 'title' : 'signInTitle'))),
         connected ? null : h('p', { className: 'dshEnterpriseLoginIntro' }, t('signInIntro')),
-        status,
         connected && renderSlot?.('desktop.account.usage', {
-          credits: usageText(state.usage, document.documentElement.lang, t),
-          creditsLabel: t('usageLabel'), creditsHelp: t('creditsHelp'),
+          identity: state.user,
           models: h('section', { className: 'dshEnterpriseManagedModels' }, accountContent)
         }, { fallback: h(React.Fragment, null,
-          h('p', { title: t('creditsHelp') }, `${t('usageLabel')}: ${usageText(state.usage, document.documentElement.lang, t)}`),
           h('section', { className: 'dshEnterpriseManagedModels' }, accountContent)) }),
         connected ? logoutButton : accountContent,
         manualFallback,
