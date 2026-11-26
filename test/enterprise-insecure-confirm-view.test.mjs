@@ -11,7 +11,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 const source = await readFile(new URL('../packages/dsh-desktop-enterprise/client.js', import.meta.url), 'utf8')
 const localeSource = await readFile(new URL('../node_modules/@deepseek-ai/dsh-client-locale/lib/client.js', import.meta.url), 'utf8')
 const SERVICE = 'http://192.168.106.109:13001'
-const LOGIN_LINK = 'bisheng-work://login?server=http%3A%2F%2F192.168.106.109%3A13001'
+const LOGIN_LINK = 'luokuiai://login?server=http%3A%2F%2F192.168.106.109%3A13001'
 let cleanup
 
 afterEach(async () => {

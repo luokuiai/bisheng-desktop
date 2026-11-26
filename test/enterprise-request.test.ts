@@ -8,7 +8,7 @@ describe('enterprise stream conversation metadata', () => {
       const body = { model: 'bisheng:42', stream: true, ...(path.endsWith('/responses') ? { input: messages } : { messages }) }
       const attribution = { 'x-dsh-conversation-id': 'session-1', 'x-dsh-request-purpose': 'chat' }
       const fetchImpl = vi.fn(async (_input: string, _init?: RequestInit) => new Response())
-      await requestEnterpriseStream(fetchImpl, 'https://bisheng.example.com', path, {
+      await requestEnterpriseStream(fetchImpl, 'https://platform.example.com', path, {
         body, attribution, accessToken: 'test-access-token'
       })
       const init = fetchImpl.mock.calls[0]?.[1]
@@ -21,7 +21,7 @@ describe('enterprise stream conversation metadata', () => {
   it('preserves body metadata and prefers its conversation ID over the header', async () => {
     const body = { model: 'bisheng:42', audit_context: { conversation_id: 'body-session', purpose: 'compaction' } }
     const fetchImpl = vi.fn(async (_input: string, _init?: RequestInit) => new Response())
-    await requestEnterpriseStream(fetchImpl, 'https://bisheng.example.com', '/api/v1/dsh/responses', {
+    await requestEnterpriseStream(fetchImpl, 'https://platform.example.com', '/api/v1/dsh/responses', {
       body, attribution: { 'x-dsh-conversation-id': 'header-session' }, accessToken: 'test-access-token'
     })
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual(body)
@@ -30,7 +30,7 @@ describe('enterprise stream conversation metadata', () => {
   it('adds a missing conversation ID without dropping other audit metadata', async () => {
     const body = { model: 'bisheng:42', audit_context: { purpose: 'session-title' } }
     const fetchImpl = vi.fn(async (_input: string, _init?: RequestInit) => new Response())
-    await requestEnterpriseStream(fetchImpl, 'https://bisheng.example.com', '/api/v1/dsh/responses', {
+    await requestEnterpriseStream(fetchImpl, 'https://platform.example.com', '/api/v1/dsh/responses', {
       body, attribution: { 'x-dsh-conversation-id': 'session-2' }, accessToken: 'test-access-token'
     })
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
@@ -41,7 +41,7 @@ describe('enterprise stream conversation metadata', () => {
   it('does not fabricate a conversation ID for requests without a session', async () => {
     const body = { model: 'bisheng:42', stream: true }
     const fetchImpl = vi.fn(async (_input: string, _init?: RequestInit) => new Response())
-    await requestEnterpriseStream(fetchImpl, 'https://bisheng.example.com', '/api/v1/dsh/responses', {
+    await requestEnterpriseStream(fetchImpl, 'https://platform.example.com', '/api/v1/dsh/responses', {
       body, attribution: { 'user-agent': 'test-harness' }, accessToken: 'test-access-token'
     })
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual(body)
@@ -50,7 +50,7 @@ describe('enterprise stream conversation metadata', () => {
   it('keeps a stable ID across repeated calls and isolates different conversations', async () => {
     const fetchImpl = vi.fn(async (_input: string, _init?: RequestInit) => new Response())
     for (const conversationId of ['session-1', 'session-1', 'session-2']) {
-      await requestEnterpriseStream(fetchImpl, 'https://bisheng.example.com', '/api/v1/dsh/responses', {
+      await requestEnterpriseStream(fetchImpl, 'https://platform.example.com', '/api/v1/dsh/responses', {
         body: { model: 'bisheng:42' }, attribution: { 'x-dsh-conversation-id': conversationId }, accessToken: 'test-access-token'
       })
     }
@@ -60,7 +60,7 @@ describe('enterprise stream conversation metadata', () => {
 
   it.each([null, [], 'invalid'])('rejects malformed audit context %j before sending', async (auditContext) => {
     const fetchImpl = vi.fn(async (_input: string, _init?: RequestInit) => new Response())
-    await expect(requestEnterpriseStream(fetchImpl, 'https://bisheng.example.com', '/api/v1/dsh/responses', {
+    await expect(requestEnterpriseStream(fetchImpl, 'https://platform.example.com', '/api/v1/dsh/responses', {
       body: { model: 'bisheng:42', audit_context: auditContext },
       attribution: { 'x-dsh-conversation-id': 'session-1' }, accessToken: 'test-access-token'
     })).rejects.toThrow('audit context must be a JSON object')

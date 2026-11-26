@@ -13,11 +13,11 @@ import { BrowserUpdater, selectUpdateInstaller } from '../src/main/update/browse
 const originalArchitecture = process.arch
 const originalPlatform = process.platform
 const files = ['arm64', 'x64'].flatMap(architecture => ['dmg', 'zip'].map(extension => ({
-  url: new URL(`https://updates.example.test/bisheng-mac-${architecture}.${extension}`),
-  info: { url: `bisheng-mac-${architecture}.${extension}`, sha512: `${architecture}-${extension}-digest`, size: 120 }
+  url: new URL(`https://updates.example.test/luokui-ai-mac-${architecture}.${extension}`),
+  info: { url: `luokui-ai-mac-${architecture}.${extension}`, sha512: `${architecture}-${extension}-digest`, size: 120 }
 }))).concat({
-  url: new URL('https://updates.example.test/bisheng-windows-x64-setup.exe'),
-  info: { url: 'bisheng-windows-x64-setup.exe', sha512: 'windows-digest', size: 120 }
+  url: new URL('https://updates.example.test/luokui-ai-windows-x64-setup.exe'),
+  info: { url: 'luokui-ai-windows-x64-setup.exe', sha512: 'windows-digest', size: 120 }
 })
 
 function offeredUpdater() {
@@ -39,9 +39,9 @@ afterEach(() => {
 })
 
 it.each([
-  ['darwin', 'arm64', 'bisheng-mac-arm64.dmg'],
-  ['darwin', 'x64', 'bisheng-mac-x64.dmg'],
-  ['win32', 'x64', 'bisheng-windows-x64-setup.exe']
+  ['darwin', 'arm64', 'luokui-ai-mac-arm64.dmg'],
+  ['darwin', 'x64', 'luokui-ai-mac-x64.dmg'],
+  ['win32', 'x64', 'luokui-ai-windows-x64-setup.exe']
 ])('opens the %s/%s installer in the browser only on request', async (platform, architecture, installer) => {
   Object.defineProperty(process, 'platform', { value: platform })
   Object.defineProperty(process, 'arch', { value: architecture })
@@ -56,7 +56,7 @@ it.each([
 it('selects Apple Silicon installers under Rosetta', async () => {
   mocks.rosetta = true
   await offeredUpdater().openDownload()
-  expect(mocks.openExternal).toHaveBeenCalledWith('https://updates.example.test/bisheng-mac-arm64.dmg')
+  expect(mocks.openExternal).toHaveBeenCalledWith('https://updates.example.test/luokui-ai-mac-arm64.dmg')
 })
 
 it.each(['file:', 'javascript:', 'ftp:'])('rejects %s installer URLs before invoking the system handler', protocol => {

@@ -78,8 +78,8 @@ it('restores the minimized window and routes a click to the completed Work sessi
 })
 it('rejects foreign windows and child frames before constructing a native notification', () => {
   const f = fixture()
-  expect(() => f.receive({ ...f.event, sender: {} } as IpcMainInvokeEvent, payload)).toThrow('main BISHENG')
-  expect(() => f.receive({ ...f.event, senderFrame: null }, payload)).toThrow('main BISHENG')
+  expect(() => f.receive({ ...f.event, sender: {} } as IpcMainInvokeEvent, payload)).toThrow('main LUOKUI-AI')
+  expect(() => f.receive({ ...f.event, senderFrame: null }, payload)).toThrow('main LUOKUI-AI')
   expect(mock.create).toHaveBeenCalledTimes(0)
 })
 it.each([null, {}, { ...payload, seq: NaN }, { ...payload, turn: 0 }, { ...payload, count: -1 }, { ...payload, sessionId: '../secret' }])('validates completion payload %j', value => {

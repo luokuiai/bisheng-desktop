@@ -17,10 +17,10 @@ from test_change_summary import summarize_changes
 
 INSTALLERS = {
     "macos": [
-        ("macOS Apple Silicon", "bisheng-mac-arm64.dmg"),
-        ("macOS Intel", "bisheng-mac-x64.dmg"),
+        ("macOS Apple Silicon", "luokui-ai-mac-arm64.dmg"),
+        ("macOS Intel", "luokui-ai-mac-x64.dmg"),
     ],
-    "windows": [("Windows x64", "bisheng-windows-x64-setup.exe")],
+    "windows": [("Windows x64", "luokui-ai-windows-x64-setup.exe")],
 }
 
 
@@ -109,7 +109,7 @@ def build_notification(version: str, installers: list[tuple[str, Path]], repo_id
         changes = changes[:8500].rsplit("\n", 1)[0] + "\n\n变更较多，已截断展示。"
     details = f"\n\n{changes}" if changes else ""
     return (
-        f"**BISHENG {version} 测试打包完成**\n\n"
+        f"**LUOKUI-AI {version} 测试打包完成**\n\n"
         f"**下载地址**\n{links}"
         + details
         + f"\n\n{TEST_SUGGESTIONS}\n\n[查看 CI 构建详情]({run_url})"
@@ -133,7 +133,7 @@ def main() -> None:
     repository_url = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
     changes = build_test_changes(repository_url)
     changes_file = args.directory / "test-changes.md"
-    changes_file.write_text(f"# BISHENG {args.version} 提测说明\n\n{changes}\n", encoding="utf-8")
+    changes_file.write_text(f"# LUOKUI-AI {args.version} 提测说明\n\n{changes}\n", encoding="utf-8")
     # Import the SDK only for uploads; the notification and selection logic is independently testable.
     from modelscope.hub.api import HubApi
 

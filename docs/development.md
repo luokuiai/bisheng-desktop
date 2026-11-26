@@ -21,17 +21,17 @@ npm run dev
 
 `npm ci` runs the repository's `postinstall` hook. It reapplies the tracked `patch-package` patches, installs DSH brand assets into the pinned Harness frontend, and installs Electron.
 
-The application icon sources are `build/app-icon.svg` (light/default) and `build/app-icon-dark.svg` (dark). After changing either, run `npm run icons:generate` manually and include the updated PNG, macOS ICNS, and Windows ICO files in the change. These icon files remain checked in as packaging inputs; ordinary builds consume them directly. Generation works on all build platforms without `iconutil`. The sidebar and default conversation mark select the installed light/dark icons through the Harness theme service. About and update dialogs follow the resolved `documentElement.style.colorScheme` published by the Harness layout presenter; no image theme token is provided for these preload-owned surfaces. Packaged desktop icons retain the default artwork. The BISHENG wordmark remains a separate branding input.
+The application icon sources are `build/app-icon.svg` (light/default) and `build/app-icon-dark.svg` (dark). After changing either, run `npm run icons:generate` manually and include the updated PNG, macOS ICNS, and Windows ICO files in the change. These icon files remain checked in as packaging inputs; ordinary builds consume them directly. Generation works on all build platforms without `iconutil`. The sidebar and default conversation mark select the installed light/dark icons through the Harness theme service. About and update dialogs follow the resolved `documentElement.style.colorScheme` published by the Harness layout presenter; no image theme token is provided for these preload-owned surfaces. Packaged desktop icons retain the default artwork. The wordmark remains a separate branding input.
 
-Development builds use the application name `BISHENG` and the separate user-data directory `bisheng-dev`, so they do not reuse production BISHENG data. Development installers use the same `bisheng-<platform>-<arch>` filename prefix as release installers, with output under `dist-dev`. Multiple development worktrees still share that development profile by default; avoid running them at the same time when testing profile, plugin, migration, or recovery changes.
+Development builds use the application name `LUOKUI-AI` and the login protocol `luokuiai-dev://login`. Fresh development profiles default to `luokuiai-dev`. If that directory is absent, the app reuses an existing development profile from the previous default path. Development installers use the same `luokui-ai-<platform>-<arch>` filename prefix as release installers, with output under `dist-dev`.
 
-To run another worktree concurrently, set a distinct `DSH_DEV_PROFILE` directory name and unused loopback ports using `DSH_DEV_HARNESS_PORT` and `DSH_DEV_MOBILE_PORT`. For example, on macOS:
+To run another worktree concurrently, set `BISHENG_DEV_USER_DATA` to a distinct profile path and use `BISHENG_DEV_PORT_OFFSET` to select a free port pair. For example, on macOS:
 
 ```bash
-DSH_DEV_PROFILE=dsh-desktop-dev-workbench DSH_DEV_HARNESS_PORT=43132 DSH_DEV_MOBILE_PORT=43133 npm run dev
+BISHENG_DEV_USER_DATA="$(mktemp -d)" BISHENG_DEV_PORT_OFFSET=100 npm run dev
 ```
 
-On PowerShell, set the same names through `$env:DSH_DEV_PROFILE`, `$env:DSH_DEV_HARNESS_PORT` and `$env:DSH_DEV_MOBILE_PORT` before `npm run dev`. The profile must be a directory name, separate from `dsh-desktop`; ports must be distinct integers from 1024 to 65535. These overrides are ignored by production builds. Defaults remain `dsh-desktop-dev`, Harness port 43130 and mobile port 43128.
+On PowerShell, set the same variables using `$env:BISHENG_DEV_USER_DATA` and `$env:BISHENG_DEV_PORT_OFFSET` before `npm run dev`. The offset is added to the production mobile and Harness ports 43227 and 43229. The development default offset is 1.
 
 ## Validation
 
@@ -105,7 +105,7 @@ npm run package:win
 
 Do not invoke `electron-builder --win` from macOS or Linux for a distributable Windows package. The target verification scripts intentionally reject host/target mismatches.
 
-For local development packages, use the corresponding `package:dev:*` command. Production packages use app ID `com.luokuiai.bisheng`; development packages use `com.luokuiai.bisheng.dev`. Both use ad-hoc signing on macOS and unsigned NSIS installers on Windows. Windows resource editing remains enabled so the icon and product metadata are included. Apple certificate, notarization, and Windows UKey credentials are not required.
+For local development packages, use the corresponding `package:dev:*` command. Production packages use app ID `com.luokuiai.eai`. Development packages use `com.luokuiai.eai.dev`. Both use ad-hoc signing on macOS and unsigned NSIS installers on Windows. Windows resource editing remains enabled so the icon and product metadata are included. Apple certificate, notarization, and Windows UKey credentials are not required.
 
 Packages run Harness and package commands through the packaged Electron runtime (a utility process and the Helper in Node mode on macOS, the executable in Node mode on Windows); no standalone `node_modules/node` may be present under `app.asar.unpacked`. Verify the packaged native-module, pnpm and Harness smokes, then the final installer's separate installed-app smoke before handoff. Office preparation is included in dev, build and test: it fetches hash-locked native Python and wheels into `.build/office-runtime`, outside ASAR, and ships no second Node runtime. See [Office runtime](office-runtime.md). The locked Electron 43.0.0 must remain compatible with the native loader: `scripts/verify-target.mjs` fails packaging when Electron in Node mode cannot load it, and changing Electron still requires a new Windows package qualification. Before packaging, `node scripts/probe-electron-node-runtime.mjs` boots Harness from the repository through Electron Node mode with a disposable `DSH_HOME` and checks an authenticated HTTP response; the Windows CI job runs it on every build.
 

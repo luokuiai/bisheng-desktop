@@ -8,9 +8,9 @@ describe('enterprise platform fetch', () => {
       return new Response('ok')
     })
     const fetchEnterprise = createEnterpriseFetch(fetchImpl)
-    await fetchEnterprise('https://bisheng.example.com/api/v1/dsh/config')
+    await fetchEnterprise('https://platform.example.com/api/v1/dsh/config')
     expect(fetchImpl).toHaveBeenCalledTimes(1)
-    await expect(fetchEnterprise('https://bisheng.example.com/api/v1/dsh/config', {
+    await expect(fetchEnterprise('https://platform.example.com/api/v1/dsh/config', {
       redirect: 'follow'
     })).rejects.toThrow('cannot follow redirects')
   })

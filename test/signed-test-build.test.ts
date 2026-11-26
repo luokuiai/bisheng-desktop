@@ -14,7 +14,7 @@ import signed_test_build as build
 
 with tempfile.TemporaryDirectory() as work:
     directory = Path(work)
-    for name in ['bisheng-mac-arm64.dmg', 'bisheng-mac-x64.dmg', 'bisheng-windows-x64-setup.exe']:
+    for name in ['luokui-ai-mac-arm64.dmg', 'luokui-ai-mac-x64.dmg', 'luokui-ai-windows-x64-setup.exe']:
         (directory / name).write_text('content', encoding='utf-8')
     for target, count in [('all', 3), ('macos', 2), ('windows', 1)]:
         files = build.installer_paths(directory, target)
@@ -54,7 +54,7 @@ import signed_test_build as build
 
 with tempfile.TemporaryDirectory() as work:
     directory = Path(work)
-    (directory / 'bisheng-windows-x64-setup.exe').write_text('content', encoding='utf-8')
+    (directory / 'luokui-ai-windows-x64-setup.exe').write_text('content', encoding='utf-8')
     events = []
     api = MagicMock()
     api.upload_file.side_effect = lambda **kwargs: events.append(('upload', kwargs['path_in_repo']))
@@ -65,7 +65,7 @@ with tempfile.TemporaryDirectory() as work:
     with patch.dict(sys.modules, {'modelscope': types.ModuleType('modelscope'), 'modelscope.hub': types.ModuleType('modelscope.hub'), 'modelscope.hub.api': sdk}), patch.dict(os.environ, env), patch.object(sys, 'argv', argv), patch.object(build, 'build_test_changes', return_value='feat: New Office preview\nDescription of preview') as changes, patch.object(build, 'verify_download', side_effect=lambda *args: events.append(('verify', args[0]))) as verify, patch.object(build, 'send_feishu_notification', side_effect=lambda *args, **kw: events.append(('notify', kw))) as notify:
         build.main()
         assert [e[0] for e in events] == ['upload', 'verify', 'upload', 'verify', 'notify']
-        assert events[0][1] == 'test/1.0.0-test.1/42/bisheng-windows-x64-setup.exe'
+        assert events[0][1] == 'test/1.0.0-test.1/42/luokui-ai-windows-x64-setup.exe'
         assert events[2][1] == 'test/1.0.0-test.1/42/test-changes.md'
         assert events[4][1] == {'test_build': True}
         assert 'Description of preview' in notify.call_args.args[2]

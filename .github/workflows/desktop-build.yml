@@ -25,17 +25,17 @@ jobs:
             runner: macos-15
             arch: arm64
             script: package:dev:mac:arm64
-            installer: bisheng-mac-arm64.dmg
+            installer: luokui-ai-mac-arm64.dmg
           - target: mac-x64
             runner: macos-15-intel
             arch: x64
             script: package:dev:mac:x64
-            installer: bisheng-mac-x64.dmg
+            installer: luokui-ai-mac-x64.dmg
           - target: windows-x64
             runner: windows-2022
             arch: x64
             script: package:dev:win
-            installer: bisheng-windows-x64-setup.exe
+            installer: luokui-ai-windows-x64-setup.exe
     steps:
       - uses: actions/checkout@v4
         with:

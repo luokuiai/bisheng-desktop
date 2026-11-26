@@ -19,7 +19,7 @@ function memorySafeStorage(): SafeStorageCryptoAdapter {
 }
 
 const validSession = {
-  base: 'https://bisheng.example.com',
+  base: 'https://platform.example.com',
   token_type: 'Bearer',
   access_token: 'access-1',
   access_expires_at: new Date(Date.now() + 60_000).toISOString(),

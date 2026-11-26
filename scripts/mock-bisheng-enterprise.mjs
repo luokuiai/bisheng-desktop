@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
+import { ENTERPRISE_LOGIN_PROTOCOL } from '../packages/dsh-desktop-enterprise/deep-link.js'
 
 const HOST = '127.0.0.1'
 const DEFAULT_PORT = 17860
@@ -200,7 +201,7 @@ function exactFields(body, required, optional = []) {
 
 function loginPage(origin, auth) {
   if (!auth) {
-    const link = new URL('bisheng://login')
+    const link = new URL(`${ENTERPRISE_LOGIN_PROTOCOL}://login`)
     link.searchParams.set('server', origin)
     return layout('打开 DSH Desktop', `<span class="tag">固定入口</span><h1>在 DSH Desktop 中连接毕昇</h1><p>此链接只携带平台地址。客户端确认后会新建 PKCE 登录事务。</p><a class="button" href="${escapeHtml(link)}">打开 DSH Desktop</a>`)
   }

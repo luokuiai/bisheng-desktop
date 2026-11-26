@@ -1,15 +1,15 @@
-# BISHENG
+# LUOKUI-AI
 
 基于 [DSH Desktop](https://github.com/dataelement/dsh-desktop) 的私有工作平台，面向个人、团队及企业场景，在上游桌面宿主基础上开发非开源扩展。
 
 本仓库是独立的私有仓库，保留上游 Git 历史。初始化基线为上游 `main` 的 `a23788a7817b4f3980e3c4aa96ed48e24e653e74`。协作与同步方式见 [私有仓库开发说明](docs/bisheng-work.md)。
 
-当前应用产品名称为 BISHENG。应用 ID 为 `com.luokuiai.bisheng`（开发通道为 `com.luokuiai.bisheng.dev`），数据目录、登录协议和发布资产文件名使用 `bisheng`（开发通道为 `bisheng-dev`）。生产包更新地址由打包环境变量 `BISHENG_UPDATE_URL` 指定，为空则关闭在线更新，无上游默认值；正式版更新资产导出至 Actions artifacts。继承的测试和预发布渠道仍使用 ModelScope，仓库信息仍待定制。**以下下载、发布及产品介绍均属于上游 DSH Desktop，不代表 BISHENG 已发布。** 上游及第三方代码保留各自许可；新增非开源功能应明确其授权范围，不应默认沿用下方 MIT 标识。
+LUOKUI-AI 的 Windows 可执行文件为 `LUOKUI-AI.exe`，发布资产使用 `luokui-ai` 文件名前缀。企业登录入口为 `luokuiai://login`，开发通道使用 `luokuiai-dev://login`。安装标识和 Profile 兼容策略见 [发布手册](docs/release-runbook.md)。生产包通过 `BISHENG_UPDATE_URL` 设置更新地址，留空时关闭在线更新。正式版更新资产导出至 Actions artifacts，测试和预发布渠道仍使用 ModelScope。**以下下载、发布及产品介绍均属于上游 DSH Desktop。** 上游及第三方代码保留各自许可，新增非开源功能应明确其授权范围。
 
 ---
 
 <h1 align="center">
-  <img src="docs/images/readme-logo-black-v020.png" width="274" alt="BISHENG" valign="middle" />
+  <img src="docs/images/readme-logo-black-v020.png" width="274" alt="LUOKUI-AI" valign="middle" />
 </h1>
 
 <p align="center">
