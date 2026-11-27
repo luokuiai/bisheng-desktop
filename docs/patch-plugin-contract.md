@@ -442,4 +442,8 @@ AI 对话通过 `desktop.mode.content` 挂载会话历史，通过 `conversation
 
 工作台挂载时，`body[data-dsh-workspace-scene]` 标记所有由该外壳管理的页面，`data-dsh-workspace-density` 取 `expanded` 或 `compact`。打开实际插件后另有 `data-dsh-workspace-native` 标记对应业务区。插件若需在工作台中收起重复的悬浮入口，应使用 scene 判断外壳是否存在。切回原桌面会移除这些标记，插件可恢复原有入口。
 
+总览式侧栏及收起后的快捷栏在底部提供 `[data-workspace-account-slot]`。工作台挂载、切换或离开该位置时通过 `luokui:workspace-account-slot-ready` 同步席位。`settings.launcher` 的桌面账号贡献项通过 React portal 将唯一触发器放入该位置，继续使用原生设置动作和账号状态。席位卸载后触发器回到原侧栏。
+
+工作台账号菜单和对话模板的「添加」菜单共用弹层样式和 150ms 动效。Harness `dsh-web-frontend@0.2.1-rc.2` 自带的共享 `Menu` 在关闭时立即卸载。构建时为实际运行的共享组件接入可选的 `animatePresence`，关闭时立即停止交互，等 CSS 退场动画结束后移除弹层。上游提供退场生命周期后可移除此接缝。
+
 右侧有上下文面板的工作区将唯一开关挂到 `[data-workspace-right-sidebar-slot]`。宿主在挂载和卸载时于 `document` 派发 `luokui:workspace-right-sidebar-slot-ready`，插件重新查找当前插槽并在离开时清理。宿主组件样式限制在工作台页面、工作台 portal 和该插槽中，CSS Modules 具有 `dsh_workspace_` 前缀；外部插件的弹窗与菜单可继续使用自己的样式。

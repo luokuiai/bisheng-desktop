@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 const source = await readFile(new URL('../packages/dsh-desktop-settings/client.js', import.meta.url), 'utf8')
 let definition
 vm.runInNewContext(source, { window: { __ModuleLoader__: { load: entry => { definition = entry } } } })
-const plugin = definition.factory(id => ({ react: {}, '@deepseek-ai/dsh-client-ui-primitives': {} })[id])
+const plugin = definition.factory(id => ({ react: {}, 'react-dom': {}, '@deepseek-ai/dsh-client-ui-primitives': {} })[id])
 const { buildHeatmapLayout, sumCurrentYearMessages, peakTokens, longestMessageStreak, tokenDeltaPercent, formatDeltaPercent } = plugin.helpers
 
 const point = (date, tokens, messages = 1) => ({

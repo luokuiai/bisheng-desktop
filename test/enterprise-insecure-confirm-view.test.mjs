@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 import React, { act } from 'react'
 import * as jsx from 'react/jsx-runtime'
+import { createPortal } from 'react-dom'
 import { Context } from '@deepseek-ai/cordis'
 import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
 import { createRoot } from 'react-dom/client'
@@ -110,6 +111,7 @@ async function mountEnterprise(initial, hooks = {}) {
   })
   const loadDependency = name => {
     if (name === 'react') return React
+    if (name === 'react-dom') return { createPortal }
     if (name === '@deepseek-ai/dsh-client-ui-primitives') return {
       Button: ({ variant, size, ...props }) => React.createElement('button', props),
       Tooltip: ({ children }) => children

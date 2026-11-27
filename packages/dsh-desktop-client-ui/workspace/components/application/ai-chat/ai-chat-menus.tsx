@@ -785,9 +785,9 @@ function AddMenuItem({ icon: Icon, image, darkImage, label, description, onSelec
     <button
       type="button"
       onClick={onSelect}
-      className="flex w-full cursor-pointer items-center gap-2 rounded-2lg px-2 py-1.5 outline-none transition-colors hover:bg-background-primary-hover focus-visible:bg-background-primary-hover"
+      className="dshWorkspacePopupRow flex w-full cursor-pointer items-center outline-none transition-colors"
     >
-      {Icon && <Icon className="size-5 shrink-0 text-foreground-icon-secondary" aria-hidden />}
+      {Icon && <Icon className="dshWorkspacePopupIcon shrink-0 text-foreground-icon-secondary" aria-hidden />}
       {image && (
         <>
           <Image
@@ -812,7 +812,7 @@ function AddMenuItem({ icon: Icon, image, darkImage, label, description, onSelec
           )}
         </>
       )}
-      <span className="truncate text-body-medium whitespace-nowrap">
+      <span className="truncate whitespace-nowrap">
         <span className="text-text-primary">{label}</span>
         {description && <span className="ms-1.5 text-text-secondary">{description}</span>}
       </span>
@@ -894,13 +894,7 @@ export function AddMenu({
         isNonModal
         placement="top start"
         offset={8}
-        className={cx(
-          "w-[361px] max-w-[calc(100vw-32px)] origin-bottom-left",
-          "rounded-2xl border border-border-button-default bg-background-primary-default p-2 shadow-dropdown",
-          "transition duration-150 ease-out",
-          "data-[entering]:opacity-0 data-[entering]:scale-95 data-[entering]:blur-[2px]",
-          "data-[exiting]:opacity-0 data-[exiting]:scale-95 data-[exiting]:blur-[2px]",
-        )}
+        className="dshWorkspacePopup w-[361px] max-w-[calc(100vw-32px)]"
       >
         <AriaDialog aria-label="添加到对话" className="flex flex-col gap-2 outline-none">
           <AddMenuGroup label="添加" rows={ADD_ROWS} onSelect={close} />

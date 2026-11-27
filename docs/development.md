@@ -31,7 +31,7 @@ To run another worktree concurrently, set `BISHENG_DEV_USER_DATA` to a distinct 
 BISHENG_DEV_USER_DATA="$(mktemp -d)" BISHENG_DEV_PORT_OFFSET=100 npm run dev
 ```
 
-On PowerShell, set the same variables using `$env:BISHENG_DEV_USER_DATA` and `$env:BISHENG_DEV_PORT_OFFSET` before `npm run dev`. The offset is added to the production mobile and Harness ports 43227 and 43229. The development default offset is 1.
+On PowerShell, set the same variables using `$env:BISHENG_DEV_USER_DATA` and `$env:BISHENG_DEV_PORT_OFFSET` before `npm run dev`. The offset is added to the production mobile bridge port `45227` and the preferred Harness port `45229`. The development default offset is 1, yielding `45228` and `45230`.
 
 ### Desktop workspace
 

@@ -2,6 +2,7 @@ window.__ModuleLoader__.load({
   id: 'dsh-desktop-settings',
   factory: (require) => {
     const React = require('react')
+    const { createPortal } = require('react-dom')
     const { createElement: h, useEffect, useRef, useState } = React
     const { Tooltip, Menu, MenuItemButton, Modal, IconSettingsOutlineRegular, IconChecklistOutlineRegular, IconChecklistOutlineMedium, IconPaperPlaneOutlineMedium, IconAlarmClockOutlineMedium, IconGaugeOutlineMedium, IconApiOutlineMedium, IconInfoOutlineMedium, IconUserOutlineMedium, IconChevronDownOutlineRegular, IconCloseOutlineRegular } = require('@deepseek-ai/dsh-client-ui-primitives')
     const NS = 'desktop.settings'
@@ -585,9 +586,11 @@ window.__ModuleLoader__.load({
       }, failed && h('p', { className: 'dshAccountDialogError', role: 'alert' }, t('logoutFailed')))
     }
 
-    function AccountLauncher({ wide, settingsOpen, openSettings, settingsShortcut, t }) {
+    function AccountLauncher({ wide: sidebarWide, settingsOpen, openSettings, settingsShortcut, t }) {
       const identity = useAccountIdentity()
       const pending = useApprovalsPending()
+      const [workspace, setWorkspace] = useState(null)
+      const wide = workspace ? workspace.wide : sidebarWide
       const [menuOpen, setMenuOpen] = useState(false)
       const [approvalsOpen, setApprovalsOpen] = useState(false)
       const [logoutOpen, setLogoutOpen] = useState(false)
@@ -596,6 +599,18 @@ window.__ModuleLoader__.load({
       const [actionError, setActionError] = useState(false)
       const alive = useRef(true)
       const trigger = useRef(null)
+      React.useLayoutEffect(() => {
+        const sync = () => {
+          const seat = document.querySelector('[data-workspace-account-slot]')
+          const next = seat && { seat, wide: seat.dataset.workspaceAccountSlot === 'expanded' }
+          setWorkspace(previous => previous?.seat === next?.seat && previous?.wide === next?.wide ? previous : next)
+        }
+        const event = 'luokui:workspace-account-slot-ready'
+        document.addEventListener(event, sync)
+        sync()
+        return () => document.removeEventListener(event, sync)
+      }, [])
+      useEffect(() => { setMenuOpen(false) }, [workspace?.seat])
       const closeApprovals = React.useCallback(() => { setApprovalsOpen(false); trigger.current?.focus() }, [])
       const closeLogout = React.useCallback(() => { setLogoutOpen(false); setLogoutFailed(false); trigger.current?.focus() }, [])
       useEffect(() => {
@@ -652,9 +667,11 @@ window.__ModuleLoader__.load({
       }
       const badge = pending > 0 ? h(AccountBadge, { count: pending }) : null
       const triggerLabel = `${t('accountMenu')}: ${label}${pending > 0 ? ` · ${t('approvalsPending')} ${pending}` : ''}`
+      const menuStyle = workspace ? ' dshAccountMenuWorkspace dshWorkspacePopup' : wide ? ' dshAccountMenuWide' : ''
+      const launcherClass = workspace ? 'dshAccountLauncher dshAccountLauncherWorkspace' : 'dshAccountLauncher'
       // The sidebar menu does not cover the native Chat view or own its presentation.
-      return h('div', { className: 'dshAccountLauncher', 'data-dsh-account-launcher': '' },
-        h(Menu, { open: menuOpen, onClose: () => { if (!busy) setMenuOpen(false) }, side: 'top', align: 'start', portal: true, autoFocus: true, className: 'dshAccountMenuAnchor', listClassName: `dshAccountMenu${wide ? ' dshAccountMenuWide' : ''}`,
+      const launcher = h('div', { className: launcherClass, 'data-dsh-account-launcher': '' },
+        h(Menu, { open: menuOpen, animatePresence: Boolean(workspace), onClose: () => { if (!busy) setMenuOpen(false) }, side: 'top', align: 'start', portal: true, autoFocus: true, className: 'dshAccountMenuAnchor', listClassName: `dshAccountMenu${menuStyle}`,
           anchor: h('button', { ref: trigger, type: 'button', className: `dshAccountTrigger${wide ? '' : ' dshAccountTriggerRail'}`, 'aria-label': triggerLabel, title: wide ? undefined : label, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, disabled: settingsOpen || busy, onClick: () => { setMenuOpen(previous => !previous); setActionError(false); void identity.refresh() } },
             h('span', { className: 'dshAccountAvatarWrap' }, h(AccountAvatar, { key: avatarUrl, avatarUrl }), badge),
             wide && h('span', { className: 'dshAccountTriggerCopy' }, h('span', null, label)), wide && h(IconChevronDownOutlineRegular)) },
@@ -669,7 +686,8 @@ window.__ModuleLoader__.load({
             ? h(MenuItemButton, { icon: h(AccountMenuIcon, { kind: 'logout' }), separatorBefore: true, danger: true, disabled: busy, onSelect: () => { setMenuOpen(false); setLogoutFailed(false); setLogoutOpen(true) } }, t('logout'))
             : h(MenuItemButton, { icon: h(AccountMenuIcon, { kind: 'login' }), separatorBefore: true, disabled: busy, onSelect: openAccountSettings }, t('login')),
           failure && h('p', { className: 'dshAccountMenuError', role: 'alert' }, t(failure)),
-          failure && h(MenuItemButton, { disabled: busy, onSelect: () => { if (actionError) { void pairPhone(); return } setActionError(false); void identity.refresh() } }, t('again'))),
+          failure && h(MenuItemButton, { disabled: busy, onSelect: () => { if (actionError) { void pairPhone(); return } setActionError(false); void identity.refresh() } }, t('again'))))
+      return h(React.Fragment, null, workspace ? createPortal(launcher, workspace.seat) : launcher,
         h(ApprovalsDialog, { open: approvalsOpen, onClose: closeApprovals, t }),
         h(LogoutDialog, { open: logoutOpen, busy, failed: logoutFailed, onCancel: closeLogout, onConfirm: () => { void confirmLogout() }, t }))
     }
@@ -757,6 +775,21 @@ window.__ModuleLoader__.load({
           /* The portal follows the real trigger width; override Menu's inline 12px viewport clamp to keep both edges aligned. */
           .dshAccountMenu{min-width:248px;max-width:min(320px,calc(100vw - 24px))}.dshAccountMenuWide{position-anchor:--dsh-desktop-account-trigger;box-sizing:border-box;width:anchor-size(width);min-width:0;max-width:none;left:anchor(left)!important}.dshAccountMenuIdentity{display:flex;align-items:center;gap:12px;padding:10px 10px 14px;margin-bottom:4px;border-bottom:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}.dshAccountMenuIdentity>div{display:flex;flex-direction:column;gap:4px;min-width:0}.dshAccountMenuIdentity strong{font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dshAccountMenuError{font-size:12px;line-height:1.5;padding:4px 10px;color:var(--dsw-alias-label-secondary)}
           .dshAccountMenuIdentity>.dshAccountMenuCredits{flex:none;margin-left:auto;text-align:right;max-width:48%}.dshAccountMenuCredits strong{font-variant-numeric:tabular-nums}.dshAccountMenuIdentity>div:not(.dshAccountMenuCredits){flex:1;min-width:0}
+          .dshAccountLauncherWorkspace {
+            font-family: var(--dsh-font-family-text-default, system-ui);
+          }
+          .dshAccountLauncherWorkspace .dshAccountTrigger {
+            border-radius: 12px;
+          }
+          .dshAccountMenu.dshAccountMenuWorkspace {
+            width: min(265px, calc(100vw - 32px));
+            min-width: 0;
+            max-width: none;
+          }
+          .dshAccountMenuWorkspace .dshAccountMenuIdentity {
+            margin: 0 0 4px;
+            padding: 9px 8px 10px;
+          }
           .dshAccountDialog{width:min(420px,100%)}.dshAccountDialogActions{display:flex;justify-content:flex-end;gap:8px}.dshAccountDialogActions button{font:inherit;color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);border-radius:var(--dsw-radius-md);padding:7px 14px;cursor:pointer}.dshAccountDialogActions button:hover{background:var(--dsw-alias-interactive-bg-hover)}.dshAccountDialogActions button:disabled{opacity:.5;cursor:default}.dshAccountDialogActions .dshAccountDialogDanger{border-color:transparent;background:var(--dsw-alias-state-error-primary);color:#fff}.dshAccountDialogActions .dshAccountDialogDanger:hover{background:var(--dsw-alias-state-error-primary);opacity:.9}.dshAccountDialogError{margin:0;font-size:13px;line-height:1.5;color:var(--dsw-alias-state-error-primary)}
           /* 1080 = 188 导航 + 48 内边距 + 844 嵌入视口。网页的审批列表/详情双栏挂在 Tailwind md(768px) 视口断点上，
              嵌入区窄于 768px 会退回单栏，所以弹窗宽度要留出这条余量；窗口放不下时仍按 100% 收缩并回到单栏。 */

@@ -27,9 +27,12 @@ it('opens directory links, switches to the persistent rail and transfers focus o
   const Chrome = createWorkspaceChrome(React, vi.fn())
   const render = () => act(async () => root.render(React.createElement(Chrome, { path: '/', navigation, theme, t: key => key })))
   await render()
-  const link = container.querySelector('.dshWorkspaceDirectory [data-workspace-route="/lab"]')
+  const account = container.querySelector('[data-workspace-account-slot="expanded"]')
+  expect(account).not.toBeNull()
+  expect(container.querySelector('.dshWorkspaceLibrary')).toBeNull()
+  const link = container.querySelector('.dshWorkspaceDirectory [data-workspace-route="/project-board"]')
   link.click()
-  expect(navigation.navigate).toHaveBeenCalledWith('/lab')
+  expect(navigation.navigate).toHaveBeenCalledWith('/project-board')
   link.focus()
   await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backslash', metaKey: true, cancelable: true })))
   const toggle = container.querySelector('[data-workspace-sidebar-toggle]')
@@ -37,8 +40,10 @@ it('opens directory links, switches to the persistent rail and transfers focus o
   expect(document.activeElement).toBe(toggle)
   expect(container.querySelector('.dshWorkspaceDirectory').hasAttribute('inert')).toBe(true)
   expect(container.querySelector('.dshWorkspaceRail').hasAttribute('inert')).toBe(false)
+  expect(container.querySelector('[data-workspace-account-slot="compact"]')).toBe(account)
   await act(async () => root.unmount())
   expect(document.body.hasAttribute('data-dsh-workspace-scene')).toBe(false)
+  expect(account.isConnected).toBe(false)
   root = createRoot(container)
   await render()
   expect(document.body.dataset.dshWorkspaceDensity).toBe('compact')
@@ -49,7 +54,22 @@ it('opens directory links, switches to the persistent rail and transfers focus o
   expect(theme.set).toHaveBeenCalledWith('dark')
 })
 
-it('keeps a page-owned sidebar out of the expanded directory and highlights nested routes', async () => {
+it('shows only workspace links in the expanded sidebar and shortcut rail', async () => {
+  const Chrome = createWorkspaceChrome(React, vi.fn())
+  const navigate = vi.fn()
+  await act(async () => root.render(React.createElement(Chrome, {
+    path: '/', navigation: { navigate }, theme, t: key => key
+  })))
+  for (const surface of ['.dshWorkspaceDirectory', '.dshWorkspaceRail']) {
+    expect([...container.querySelectorAll(`${surface} [data-workspace-route]`)].map(button => button.dataset.workspaceRoute))
+      .toEqual(['/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board'])
+  }
+  expect([...container.querySelectorAll('.dshWorkspaceNavGroup')].map(group => group.textContent)).toEqual(['spaces'])
+  container.querySelector('.dshWorkspaceToolbar [title="settings"]').click()
+  expect(navigate).toHaveBeenCalledWith('/settings')
+})
+
+it('keeps a page-owned sidebar out of the expanded directory and preserves template breadcrumbs', async () => {
   const Chrome = createWorkspaceChrome(React, vi.fn())
   const navigate = vi.fn()
   const mount = path => act(async () => root.render(React.createElement(Chrome, { path,
@@ -58,9 +78,9 @@ it('keeps a page-owned sidebar out of the expanded directory and highlights nest
   expect(container.querySelector('.dshWorkspaceDirectory')).toBeNull()
   container.querySelector('.dshWorkspaceParentLink').click()
   expect(navigate).toHaveBeenCalledWith('/templates')
-  expect(container.querySelector('.dshWorkspaceRail [aria-current]').dataset.workspaceRoute).toBe('/templates')
+  expect(container.querySelector('.dshWorkspaceRail [aria-current]')).toBeNull()
   await mount('/admin/models')
-  expect(container.querySelector('.dshWorkspaceDirectory [aria-current]').dataset.workspaceRoute).toBe('/admin')
+  expect(container.querySelector('.dshWorkspaceDirectory [aria-current]')).toBeNull()
   expect(container.querySelector('.dshWorkspaceTitle').textContent).toBe('admin')
   expect(workspaceScene('/chat')).toBe('chat')
 })
