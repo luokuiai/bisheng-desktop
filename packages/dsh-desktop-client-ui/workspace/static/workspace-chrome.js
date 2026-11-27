@@ -208,9 +208,9 @@ export function createWorkspaceChrome(React, loadPages) {
     const navRef = React.useRef(null)
     const railRef = React.useRef(null)
     const moving = React.useRef(null)
-    // Native panels replace the page body entirely, so their routes keep the
-    // shared directory instead of falling back to a page-owned sidebar.
-    const scene = native ? 'workspace' : workspaceScene(path)
+    // Open the plugin in the same content area as its preview. The compact
+    // rail and the toolbar's Home button still provide workspace navigation.
+    const scene = native ? 'page' : workspaceScene(path)
     const surface = native ? nativeSurfaces.get(path) : undefined
     const accountPlacement = compact ? 'compact' : scene === 'workspace' ? 'expanded' : undefined
     const toggle = () => {

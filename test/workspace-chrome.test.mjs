@@ -145,6 +145,32 @@ it('keeps one toolbar and one right-side portal when the native plugin replaces 
   expect(document.body.hasAttribute('data-dsh-workspace-native')).toBe(false)
 })
 
+it.each(['/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board', '/plugins'])('yields the expanded directory to %s and restores it on return', async path => {
+  const Chrome = createWorkspaceChrome(React, vi.fn())
+  const navigate = vi.fn()
+  const render = (route, native) => act(async () => root.render(React.createElement(Chrome, {
+    path: route, native, navigation: { navigate }, theme, t: key => key
+  })))
+  await render('/', false)
+  container.querySelector(`.dshWorkspaceDirectory [data-workspace-route="${path}"]`).click()
+  expect(navigate).toHaveBeenLastCalledWith(path)
+  await render(path, true)
+  expect(document.body.dataset.dshWorkspaceScene).toBe('page')
+  expect(container.querySelector('.dshWorkspaceDirectory')).toBeNull()
+  expect(container.querySelector('[data-workspace-account-slot="expanded"]')).toBeNull()
+  const toggle = container.querySelector('[data-workspace-sidebar-toggle]')
+  await act(async () => toggle.click())
+  const rail = container.querySelector('.dshWorkspaceRail')
+  expect(rail.hasAttribute('inert')).toBe(false)
+  rail.querySelector('[data-workspace-route="/chat"]').click()
+  expect(navigate).toHaveBeenLastCalledWith('/chat')
+  await act(async () => toggle.click())
+  container.querySelector('.dshWorkspaceBrand').click()
+  expect(navigate).toHaveBeenLastCalledWith('/')
+  await render('/', false)
+  expect(container.querySelector('.dshWorkspaceDirectory').hasAttribute('inert')).toBe(false)
+})
+
 it('merges the authorized enterprise entries after the new workbench entries without groups', () => {
   const entries = ['square', 'apps', 'channel', 'knowledge', 'capabilities']
     .map(id => ({ id, label: `label:${id}`, path: `/${id}`, active: false, primary: true }))
