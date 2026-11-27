@@ -1,0 +1,231 @@
+/* The Harness frame still owns the content, bottom and overlay slots. This
+   layout only takes over while one of the workspace routes is selected. */
+body[data-dsh-workspace-scene] {
+  --dsh-workspace-bar: calc(48px * var(--dsh-caption-scale, 1));
+  --dsh-workspace-wide: 228px;
+  --dsh-workspace-track: var(--dsh-workspace-wide);
+  --dsh-workspace-soft: color-mix(in srgb, var(--dsw-alias-label-primary) 3.2%, var(--dsw-alias-bg-base));
+  --dsh-workspace-line: var(--dsw-alias-border-l2);
+  --dsh-workspace-motion: 280ms ease-in-out;
+}
+body[data-dsh-workspace-scene=chat] { --dsh-workspace-wide: 276px; }
+body[data-dsh-workspace-scene=page] { --dsh-workspace-track: 0px; }
+body[data-dsh-workspace-density=compact] { --dsh-workspace-track: 60px; }
+
+html body[data-dsh-workspace-scene] :has(> [data-shell-overlay]) {
+  box-sizing: border-box;
+  padding: var(--dsh-workspace-bar) 0 0 !important;
+  column-gap: 0 !important;
+  grid-template-columns: var(--dsh-workspace-track) minmax(0, 1fr) 0px !important;
+  transition: grid-template-columns var(--dsh-workspace-motion) !important;
+  background: var(--dsw-alias-bg-base);
+}
+body[data-dsh-workspace-scene] [data-dsh-sidebar-root] { display:none !important; }
+body[data-dsh-workspace-scene] :has(> [data-shell-overlay])::before,
+body[data-dsh-workspace-scene] :has(> [data-shell-overlay]) > :is([data-shell-leading],[data-side=sidebar]),
+body[data-dsh-workspace-scene] :has(> [data-shell-overlay]) > :has(> [data-slot=sidebar], > [data-dsh-sidebar-root]) { display: none !important; }
+html body[data-dsh-desktop-ui=dsh][data-dsh-workspace-scene] .dshModes {
+  margin: 0;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--dsw-alias-bg-base);
+}
+body[data-dsh-workspace-scene] :is(.dshWorkspaceToolbar,.dshWorkspaceDirectory,.dshWorkspaceRail) {
+  box-sizing: border-box;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--font-inter), 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+:is(.dshWorkspaceToolbar,.dshWorkspaceRail,.dshWorkspaceDirectory) button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+:is(.dshWorkspaceToolbar,.dshWorkspaceRail,.dshWorkspaceDirectory) button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+:is(.dshWorkspaceToolbar,.dshWorkspaceRail,.dshWorkspaceDirectory) button:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+:is(.dshWorkspaceToolbar,.dshWorkspaceRail,.dshWorkspaceDirectory) svg { width: 17px; height: 17px; flex: none; }
+.dshWorkspaceToolbar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--dsh-workspace-bar);
+  padding: 0 16px;
+  box-shadow: inset 0 -1px var(--dsh-workspace-line);
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 52%, var(--dsh-workspace-soft));
+  user-select: none;
+  -webkit-app-region: drag;
+}
+html[data-platform=darwin]:not([data-fullscreen=true]) .dshWorkspaceToolbar {
+  padding-inline-start: calc(90px * var(--dsh-caption-scale, 1));
+}
+html[data-platform=darwin][data-fullscreen=true] .dshWorkspaceToolbar {
+  padding-inline-start: calc(14px * var(--dsh-caption-scale, 1));
+}
+html[data-windows-titlebar]:not([data-fullscreen]) .dshWorkspaceToolbar {
+  padding-inline-start: 172px;
+  padding-inline-end: max(146px, calc(100vw - env(titlebar-area-width, 100vw)));
+}
+html[data-windows-titlebar] body[data-dsh-workspace-scene] [data-dsh-windows-menu] {
+  --dsh-windows-menu-start: 8px;
+  --dsh-windows-titlebar-height: var(--dsh-workspace-bar);
+}
+html[data-dsh-modal-open] .dshWorkspaceToolbar { -webkit-app-region: no-drag; }
+.dshWorkspaceBreadcrumb,.dshWorkspaceTools,.dshWorkspaceTabs { display:flex; align-items:center; min-width:0; }
+.dshWorkspaceBreadcrumb { gap: 0; }
+.dshWorkspaceBrand { border-radius: 6px; padding: 4px !important; margin-inline-start: -4px; }
+.dshWorkspaceBrand img { width: 20px; height: 20px; object-fit: contain; }
+.dshWorkspaceBrand strong { font-size: 13px; font-weight: 650; letter-spacing: -.025em; }
+.dshWorkspaceDivider { width: 1px; height: 16px; background: var(--dsh-workspace-line); margin-inline: 15px; }
+.dshWorkspaceParent { color: var(--dsw-alias-label-tertiary); font-size: 13px; white-space: pre; }
+.dshWorkspaceBreadcrumb .dshWorkspaceParentLink {
+  border-radius:6px; padding:4px; margin-inline:-4px; color:var(--dsw-alias-label-tertiary); font-size:13px;
+}
+.dshWorkspaceTitle { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; font-weight:580; }
+.dshWorkspaceTools { gap: 5px; margin-inline-start: auto; }
+.dshWorkspaceToolbar .dshWorkspaceTool,.dshWorkspaceToolbar [data-workspace-right-sidebar-slot] button {
+  display: inline-grid; place-items: center; width: 30px; height: 29px; border: 0; border-radius: 7px;
+  padding: 0; background: transparent; color: var(--dsw-alias-label-secondary);
+}
+.dshWorkspaceToolbar :is(.dshWorkspaceTool,[data-workspace-right-sidebar-slot] button):hover { background:var(--dsw-alias-interactive-bg-hover); }
+.dshWorkspaceToolbar :is(.dshWorkspaceTool,[data-workspace-right-sidebar-slot] button):active { opacity:.65; }
+.dshWorkspaceToolbar [data-workspace-right-sidebar-slot] { display:contents; }
+.dshWorkspaceTabs { gap:2px; }
+.dshWorkspaceTabs .dshWorkspaceRoute,.dshWorkspaceCurrentTab {
+  display:inline-flex; align-items:center; gap:6px; border-radius:6px; height:28px; padding:0 10px; font-size:12px; white-space:nowrap;
+}
+.dshWorkspaceTabs .dshWorkspaceRoute svg { width:15px; height:15px; }
+.dshWorkspaceTabs .dshWorkspaceRoute[aria-current],.dshWorkspaceCurrentTab { background:var(--dsh-workspace-soft); font-weight:600; }
+
+.dshWorkspaceRail,.dshWorkspaceDirectory,.dshWorkspaceChatNav {
+  position: fixed;
+  inset: var(--dsh-workspace-bar) auto 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dshWorkspaceRail,.dshWorkspaceDirectory {
+  background: var(--dsh-workspace-soft);
+  border-inline-end: 1px solid var(--dsh-workspace-line);
+}
+.dshWorkspaceDirectory {
+  width: var(--dsh-workspace-wide);
+  padding: 20px 16px 16px;
+  transition: transform var(--dsh-workspace-motion),visibility var(--dsh-workspace-motion);
+}
+.dshWorkspaceDirectory nav,.dshWorkspaceRail nav {
+  display: flex; flex-direction:column; gap:4px; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin;
+}
+.dshWorkspaceDirectory nav { flex:1; padding-block-end:8px; }
+.dshWorkspaceDirectory .dshWorkspaceRoute {
+  min-height: 40px; gap: 12px; border-radius: 12px; padding: 10px 12px;
+  font-size: 14px; font-weight:500; line-height:20px; color:var(--dsw-alias-label-secondary);
+  transition: background-color 150ms,color 150ms;
+}
+.dshWorkspaceDirectory .dshWorkspaceRoute svg { width:16px; height:16px; }
+:is(.dshWorkspaceDirectory,.dshWorkspaceRail) .dshWorkspaceRoute[aria-current] {
+  color:var(--dsw-alias-state-business-primary);
+  background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 10%, transparent);
+}
+.dshWorkspaceNavGroup { padding:16px 12px 4px; font-size:12px; font-weight:600; line-height:16px; color:var(--dsw-alias-label-tertiary); }
+.dshWorkspaceDirectory .dshWorkspaceLibrary {
+  gap:12px; border:1px solid var(--dsh-workspace-line); border-radius:16px; padding:12px; width:100%;
+  background:var(--dsh-workspace-soft);
+}
+.dshWorkspaceLibrary svg { width:20px; height:20px; color:var(--dsw-alias-label-secondary); }
+.dshWorkspaceLibrary span { display:flex; flex-direction:column; min-width:0; }
+.dshWorkspaceLibrary strong,.dshWorkspaceLibrary small { line-height:16px; font-size:12px; font-weight:600; }
+.dshWorkspaceLibrary small { font-size:11px; color:var(--dsw-alias-label-secondary); font-weight:500; }
+
+.dshWorkspaceRail {
+  z-index:2;
+  align-items:center; width:60px; padding:10px 0; overflow-y:auto; scrollbar-width:none;
+  transition: transform var(--dsh-workspace-motion),visibility var(--dsh-workspace-motion);
+}
+.dshWorkspaceRail nav { flex:none; align-items:center; overflow:visible; gap:3px; }
+.dshWorkspaceRail :is(.dshWorkspaceRoute,.dshWorkspaceRailBrand) {
+  flex:none; display:grid; place-items:center; width:35px; height:33px; border-radius:8px; color:var(--dsw-alias-label-secondary);
+}
+.dshWorkspaceRailBrand { margin-block-end:7px; }
+.dshWorkspaceRailBrand img { width:23px; height:23px; }
+.dshWorkspaceRailDivider { width:23px; height:1px; flex:none; margin:4px 0; background:var(--dsh-workspace-line); }
+.dshWorkspaceChatNav {
+  box-sizing:border-box; width:var(--dsh-workspace-wide); padding:12px 4px 12px 12px;
+  transition:transform var(--dsh-workspace-motion),visibility var(--dsh-workspace-motion);
+}
+.dshWorkspaceChatNav > .dshWorkspaceChatSidebar { overflow:visible; height:100%; background:transparent; }
+.dshWorkspaceChatSidebar aside[data-titlebar-sidebar] { display:flex; width:100%; }
+.dshWorkspaceChatNav .dshWorkspaceDirectory { position:static; width:100%; }
+.dshWorkspaceChatSidebar button[aria-label="收起侧栏"],.dshWorkspaceChatSidebar button[aria-label="Collapse sidebar"] { display:none; }
+:is(.dshWorkspaceRail,.dshWorkspaceDirectory,.dshWorkspaceChatNav)[aria-hidden=true] { transform:translateX(-100%); visibility:hidden; }
+body[data-dsh-workspace-density=compact]:not([data-dsh-workspace-nav-motion]) .dshWorkspacePages [data-titlebar-sidebar=desktop] { display:none !important; }
+@media (max-width:1023px) {
+  body[data-dsh-workspace-scene] { --dsh-workspace-wide:clamp(156px,21vw,216px); }
+  body[data-dsh-workspace-scene=page]:is([data-dsh-workspace-density=expanded],[data-dsh-workspace-nav-motion]) .dshWorkspacePages [data-titlebar-sidebar=desktop] {
+    display:flex; width:var(--dsh-workspace-wide);
+  }
+  body[data-dsh-workspace-scene=page]:is([data-dsh-workspace-density=expanded],[data-dsh-workspace-nav-motion]) .dshWorkspacePages .hidden:has(> [data-titlebar-sidebar=desktop]:only-child) { display:block; }
+}
+@media (max-height:735px) {
+  .dshWorkspaceRail .dshWorkspaceRoute { height:30px; }
+  .dshWorkspaceRailBrand { margin-bottom:1px; }
+  .dshWorkspaceRailDivider { margin:2px 0; }
+}
+@media (prefers-reduced-motion:reduce) {
+  body[data-dsh-workspace-scene] { --dsh-workspace-motion:0s linear; }
+  .dshWorkspaceDirectory .dshWorkspaceRoute { transition:none; }
+}
+.dshWorkspaceRecoveryButton {
+  position: fixed; top:48px; inset-inline-start:12px;
+  border-radius:8px; background:var(--dsw-alias-bg-base); color:var(--dsw-alias-label-primary);
+}
+
+body[data-dsh-workspace-scene] .dshWorkspacePages [data-dsh-workspace-nav-column] {
+  margin-inline-end: var(--dsh-workspace-column-end);
+  clip-path: inset(0);
+  transition: margin-inline-end var(--dsh-workspace-motion), clip-path var(--dsh-workspace-motion);
+}
+body[data-dsh-workspace-density=compact] .dshWorkspacePages [data-dsh-workspace-nav-column] {
+  margin-inline-end: var(--dsh-workspace-column-closed);
+  clip-path: inset(0 100% 0 0);
+}
+
+.dshWorkspaceToolbar .dshWorkspaceActions { display:flex; align-items:center; gap:6px; font-size:12px; }
+.dshWorkspaceToolbar .dshWorkspaceActions:empty { display:none; }
+
+/* DS Bot portals its own column to the body and reports the dock width via
+   DesktopModes' existing resize observer. Its rail yields to the workspace
+   rail, including during a change of surface or while a plugin is unloading. */
+body[data-dsh-workspace-scene]:not([data-dsh-workspace-native=agents]) > .bt-leftcol,
+body[data-dsh-workspace-native=agents] :is(.bt-title-toggle,.bt-side-collapse) { display:none !important; }
+body[data-dsh-workspace-native=agents][data-dsh-workspace-density=expanded] > .bt-leftcol {
+  /* Older Bot styles pin their portal to top:0!important, above the caption. */
+  top:var(--dsh-workspace-bar) !important;
+  --bt-lc-clear:0px;
+  padding-block-start:6px;
+}
+html body[data-dsh-desktop-ui=dsh][data-dsh-workspace-native=agents][data-dsh-workspace-density=expanded] .dshModes {
+  margin-inline-start:var(--dsh-plugin-rail-inset, 0px);
+  width:calc(100% - var(--dsh-plugin-rail-inset, 0px));
+}
+/* Older Bot builds force the first track to zero whenever Harness is folded.
+   The workspace width takes precedence only inside this mounted route. */
+html body[data-dsh-desktop-ui=dsh][data-dsh-workspace-native=agents][data-dsh-workspace-density] :has(> [data-shell-overlay]) {
+  grid-template-columns:var(--dsh-workspace-track) minmax(0, 1fr) 0px !important;
+}

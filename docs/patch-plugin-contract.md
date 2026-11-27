@@ -415,3 +415,31 @@ Windows installed-package and real-account acceptance remain separate checks.
 `sidebar.workspaces.collection` 的搜索贡献项拥有合并后列表的空态。搜索组件通过可选 owner 字段 `searchPending` 传递本地历史搜索进度；桌面贡献项按本地与云端结果总数、搜索进度和云端首屏加载状态决定空态。上游原有“无匹配会话”随默认结果行一起放入 slot fallback，保留无贡献项时的独立搜索体验。搜索加载提示、结果数量上限提示与远程搜索生命周期继续由搜索组件管理。
 
 本次直接修正已有搜索组件与共享列表的渲染条件，发行安装使用现有 `dsh-client-ui-workspace@0.2.1-rc.2` 重放文件保存修改；宿主改动位于 `packages/dsh-desktop-client-ui/client.js`。当前 single/root slot 的挂载次数、筛选范围、归档和行操作保持原契约。上游提供等价的完整搜索列表组合协议后迁移并移除该兼容段。行为回归见 `test/session-search-recovery.test.mjs`，macOS 原生组件验证见 `scripts/verify-session-search-empty.mjs`；目录与搜索接口使用隔离数据。
+
+### 工作台对话历史（Harness 0.2.1-rc.2）
+
+AI 对话通过 `desktop.mode.content` 挂载会话历史，通过 `conversation.hero.brand.title` 提供快捷问题。会话切换、创建、发送、附件、模型、重命名和确认删除均由 Harness 与已有宿主服务处理。历史按目录成员、归档状态及当前工作台可见性筛选。导出使用会话的分页事件视图，只序列化用户与助手可见的文本消息。
+
+原生侧栏的已读状态属于 workspace 查看偏好，已有 collection slot 只在侧栏渲染其子树时传递该状态。现有 `dsh-client-ui-workspace` 补丁在 `uiWorkspace.readStatus` 提供同一份快照、订阅及单会话更新，使右侧历史与原生列表共用持久化。上游公开等价服务后移除这段兼容代码。会话录入、恢复、导出和宽窄视口回归见 `test/workspace-conversation.test.mjs`。
+
+### 桌面工作台外壳与页面
+
+`dsh-desktop-client-ui` 在 `shell.overlay` 提供 48px 工具栏、文字侧栏与 60px 快捷栏，在 `desktop.mode.content` 渲染总览与工作空间。工作台激活时让出 Harness 原有侧栏轨道，返回桌面会话和插件时恢复该轨道。侧栏按钮、快捷键及工作区右栏共用同一个窗口状态。工作台颜色随 Harness 活动主题变化，文字使用随包提供的 Inter 和系统中文字体。
+
+`workspace/pages.tsx` 及同目录组件是页面的源码。`npm run workspace:prepare` 用 esbuild 拆分页面，编译 Tailwind 4、CSS Modules 和界面素材，写到受控的 `dsh-web-frontend/dist/desktop-workspace`。页面的 React、ReactDOM、JSX runtime 都从已激活的 Harness 客户端加载器取得。HTML 仅增加样式链接，原有 bootstrap 顺序与授权入口继续生效。拖拽、图表、图标、动效和无障碍控件依赖用于编译原型对应的交互组件，安装包仅分发构建后的浏览器代码与素材。字体与组件来源见 `packages/dsh-desktop-client-ui/workspace/NOTICE.md`。
+
+工作台路由保存在当前窗口。会话、模型目录、企业账号、设置和插件安装状态仍由对应服务持有。显示已注册的看板、图像和代码工作区时消费 `main` 的实际 key，多代理使用 `bot-return` 公布的 surface 与 actions。模板目录中的 `preview=1` 显式打开本地示例。客户端收到插件注册、卸载或切换时重新同步侧栏与正文。离开页面释放 portal、监听器和订阅。模型和企业服务不可用时保留配置与重试入口。
+
+工作台正文与插件可直接消费 Harness 活动主题的 CSS 变量。背景使用 `--dsw-alias-bg-base`，主次文字使用 `--dsw-alias-label-primary`、`--dsw-alias-label-secondary`，选中态使用 `--dsw-alias-state-business-primary`。桌面文字栈通过 `--dsh-font-family-text-default` 提供本地 Inter、苹方和微软雅黑。
+
+| 工作区 | 宿主集成 |
+| --- | --- |
+| 代码工作台 `/ai-chat` | `main` 面板 `code-workbench-layout` |
+| 图像生成 `/ai-image-generation` | `main` 面板 `copylee-image-gen.paintings` |
+| 任务看板 `/project-board` | `main` 面板 `super-kanban` |
+| 多代理协作 `/multi-agent-chat` | `sidebar.footer.action` 的 `bot-return` 提供 surface 与切换方法，正文复用 Work 会话 |
+| 原桌面会话与插件 | 「设置 → 打开桌面会话与插件」恢复原桌面导航 |
+
+工作台挂载时，`body[data-dsh-workspace-scene]` 标记所有由该外壳管理的页面，`data-dsh-workspace-density` 取 `expanded` 或 `compact`。打开实际插件后另有 `data-dsh-workspace-native` 标记对应业务区。插件若需在工作台中收起重复的悬浮入口，应使用 scene 判断外壳是否存在。切回原桌面会移除这些标记，插件可恢复原有入口。
+
+右侧有上下文面板的工作区将唯一开关挂到 `[data-workspace-right-sidebar-slot]`。宿主在挂载和卸载时于 `document` 派发 `luokui:workspace-right-sidebar-slot-ready`，插件重新查找当前插槽并在离开时清理。宿主组件样式限制在工作台页面、工作台 portal 和该插槽中，CSS Modules 具有 `dsh_workspace_` 前缀；外部插件的弹窗与菜单可继续使用自己的样式。

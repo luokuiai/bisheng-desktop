@@ -4,9 +4,10 @@ import { describe, expect, it } from 'vitest'
 
 const html = readFileSync(new URL('../build/splash.html', import.meta.url), 'utf8')
 
-function page(locale, systemLanguage, theme = 'light') {
+function page(locale, systemLanguage, theme = 'light', stage) {
   const query = new URLSearchParams({ theme })
   if (locale !== undefined) query.set('locale', locale)
+  if (stage) query.set('stage', stage)
   return new JSDOM(html, {
     url: `file:///desktop/splash.html?${query}`,
     runScripts: 'dangerously',
@@ -52,6 +53,12 @@ describe('startup splash language', () => {
       expect(doc.documentElement.lang).toBe(expected)
       expect(doc.getElementById('title').textContent).toBe(expected === 'en' ? 'Starting LUOKUI-AI' : '正在启动 LUOKUI-AI')
     } finally { dom.window.close() }
+  })
+
+  it.each([['zh', '钥匙串'], ['en', 'Keychain']])('shows a localized %s prompt only for saved credential recovery', (locale, label) => {
+    const dom = page(locale, 'zh-CN', 'light', 'keychain')
+    try { expect(dom.window.document.getElementById('status').textContent).toContain(label) }
+    finally { dom.window.close() }
   })
 
   it('passes the active Desktop locale from the splash navigation entry', () => {

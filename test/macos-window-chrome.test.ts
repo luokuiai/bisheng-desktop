@@ -57,3 +57,14 @@ it('shares sidebar theme ownership across repeated mounts', () => {
   second()
   expect(doc.querySelectorAll('[data-dsh-macos-sidebar-theme]')).toHaveLength(0)
 })
+
+it('keeps native traffic-light clearance at reduced page zoom', () => {
+  let zoom = 0.75
+  const dispose = mountMacosWindowChrome(document, () => () => {}, () => zoom)
+  expect(Number(document.documentElement.style.getPropertyValue('--dsh-caption-scale'))).toBeCloseTo(4 / 3)
+  zoom = 1.25
+  window.dispatchEvent(new Event('resize'))
+  expect(document.documentElement.style.getPropertyValue('--dsh-caption-scale')).toBe('1')
+  dispose()
+  expect(document.documentElement.style.getPropertyValue('--dsh-caption-scale')).toBe('')
+})

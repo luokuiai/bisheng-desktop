@@ -12,7 +12,7 @@ const root = resolve(import.meta.dirname, '..')
 const temporary = await mkdtemp(join(tmpdir(), 'dsh-workspace-navigation-'))
 try {
   const source = await readFile(join(root, 'packages/dsh-desktop-client-ui/client.js'), 'utf8')
-  const styles = source.match(/function installDesktopModes\(ctx\)[\s\S]*?style\.textContent = `([\s\S]*?)`/)
+  const styles = source.match(/function installDesktopModes\(ctx(?:, services)?\)[\s\S]*?style\.textContent = `([\s\S]*?)`/)
   assert.ok(styles, 'Desktop mode stylesheet is available')
   await build({ stdin: { contents: `
     import { mountWindowsTitlebarLayout } from './src/preload/windows-titlebar'

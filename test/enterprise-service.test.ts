@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -77,6 +77,88 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<voi
 }
 
 describe('enterprise service login loop', () => {
+  it.each(['login', 'refresh'])('keeps the previously encrypted account when Keychain rejects a %s write', async action => {
+    const platform = createMockEnterpriseServer({ port: 0 })
+    const origin = await platform.listen()
+    cleanups.push(async () => platform.close())
+    const directory = await mkdtemp(join(tmpdir(), 'enterprise-crypto-denied-'))
+    const filename = join(directory, ENTERPRISE_VAULT_FILENAME)
+    const keychain = {
+      isAsyncEncryptionAvailable: async () => true,
+      encryptStringAsync: vi.fn(async (text: string) => Buffer.concat([Buffer.from('v10'), Buffer.from(text)])),
+      decryptStringAsync: async (bytes: Buffer) => ({ result: bytes.subarray(3).toString() })
+    }
+    const vault = new SecureEnterpriseCredentialVault(filename, memorySafeStorage(), keychain)
+    const clear = vi.spyOn(vault, 'clear')
+    const activate = vi.fn()
+    const events: string[] = []
+    const service = new EnterpriseService({ vault, fetchImpl: createEnterpriseFetch(globalThis.fetch), allowInsecureLoopback: true,
+      note: entry => events.push(entry.event), activateDesktop: activate })
+    cleanups.push(async () => service.stop())
+    await service.restore()
+    await completeBrowserLogin(origin, (await service.startLogin(origin)).authorizationUrl)
+    await waitFor(() => events.includes('login_committed'))
+    const before = await readFile(filename)
+    events.length = 0
+    activate.mockClear()
+    keychain.encryptStringAsync.mockClear()
+    keychain.encryptStringAsync.mockRejectedValueOnce(new Error('Keychain locked'))
+    if (action === 'login') {
+      await completeBrowserLogin(origin, (await service.startLogin(origin)).authorizationUrl)
+      await waitFor(() => events.includes('vault_write_failed'))
+    } else {
+      await service.refresh()
+    }
+    expect(service.snapshot()).toMatchObject({ connected: false, phase: 'reauthRequired' })
+    expect(await readFile(filename)).toEqual(before)
+    expect(keychain.encryptStringAsync).toHaveBeenCalledTimes(1)
+    expect(clear).not.toHaveBeenCalled()
+    expect(activate).not.toHaveBeenCalled()
+    expect(events).toContain('vault_write_failed')
+    expect(events).not.toContain('refresh_committed')
+    expect(events).not.toContain('login_committed')
+  })
+
+  it('reopens a locked vault before the next explicit login and preserves a concurrently advanced generation', async () => {
+    const platform = createMockEnterpriseServer({ port: 0 })
+    const origin = await platform.listen()
+    cleanups.push(async () => platform.close())
+    const directory = await mkdtemp(join(tmpdir(), 'enterprise-retry-unlock-'))
+    const filename = join(directory, ENTERPRISE_VAULT_FILENAME)
+    const keychain = {
+      isAsyncEncryptionAvailable: async () => true,
+      encryptStringAsync: async (text: string) => Buffer.concat([Buffer.from('v10'), Buffer.from(text)]),
+      decryptStringAsync: vi.fn(async (bytes: Buffer) => ({ result: bytes.subarray(3).toString() }))
+    }
+    const vault = new SecureEnterpriseCredentialVault(filename, memorySafeStorage(), keychain)
+    const create = () => new EnterpriseService({ vault, allowInsecureLoopback: true, fetchImpl: createEnterpriseFetch(globalThis.fetch) })
+    const first = create()
+    cleanups.push(async () => first.stop())
+    await first.restore()
+    await completeBrowserLogin(origin, (await first.startLogin(origin)).authorizationUrl)
+    await waitFor(() => first.snapshot().modelsAvailable)
+    const original = await vault.read()
+    expect(original.generation).toBe(1)
+    await first.stop()
+    const next = create()
+    cleanups.push(async () => next.stop())
+    const clear = vi.spyOn(vault, 'clear')
+    keychain.decryptStringAsync.mockRejectedValueOnce(new Error('Keychain is locked'))
+    await next.restore()
+    expect(next.snapshot()).toMatchObject({ phase: 'error', connected: false })
+    await completeBrowserLogin(origin, (await next.startLogin(origin)).authorizationUrl)
+    await waitFor(() => next.snapshot().modelsAvailable)
+    const recovered = await vault.read()
+    expect(recovered.generation).toBe(2)
+    if (!recovered.session) throw new Error('Missing recovered test account')
+    await vault.replace(2, recovered.session)
+    const beforeRefresh = await readFile(filename)
+    expect((await next.refresh()).phase).toBe('reauthRequired')
+    expect(clear).not.toHaveBeenCalled()
+    expect(await readFile(filename)).toEqual(beforeRefresh)
+    expect((await vault.read()).generation).toBe(3)
+  })
+
   it('does not poll after login or retry in the background after failure, but recovers on demand', async () => {
     const platform = createMockEnterpriseServer({ port: 0 })
     const origin = await platform.listen()

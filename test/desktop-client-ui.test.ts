@@ -123,6 +123,7 @@ describe('BISHENG client slot occupants', () => {
       'sidebar.brand.mark',
       'sidebar.brand.name',
       'conversation.hero.brand.mark',
+      'conversation.chat.assistant-actions',
       'conversation.hero.brand.title',
       'sidebar.right.tab.document.unpreviewable',
       'sidebar.workspaces.session.menu.item',

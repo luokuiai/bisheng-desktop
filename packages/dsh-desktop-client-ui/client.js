@@ -57,8 +57,31 @@ window.__ModuleLoader__.load({
       return BishengMark({ ...props, dark })
     }
 
-    function ConversationBrandTitle({ navigation, t }) {
+    function WorkConversationPart({ component, t, ...props }) {
+      const [source, setSource] = React.useState(null)
+      const [attempt, setAttempt] = React.useState(0)
+      React.useEffect(() => {
+        let current = true
+        import('/desktop-workspace/work-conversation.js')
+          .then(module => { if (current) setSource(module) })
+          .catch(() => { if (current) setSource(false) })
+        return () => { current = false }
+      }, [attempt])
+      if (source === false) return React.createElement('button', { type: 'button', onClick: () => setAttempt(value => value + 1) }, t('workspaceRetry'))
+      return source && React.createElement(source[component], { ...props, t, React, Menu, createPortal: require('react-dom').createPortal })
+    }
+
+    function WorkSpeechAction(props) {
+      const onChatPage = React.useSyncExternalStore(props.navigation.subscribe, () => props.navigation.snapshot().workspacePath === '/chat')
+      if (!onChatPage || !window.speechSynthesis) return null
+      return React.createElement(WorkConversationPart, { ...props, component: 'WorkSpeech' })
+    }
+
+    function ConversationBrandTitle({ navigation, services, t }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
+      if (state.workspacePath === '/chat' && services) return React.createElement(WorkConversationPart, {
+        component: 'WorkWelcome', services, t, title: state.navigation?.branding?.welcomeMessage
+      })
       return React.createElement('span', { 'data-dsh-welcome-title': true }, state.navigation?.branding?.welcomeMessage || t('welcomeMessage'))
     }
 
@@ -309,11 +332,73 @@ window.__ModuleLoader__.load({
       zh: { expand: '展开侧栏', collapse: '收起侧栏', create: '新建', search: '搜索' },
       en: { expand: 'Expand sidebar', collapse: 'Collapse sidebar', create: 'New…', search: 'Search' }
     }
+    const WORK_CONVERSATION_COPY = {
+      zh: {
+        workWelcome: '有什么可以帮你？',
+        workIntro: '对话使用已配置的模型。历史记录保存在当前工作区。',
+        workAsk1: '介绍这个工作台能做什么',
+        workAsk2: '用三句话写一份产品更新',
+        workAsk3: '给排程应用取五个名字',
+        workSelectFolder: '请先选择工作区。',
+        workDraft: '请先发送或清空当前草稿。',
+        workHistory: '会话历史',
+        workOpenHistory: '打开会话历史',
+        workCloseHistory: '收起会话历史',
+        workRecent: '最近',
+        workHistoryEmpty: '你发起的对话会显示在这里。',
+        workRename: '重命名',
+        workMarkRead: '标为已读',
+        workMarkUnread: '标为未读',
+        workDelete: '删除对话',
+        workExport: '导出对话',
+        workExportAll: '导出会话历史',
+        workCopy: '复制对话',
+        workCopied: '已复制',
+        workActions: '更多对话操作',
+        workLocal: '当前工作区',
+        workRenameTitle: '对话标题',
+        workSave: '保存',
+        workFailed: '操作失败，请重试。',
+        workSpeak: '朗读回复',
+        workStopSpeech: '停止朗读',
+        workAccount: '账户设置'
+      },
+      en: {
+        workWelcome: 'How can I help?',
+        workIntro: 'Chat with your configured model. History is saved in this workspace.',
+        workAsk1: 'What can this workspace do?',
+        workAsk2: 'Write a product update in three sentences',
+        workAsk3: 'Suggest five names for a scheduling app',
+        workSelectFolder: 'Choose a workspace first.',
+        workDraft: 'Send or clear your current draft first.',
+        workHistory: 'Chat history',
+        workOpenHistory: 'Open chat history',
+        workCloseHistory: 'Collapse chat history',
+        workRecent: 'Recent',
+        workHistoryEmpty: 'Your conversations will appear here.',
+        workRename: 'Rename',
+        workMarkRead: 'Mark as read',
+        workMarkUnread: 'Mark as unread',
+        workDelete: 'Delete conversation',
+        workExport: 'Export conversation',
+        workExportAll: 'Export chat history',
+        workCopy: 'Copy conversation',
+        workCopied: 'Copied',
+        workActions: 'More conversation actions',
+        workLocal: 'Current workspace',
+        workRenameTitle: 'Conversation title',
+        workSave: 'Save',
+        workFailed: 'Action failed. Try again.',
+        workSpeak: 'Read response aloud',
+        workStopSpeech: 'Stop reading',
+        workAccount: 'Account settings'
+      }
+    }
     const MODES_COPY = {
-      zh: { welcomeMessage: '来一起创造', welcome: '欢迎来到', newConversation: '新建对话', navigation: '导航', moreNavigation: '更多', recent: '对话', projects: '工作区', all: '所有会话', results: '搜索结果', cloud: '云端聊天', local: '本地工作', recentEmpty: '暂无最近会话', recentSearchEmpty: '当前列表没有匹配的会话', chat: '聊天', work: '工作', label: '聊天与工作', loading: '正在连接企业聊天…', error: '企业聊天连接失败，请重试', retry: '重新连接', refresh: '刷新聊天记录', historyLoading: '正在加载聊天记录…', historyError: '加载失败，点击重试', empty: '暂无聊天记录', more: '加载更多', newChat: '新聊天', signIn: '登录企业账号', signInTitle: '登录后使用聊天', signInDescription: '聊天由企业平台提供。登录后，即可使用平台中的模型和对话记录。', continueWork: '继续使用工作', close: '关闭', justNow: '刚刚',
+      zh: { ...WORK_CONVERSATION_COPY.zh,  workspaceImagePrompt: '请生成图像：{prompt}', workspaceAgentsUnavailable: '请先在插件管理中启用多代理协作。', workspaceLoading: '正在打开工作台…', workspaceFailed: '工作台页面加载失败。', workspaceRetry: '重新加载', welcomeMessage: '来一起创造', welcome: '欢迎来到', newConversation: '新建对话', navigation: '导航', moreNavigation: '更多', recent: '对话', projects: '工作区', all: '所有会话', results: '搜索结果', cloud: '云端聊天', local: '本地工作', recentEmpty: '暂无最近会话', recentSearchEmpty: '当前列表没有匹配的会话', chat: '聊天', work: '工作', label: '聊天与工作', loading: '正在连接企业聊天…', error: '企业聊天连接失败，请重试', retry: '重新连接', refresh: '刷新聊天记录', historyLoading: '正在加载聊天记录…', historyError: '加载失败，点击重试', empty: '暂无聊天记录', more: '加载更多', newChat: '新聊天', signIn: '登录企业账号', signInTitle: '登录后使用聊天', signInDescription: '聊天由企业平台提供。登录后，即可使用平台中的模型和对话记录。', continueWork: '继续使用工作', close: '关闭', justNow: '刚刚',
         reorderNavigation: '调整顺序', navigationOrderDescription: '拖动调整顺序，前 5 个显示在侧栏，其余放入“更多”。也可以使用上移、下移按钮。', navigationMoveUp: '上移', navigationMoveDown: '下移', navigationDirect: '侧栏', navigationOverflow: '更多', navigationOrderSave: '保存', navigationOrderCancel: '取消', navigationOrderError: '保存顺序失败，请重试。',
         multiAgentCollaboration: '多代理协作', botBack: '返回', botBackToAgent: '返回经典 Agent 界面', hostedAppBack: '返回应用中心', hostedAppBackToSquare: '返回应用广场', hostedAppLoading: '正在打开应用…', hostedAppError: '应用加载失败。', hostedAppActionError: '操作失败，请重试。', hostedAppRetry: '重试' },
-      en: { welcomeMessage: "Let's Create Together", welcome: 'Welcome', newConversation: 'New conversation', navigation: 'Navigation', moreNavigation: 'More', recent: 'Conversations', projects: 'Workspaces', all: 'All conversations', results: 'Search results', cloud: 'Cloud chat', local: 'Local work', recentEmpty: 'No recent conversations', recentSearchEmpty: 'No matches in the current list', chat: 'Chat', work: 'Work', label: 'Chat and Work', loading: 'Connecting to enterprise Chat…', error: 'Could not connect to enterprise Chat. Try again.', retry: 'Reconnect', refresh: 'Refresh Chat history', historyLoading: 'Loading history…', historyError: 'Loading failed. Retry', empty: 'No chats yet', more: 'Load more', newChat: 'New chat', signIn: 'Sign in to your enterprise account', signInTitle: 'Sign in to use Chat', signInDescription: 'Chat is provided by your enterprise platform. Sign in to use its models and conversations.', continueWork: 'Continue in Work', close: 'Close', justNow: 'Now',
+      en: { ...WORK_CONVERSATION_COPY.en,  workspaceImagePrompt: 'Generate an image: {prompt}', workspaceAgentsUnavailable: 'Enable the agent team in Plugins first.', workspaceLoading: 'Opening workspace…', workspaceFailed: 'Could not load the workspace.', workspaceRetry: 'Reload', welcomeMessage: "Let's Create Together", welcome: 'Welcome', newConversation: 'New conversation', navigation: 'Navigation', moreNavigation: 'More', recent: 'Conversations', projects: 'Workspaces', all: 'All conversations', results: 'Search results', cloud: 'Cloud chat', local: 'Local work', recentEmpty: 'No recent conversations', recentSearchEmpty: 'No matches in the current list', chat: 'Chat', work: 'Work', label: 'Chat and Work', loading: 'Connecting to enterprise Chat…', error: 'Could not connect to enterprise Chat. Try again.', retry: 'Reconnect', refresh: 'Refresh Chat history', historyLoading: 'Loading history…', historyError: 'Loading failed. Retry', empty: 'No chats yet', more: 'Load more', newChat: 'New chat', signIn: 'Sign in to your enterprise account', signInTitle: 'Sign in to use Chat', signInDescription: 'Chat is provided by your enterprise platform. Sign in to use its models and conversations.', continueWork: 'Continue in Work', close: 'Close', justNow: 'Now',
         reorderNavigation: 'Reorder navigation', navigationOrderDescription: 'Drag to reorder. The first 5 appear in the sidebar; the rest appear under More. You can also use the Move up and Move down buttons.', navigationMoveUp: 'Move up', navigationMoveDown: 'Move down', navigationDirect: 'Sidebar', navigationOverflow: 'More', navigationOrderSave: 'Save', navigationOrderCancel: 'Cancel', navigationOrderError: 'Could not save the order. Try again.',
         multiAgentCollaboration: 'Multi-Agent Collaboration', botBack: 'Back', botBackToAgent: 'Back to classic Agent', hostedAppBack: 'Back to App Center', hostedAppBackToSquare: 'Back to Discover', hostedAppLoading: 'Opening app…', hostedAppError: 'Could not load the app.', hostedAppActionError: 'The action failed. Try again.', hostedAppRetry: 'Retry' }
     }
@@ -375,18 +460,190 @@ window.__ModuleLoader__.load({
     }
 
     /** One renderer-owned mode/history controller shared by the content and sidebar slots. */
+    async function loadWorkspacePages() {
+      const runtime = await import('/desktop-workspace/host-runtime.js')
+      runtime.bindHost(require)
+      return import('/desktop-workspace/pages.js')
+    }
+
+    function WorkspaceView({ navigation, path, t }) {
+      const [result, setResult] = React.useState(null)
+      const [attempt, retry] = React.useReducer(number => number + 1, 0)
+      React.useEffect(() => {
+        let active = true
+        setResult(null)
+        loadWorkspacePages().then(module => {
+          if (!active) return
+          navigation.registerPageLocale(module.pagesMessages)
+          setResult({ Page: module.WorkspacePages })
+        }).catch(error => {
+          console.error('[desktop-workspace] Loading pages failed', error)
+          if (active) setResult({ failed: true })
+        })
+        return () => { active = false }
+      }, [attempt])
+      return React.createElement('section', { className: 'dshWorkspacePages', 'data-workspace-path': path },
+        result?.Page ? React.createElement(result.Page, { path, navigate: navigation.navigate, host: navigation.host }) :
+          React.createElement('div', { role: 'status', className: 'dshWorkspaceLoadState' },
+            t(result?.failed ? 'workspaceFailed' : 'workspaceLoading'),
+            result?.failed && React.createElement('button', { type: 'button', onClick: retry }, t('workspaceRetry'))))
+    }
+
+    const workspacePanels = { '/ai-chat': 'code-workbench-layout', '/ai-image-generation': 'copylee-image-gen.paintings', '/project-board': 'super-kanban' }
+    const workspaceDestinations = new Set(['', 'chat', 'multi-agent-chat', 'ai-chat', 'ai-image-generation', 'ai-profile', 'project-board', 'lab', 'components', 'charts', 'icons', 'templates', 'admin', 'settings', 'model', 'harness'])
     function createChatNavigation(ctx) {
       let value = { mode: 'work', connected: false, phase: 'idle', epoch: undefined, items: [], page: 0, hasMore: false, historyPhase: 'idle', settingsOpen: false, signInPromptOpen: false, approvalsOpen: false, accountDialogOpen: false, settingsSurface: undefined, pageId: undefined, navigation: undefined, workLanding: false, nativeWork: true, panelOpen: false, activePanelId: null }
+      const enabled = typeof document !== 'undefined' && Boolean(document.querySelector?.('link[href="/desktop-workspace/workspace.css"]'))
+      const trail = []
+      value.workspacePath = enabled ? '/' : undefined
       const listeners = new Set()
       let active = false, revision = 0, historyRequest = 0, historyDirty = false
       const publish = (patch) => { value = { ...value, ...patch }; listeners.forEach(fn => fn()) }
+      const hasPanel = id => ctx.slots.entries('main').some(entry => entry.options.key === id)
+      const currentBot = () => readBotReturn(createBotNavigation(ctx.slots).snapshot())
+      let workbenches, routeRevision = 0
+      const isNativeBot = () => value.workspaceNative && value.workspacePath === '/multi-agent-chat'
+      const leaveBot = () => {
+        if (isNativeBot()) currentBot()?.back()
+      }
+      const closePanel = () => {
+        if (ctx.layout.panelInfo.getSnapshot().activePanelId !== null) ctx.layout.selectPanel(null)
+      }
+      const openDesktop = () => {
+        routeRevision++
+        leaveBot()
+        closePanel()
+        publish({ workspacePath: undefined, workspaceNative: false, mode: 'work', pageId: undefined })
+      }
+      const navigate = (path, remember = true, afterOpen) => {
+        if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) return
+        const url = new URL(path, 'https://workspace.invalid')
+        if (url.origin !== 'https://workspace.invalid' || !workspaceDestinations.has(url.pathname.split('/')[1])) return
+        const target = url.pathname
+        const request = ++routeRevision
+        const preview = url.searchParams.get('preview') === '1'
+        const panel = !preview && workspacePanels[target]
+        const bot = !preview && target === '/multi-agent-chat' && currentBot()
+        const nativePanel = Boolean(panel && hasPanel(panel))
+        const native = Boolean(bot || nativePanel)
+        const workspacePath = native ? target : path
+        if (remember && value.workspacePath && value.workspacePath !== workspacePath) trail.push(value.workspacePath)
+        if (!bot) leaveBot()
+        ctx.layout.selectPanel(nativePanel ? panel : null)
+        publish({ workspacePath, workspaceNative: native, mode: 'work', pageId: undefined, signInPromptOpen: false })
+        if (bot) bot.open()
+        if (target === '/chat' && workbenches && !value.nativeWork) {
+          const leaving = workbenches.leave()
+          // Workbench persistence may fail. Keep the original workspace available for retry.
+          return leaving.then(() => {
+            if (active && request === routeRevision && value.workspacePath === workspacePath) return afterOpen?.()
+          }, error => {
+            if (!active || request !== routeRevision || value.workspacePath !== workspacePath) return
+            openDesktop()
+            workbenches?.run(Promise.reject(error))
+          })
+        }
+        return afterOpen?.()
+      }
+      const pageNamespace = 'desktop.workspacePages'
+      let pageLocaleMounted = false
+      const registerPageLocale = messages => {
+        if (pageLocaleMounted || !messages) return
+        ctx.effect(() => ctx.locale.register(pageNamespace, messages), 'desktop workspace: page locale')
+        pageLocaleMounted = true
+      }
+      const taskDrafts = new Map()
+      function templateWorkspace() {
+        const folders = ctx.get('workspaces')?.list.getSnapshot().items ?? []
+        const sessions = ctx.sessions.list.getSnapshot().byId
+        const selected = folders.find(folder => folder.sessionIds.some(id => sessions[id]?.retainedBy?.mainView > 0))
+        if (selected) return selected.workspaceId
+        // Match Harness's current-or-most-recent workspace choice before asking
+        // openWorkspace to resolve its actual reusable blank and retained binding.
+        let latest = -Infinity, target
+        for (const folder of folders) {
+          let updated = -Infinity
+          for (const id of folder.sessionIds) if (sessions[id]) updated = Math.max(updated, sessions[id].updatedAt)
+          if (updated === -Infinity) updated = Date.parse(folder.createdAt)
+          if (!target || updated > latest) { target = folder.workspaceId; latest = updated }
+        }
+        return target
+      }
+      const host = {
+        t: (...args) => ctx.locale.bind(pageNamespace)(...args),
+        get locale() { return ctx.locale.getSnapshot().active },
+        getTaskDraft(name) { return taskDrafts.get(name) },
+        setTaskDraft(name, prompt) {
+          if (prompt) taskDrafts.set(name, { prompt })
+          else taskDrafts.delete(name)
+        },
+        setTheme(mode) { if (mode === 'light' || mode === 'dark') ctx.theme.setTheme(mode) },
+        async getModelStatus(signal) { return (await import('/desktop-workspace/workspace-host.js')).getModelStatus(ctx, signal) },
+        async listTasks(signal) { return (await import('/desktop-workspace/workspace-host.js')).listTasks(ctx, signal) },
+        openTask(id) { return navigate('/chat', true, () => ctx.uiWorkspace.openSession(id)) },
+        openCapability(name, input) {
+          if (name === 'desktop') return openDesktop()
+          const sections = { settings: 'general', profile: 'enterprise-account', tools: 'plugins', storage: 'enterprise-account', usage: 'enterprise-account', model: 'models' }
+          if (Object.hasOwn(sections, name)) {
+            window.dispatchEvent(new CustomEvent('dsh-desktop:open-settings-section', { detail: { id: sections[name] } }))
+            return
+          }
+          if (!['code', 'image', 'agents', 'board'].includes(name)) return
+          const route = { code: '/ai-chat', image: '/ai-image-generation', agents: '/multi-agent-chat', board: '/project-board' }[name]
+          const panelId = workspacePanels[route]
+          if (!input?.prompt && panelId && hasPanel(panelId)) {
+            navigate(route)
+            return
+          }
+          if (name === 'board') { navigate('/harness'); return }
+          if (name === 'agents' && !input?.prompt) {
+            if (currentBot()) navigate(route)
+            else if (hasPanel('plugins')) { openDesktop(); ctx.layout.selectPanel('plugins') }
+            else throw new Error(ctx.locale.bind(MODES_NS)('workspaceAgentsUnavailable'))
+            return
+          }
+          const prompt = name === 'image' && input?.prompt
+            ? ctx.locale.bind(MODES_NS)('workspaceImagePrompt', { prompt: input.prompt }) : input?.prompt
+          // Selecting a layout panel aborts Harness's pending session navigation.
+          // Start the draft after the chat panel and any workbench exit have settled.
+          if (!prompt) return navigate('/chat', true, () => ctx.uiWorkspace.startSession())
+          const source = value.workspacePath
+          const typed = taskDrafts.get(name)?.prompt
+          const draft = { prompt: typed?.trim() === input.prompt ? typed : input.prompt }
+          taskDrafts.set(name, draft)
+          return navigate('/chat', true, async () => {
+            const request = routeRevision
+            try {
+              const workspaceId = templateWorkspace()
+              if (!workspaceId) throw new Error(host.t('taskWorkspaceRequired'))
+              await ctx.uiWorkspace.openWorkspace(workspaceId, id => {
+                const binding = ctx.sessions.binding(id)
+                const result = binding && ctx.get('conversation')?.input.requestDraftInitialization(binding, { prompt })
+                if (result !== 'applied') {
+                  draft.sessionId = id
+                  throw new Error(host.t(result === 'preserved' ? 'taskDraftConflict' : 'taskDraftBlocked'))
+                }
+                if (taskDrafts.get(name) === draft) taskDrafts.delete(name)
+              })
+            } catch (error) {
+              draft.error = error instanceof Error ? error.message : host.t('openError')
+              if (request === routeRevision && source && taskDrafts.get(name) === draft) {
+                if (trail.at(-1) === source) trail.pop()
+                navigate(source, false)
+              }
+            }
+          })
+        }
+      }
       const select = (mode) => {
         if (mode === 'chat' && !value.connected) {
           publish({ signInPromptOpen: true })
           return false
         }
         const dismissApp = mode === 'work' && value.mode !== 'work' && value.hostedApp
-        publish({ mode, pageId: undefined, signInPromptOpen: false })
+        leaveBot()
+        if (value.workspaceNative && mode === 'chat') closePanel()
+        publish({ mode, workspacePath: mode === 'work' && value.workspacePath === '/chat' ? '/chat' : undefined, workspaceNative: false, pageId: undefined, signInPromptOpen: false })
         if (dismissApp) void window.dshEnterpriseChat.closeHostedApp(false).catch(() => { if (active) void readHostState() })
         return true
       }
@@ -446,7 +703,7 @@ if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
           ...(clearHistory ? { items: [], page: 0, hasMore: false, historyPhase: 'idle' } : {}),
           signInPromptOpen: next.connected ? false : value.signInPromptOpen,
           pageId: next.navigation?.entries.find(entry => entry.active)?.id,
-          mode: next.connected ? signedIn ? 'chat' : value.mode : 'work'
+          mode: next.connected ? signedIn && !value.workspacePath ? 'chat' : value.mode : 'work'
         })
         if (signedIn) window.dispatchEvent(new CustomEvent('dsh-desktop:close-settings'))
         if (next.connected && next.phase === 'ready' && (refresh || identityChanged || signedIn || conversationChanged || becameReady)) void refreshHistory()
@@ -471,18 +728,21 @@ if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
       return {
         snapshot: () => value,
         subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn) },
-        select, open, refreshHistory, deletion,
+        select, open, refreshHistory, deletion, navigate, openDesktop, host, registerPageLocale,
+        canGoBack: () => trail.length > 0,
+        goBack() { navigate(trail.pop() || '/', false) },
         requestDelete(id, title, epoch) {
           if (value.connected && epoch === value.epoch && value.items.some(item => item.id === id)) deletion.request(id, title, epoch)
         },
         bindWorkbench(service) {
+          workbenches = service
           const sync = () => {
             const snapshot = service.getSnapshot()
             publish({ nativeWork: snapshot.enabled === false || snapshot.state.active == null })
           }
           const unsubscribe = service.subscribe(sync)
           sync()
-          return () => { unsubscribe(); publish({ nativeWork: true }) }
+          return () => { unsubscribe(); workbenches = undefined; publish({ nativeWork: true }) }
         },
         dismissSignIn() { publish({ signInPromptOpen: false }) },
         signIn() {
@@ -493,8 +753,9 @@ if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
           if (!value.connected || !value.navigation?.entries.some(entry => entry.id === id)) return
           const hostedApp = value.hostedApp
           const returningToDirectory = hostedApp && id === 'apps' && /^\/apps\/?$/u.test(value.path ?? '')
+          leaveBot()
           ctx.layout.selectPanel(null)
-          publish({ mode: 'chat', pageId: id })
+          publish({ mode: 'chat', workspacePath: undefined, workspaceNative: false, pageId: id })
           const epoch = value.epoch
           try {
             // Apps already owns the document behind an app launched from the center.
@@ -519,7 +780,7 @@ const hasNavigationHandler = typeof ctx.uiWorkspace.registerNavigationHandler ==
 const disposeNavigation = hasNavigationHandler
   ? ctx.uiWorkspace.registerNavigationHandler((intent, workspaceId) => {
     if (intent === 'new' && workspaceId === undefined && value.mode === 'chat') { void open('new'); return true }
-    select('work')
+    if (!value.workspacePath || value.mode === 'chat') select('work')
   })
   : () => {}
 // This host never notifies session opens. A history click still replaces
@@ -558,11 +819,48 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
           }
           const panel = () => {
             const { activePanelId } = ctx.layout.panelInfo.getSnapshot()
+            // The layout subscription also fires when unrelated layout state changes.
+            if (value.activePanelId === activePanelId) return
             const panelOpen = activePanelId !== null
+            if (panelOpen) leaveBot()
             if (panelOpen && value.mode !== 'work') select('work')
-            publish({ panelOpen, activePanelId })
+            const route = enabled && panelOpen && Object.keys(workspacePanels).find(path => workspacePanels[path] === activePanelId)
+            const leavingPanel = value.workspaceNative && !panelOpen && value.activePanelId && value.workspacePath !== '/multi-agent-chat'
+            publish({ panelOpen, activePanelId, ...(route ? { workspacePath: route, workspaceNative: true } :
+              leavingPanel ? { workspacePath: '/', workspaceNative: false } : panelOpen ? { workspacePath: undefined, workspaceNative: false } : {}) })
           }
           const unsubscribe = ctx.layout.panelInfo.subscribe(panel)
+          let stopBot = () => {}, stopBotSlots = () => {}
+          if (enabled) {
+            const source = createBotNavigation(ctx.slots)
+            let entry
+            const attachBot = () => {
+              const next = source.snapshot()
+              if (entry === next) return
+              stopBot(); stopBot = () => {}; entry = next
+              const bot = readBotReturn(entry)
+              if (!bot) {
+                // An unloaded plugin yields its route back to the bundled page.
+                if (isNativeBot()) publish({ workspaceNative: false })
+                return
+              }
+              const syncSurface = () => {
+                if (bot.snapshot() === 'bot') {
+                  closePanel()
+                  publish({ mode: 'work', workspacePath: '/multi-agent-chat', workspaceNative: true })
+                } else if (isNativeBot()) {
+                  publish({ workspacePath: '/', workspaceNative: false })
+                }
+              }
+              // Discovery can finish after a user has opened a page. A restored
+              // plugin surface must not replace that page or its active panel.
+              if (bot.snapshot() === 'bot' && !isNativeBot()) bot.back()
+              else syncSurface()
+              stopBot = bot.subscribe(syncSurface)
+            }
+            stopBotSlots = source.subscribe(attachBot)
+            attachBot()
+          }
           const unsubscribeSessions = ctx.sessions.list.subscribe(workState)
           const unsubscribeChat = window.dshEnterpriseChat?.subscribe?.((next) => {
             revision++
@@ -579,6 +877,7 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
           void sync()
           return () => {
 active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); unsubscribeSessions(); unsubscribeWork(); unsubscribeChat?.()
+            stopBot(); stopBotSlots()
             window.removeEventListener('dsh-desktop:enterprise-account-changed', account)
             disposeNavigation()
             if (revealWorkSession && ctx.uiWorkspace.openSession === revealWorkSession) ctx.uiWorkspace.openSession = originalOpenSession
@@ -901,9 +1200,10 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         typeof actions.openNewChat === 'function' && typeof actions.openPalette === 'function' && React.createElement(BotRailActions, { actions, t }))
     }
 
-    function DesktopModes({ work, rightbarWidth, resizeHandle, navigation, t, locale, slots, shortcuts, botSidebarText }) {
+    function DesktopModes({ work, rightbarWidth, resizeHandle, navigation, services, t, locale, slots, shortcuts, botSidebarText }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const { mode, settingsOpen, settingsSurface } = state
+      const workspaceView = Boolean(state.workspacePath && state.workspacePath !== '/chat' && !state.workspaceNative && !state.panelOpen)
       const workspaceDockOpen = mode === 'chat' && state.phase === 'ready' && state.workspaceDockOpen === true
       React.useEffect(() => navigation.start(), [navigation])
       const panel = React.useRef(null)
@@ -989,7 +1289,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           const radius = !workspaceDockOpen && modesStyle
             ? Math.max(0, Math.round((Number.parseFloat(modesStyle.borderTopLeftRadius) || 0) - (Number.parseFloat(modesStyle.borderTopWidth) || 0)))
             : 0
-          const chatVisible = mode === 'chat' && !surfaceOpen && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
+          const chatVisible = mode === 'chat' && !state.workspacePath && !surfaceOpen && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
           const settingsVisible = remote && !hostOverlayOpen && state.connected && remote.bounds.width > 0 && remote.bounds.height > 0
           const wideSidebar = chatVisible && document.querySelector('[data-dsh-sidebar-root][data-dsh-sidebar-wide="true"]')?.getBoundingClientRect()
           const overlayBounds = settingsVisible ? remote.bounds : chatVisible ? { x: Math.max(baseX, previewRight), y, height: rect.height, wideSidebar } : undefined
@@ -1104,11 +1404,11 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           if (railInset) modes?.style.removeProperty('--dsh-plugin-rail-inset')
           overlays.dispose(); interaction.disconnect(); resize.disconnect(); botSidebarState.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
         }
-      }, [mode, surfaceOpen, hostedAppSlug, settingsSurface, state.connected, state.settingsProtocolVersion, workspaceDockOpen, locale])
+      }, [mode, state.workspacePath, surfaceOpen, hostedAppSlug, settingsSurface, state.connected, state.settingsProtocolVersion, workspaceDockOpen, locale])
       React.useEffect(() => () => {
         void window.dshEnterpriseChat?.present({ visible: false, bounds: { x: 0, y: 48, width: 0, height: 0 }, theme: 'light' }).catch(() => {})
       }, [])
-      const showModePicker = !settingsOpen && (mode === 'chat'
+      const showModePicker = !state.workspacePath && !settingsOpen && (mode === 'chat'
         ? !state.hostedApp && !state.pageId && state.conversationId === 'new' && state.landing !== false
         : state.nativeWork && state.workLanding && !state.panelOpen)
       const select = navigation.choose
@@ -1120,7 +1420,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         if (select(next)) tabs.current[next]?.focus()
       }
       return React.createElement('div', { className: 'dshModes', 'data-dsh-workspace-dock': workspaceDockOpen ? '' : undefined },
-        document.documentElement.dataset.platform === 'darwin' && slots.entriesOfSlot &&
+        !state.workspacePath && document.documentElement.dataset.platform === 'darwin' && slots.entriesOfSlot &&
           React.createElement(BotSidebarToggle, { slots, shortcuts, t: botSidebarText }),
         state.signInPromptOpen && React.createElement(Modal, {
           open: true, title: t('signInTitle'), closeLabel: t('close'), onClose: navigation.dismissSignIn,
@@ -1131,8 +1431,11 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         showModePicker && React.createElement('header', { className: 'dshModesHeader' },
           React.createElement('div', { role: 'tablist', 'aria-label': t('label'), className: 'dshModesTabs', onKeyDown: keyDown },
             ...['chat', 'work'].map((key) => React.createElement('button', { key, id: `dsh-mode-${key}`, type: 'button', role: 'tab', 'aria-selected': mode === key, 'aria-controls': `dsh-panel-${key}`, tabIndex: mode === key ? 0 : -1, ref: (node) => { tabs.current[key] = node }, onClick: (event) => { setAnimateWork(event.detail > 0 && key === 'work'); select(key) } }, t(key))))),
-        React.createElement('section', { id: 'dsh-panel-work', role: 'tabpanel', 'aria-label': t('work'), hidden: mode !== 'work', className: 'dshModeBody dshWorkContent', 'data-reveal-controls': animateWork, onTransitionEnd: event => { if (event.propertyName === 'clip-path') setAnimateWork(false) }, style: { '--dsh-work-rightbar-width': `${rightbarWidth ?? 0}px` } }, work, resizeHandle),
-        React.createElement('section', { ref: panel, id: 'dsh-panel-chat', role: 'tabpanel', 'aria-label': t('chat'), hidden: mode !== 'chat', className: 'dshModeBody' },
+        React.createElement('section', { id: 'dsh-panel-work', role: 'tabpanel', 'aria-label': t('work'), hidden: workspaceView || (mode !== 'work' && !state.workspacePath), className: 'dshModeBody dshWorkContent', 'data-reveal-controls': animateWork, onTransitionEnd: event => { if (event.propertyName === 'clip-path') setAnimateWork(false) }, style: { '--dsh-work-rightbar-width': `${rightbarWidth ?? 0}px` } }, work, resizeHandle,
+          services && mode === 'work' && state.workspacePath === '/chat' && state.nativeWork && !state.panelOpen &&
+            React.createElement(WorkConversationPart, { component: 'WorkHistory', services, t, rightbarWidth })),
+        workspaceView && React.createElement(WorkspaceView, { navigation, path: state.workspacePath, t }),
+        React.createElement('section', { ref: panel, id: 'dsh-panel-chat', role: 'tabpanel', 'aria-label': t('chat'), hidden: mode !== 'chat' || Boolean(state.workspacePath), className: 'dshModeBody' },
           hostedApp ? React.createElement(HostedAppContent, { key: hostedAppSlug, app: hostedApp, seat: hostedSeat, sourcePath: state.path, t }) : React.createElement('div', { className: 'dshChatStatus', role: 'status' },
             React.createElement('p', null, state.phase === 'error' ? t('error') : state.phase === 'ready' ? '' : t('loading')),
             state.connected && state.phase === 'error' && React.createElement('button', { type: 'button', onClick: () => { void window.dshEnterpriseChat.retry().catch(() => {}) } }, t('retry')))))
@@ -1410,7 +1713,54 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       error && React.createElement('p', { role: 'alert' }, error))
     }
 
-    function PrimaryNavigation({ wide, renderAction, panels, selectPanel, renderPanelIcon, navigation, botNavigation, t }) {
+    const WORKSPACE_CHROME_NS = 'desktop.workspaceChrome'
+    const WORKSPACE_CHROME_COPY = {
+      zh: {
+        home: '总览', chat: 'AI 对话', 'multi-agent-chat': '多代理协作', 'ai-chat': '代码工作台',
+        'ai-image-generation': '图像生成', 'ai-profile': 'AI 活动档案', 'project-board': '任务看板',
+        lab: '组件实验室', charts: '数据图表', icons: '图标库', templates: '整页模板', admin: 'AI 管理后台',
+        components: 'AI 组件目录', settings: '设置', model: '模型连接', harness: '任务执行台',
+        'templates/dashboard': '通用仪表盘', 'templates/marketing': '营销分析', 'templates/finance': '财务分析',
+        'templates/hr': '人力资源', 'templates/medical-profile': '健康档案',
+        toolbar: '桌面窗口工具栏', expand: '展开导航栏', collapse: '收起导航栏', workspace: '工作台',
+        navigation: '工作台导航', quickNavigation: '工作台快捷导航', spaces: '工作空间', library: '组件与管理',
+        componentLibrary: 'LUOKUI-AI 组件库', viewAll: '查看全部', views: '工作区视图',
+        dark: '切换深色模式', light: '切换浅色模式', native: '桌面会话与插件', unavailable: '工作台导航加载失败'
+      },
+      en: {
+        home: 'Overview', chat: 'AI chat', 'multi-agent-chat': 'Multi-agent chat', 'ai-chat': 'Code workspace',
+        'ai-image-generation': 'Image generation', 'ai-profile': 'AI activity', 'project-board': 'Task board',
+        lab: 'Component lab', charts: 'Charts', icons: 'Icons', templates: 'Page templates', admin: 'AI administration',
+        components: 'AI components', settings: 'Settings', model: 'Model connection', harness: 'Task console',
+        'templates/dashboard': 'Dashboard', 'templates/marketing': 'Marketing analytics', 'templates/finance': 'Financial analytics',
+        'templates/hr': 'Human resources', 'templates/medical-profile': 'Health profile',
+        toolbar: 'Desktop toolbar', expand: 'Expand navigation', collapse: 'Collapse navigation', workspace: 'Workspace',
+        navigation: 'Workspace navigation', quickNavigation: 'Quick navigation', spaces: 'Workspace', library: 'Components & management',
+        componentLibrary: 'LUOKUI-AI library', viewAll: 'View all', views: 'Workspace views',
+        dark: 'Switch to dark mode', light: 'Switch to light mode', native: 'Desktop sessions and plugins', unavailable: 'Workspace navigation could not load'
+      }
+    }
+
+    function WorkspaceChromeMount({ navigation, theme, shortcuts, expandBotSidebar, t }) {
+      const { workspacePath, workspaceNative } = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
+      const [result, setResult] = React.useState(null)
+      React.useEffect(() => {
+        let active = true
+        import('/desktop-workspace/workspace-chrome.js').then(module => {
+          if (active) setResult({ Chrome: module.createWorkspaceChrome(React, loadWorkspacePages) })
+        }, error => {
+          console.error('[desktop-workspace] Loading navigation failed', error)
+          if (active) setResult({ failed: true })
+        })
+        return () => { active = false }
+      }, [])
+      if (!workspacePath || !result) return null
+      if (result.failed) return React.createElement('button', { type: 'button', className: 'dshWorkspaceRecoveryButton',
+        title: t('unavailable'), onClick: navigation.openDesktop }, t('native'))
+      return React.createElement(result.Chrome, { path: workspacePath.split(/[?#]/u, 1)[0], native: workspaceNative === true, navigation, theme, shortcuts, expandBotSidebar, t })
+    }
+
+    function PrimaryNavigation({ wide, renderAction, panels, selectPanel, renderPanelIcon, navigation, botNavigation, t, workspaceHome }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const { entry: botEntry, action: botAction } = useBotReturn(botNavigation)
       const botSurface = botAction ?? EMPTY_BOT_SOURCE
@@ -1482,6 +1832,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         }
       }
       return React.createElement('nav', { className: 'dshPrimaryNavigation', 'data-wide': wide, 'aria-label': t('navigation') },
+        workspaceHome && renderAction({ id: 'workspace-home', label: workspaceHome, icon: BishengMark(), onClick: () => navigation.navigate('/') }),
         plugins && renderAction({ id: plugins.id, label: plugins.label, icon: renderPanelIcon(plugins.id), active: state.mode === 'work' && state.activePanelId === plugins.id, onClick: () => { setMenuOpen(false); navigation.select('work'); selectPanel(plugins.id) } }),
         visible.map(item => React.createElement(React.Fragment, { key: item.id }, renderAction({ ...item, active: item.id === selectedId, onClick: () => openItem(item.id) }))),
         items.length > 0 && React.createElement(Menu, {
@@ -1496,9 +1847,35 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
     }
     // Work overlays use viewport coordinates. Isolate stacking while keeping
     // their fixed-position containing block attached to the viewport.
-    function installDesktopModes(ctx) {
+    function installDesktopModes(ctx, services) {
       const navigation = createChatNavigation(ctx)
       const botNavigation = createBotNavigation(ctx.slots)
+      const workspaceEnabled = Boolean(navigation.snapshot().workspacePath)
+      if (workspaceEnabled) {
+        ctx.effect(() => ctx.locale.register(WORKSPACE_CHROME_NS, WORKSPACE_CHROME_COPY))
+        const theme = {
+          subscribe: listener => ctx.on('theme/change', listener),
+          snapshot: () => ctx.theme.getTheme().active.colorScheme,
+          set: id => ctx.theme.setTheme(id)
+        }
+        // DS Bot can restore its previous stand-alone rail. An expanded
+        // workspace uses that plugin's own navigation rows and resize state.
+        const expandBotSidebar = () => {
+          try {
+            const entry = ctx.slots.entriesOfSlot?.('sidebar.workspaces')?.[0]
+            const face = entry?.inject?.()
+            if (face?.actions?.surfaceMode?.() !== 'bot' || !face.hooks?.sidebarPref) return
+            if (face.hooks.sidebarPref.getSnapshot() !== 'open') face.actions.setSidebarPref?.('open')
+          } catch (error) {
+            // A replaced or unloading optional plugin can lose its slot face.
+            console.warn('[desktop-workspace] Could not expand agent navigation', error)
+          }
+        }
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+          name: 'shell.overlay', id: 'desktop-workspace-chrome', locale: WORKSPACE_CHROME_NS,
+          inject: () => ({ navigation, theme, shortcuts: ctx.get?.('shortcuts'), expandBotSidebar, t: ctx.locale.bind(WORKSPACE_CHROME_NS) })
+        }, WorkspaceChromeMount))
+      }
       ctx.effect(() => () => navigation.deletion.dispose())
       ctx.effect(() => ctx.locale.register(MODES_NS, MODES_COPY), 'desktop: Chat and Work locale')
       ctx.effect(() => ctx.locale.register(BOT_SIDEBAR_NS, BOT_SIDEBAR_COPY))
@@ -1628,9 +2005,9 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         document.head.appendChild(style)
         return () => style.remove()
       })
-      ctx.slots.inject('sidebar.primaryNavigation', () => ctx.slots.register({ name: 'sidebar.primaryNavigation', id: 'desktop-primary-navigation', inject: () => ({ navigation, botNavigation, t: ctx.locale.bind(MODES_NS) }) }, PrimaryNavigation))
+      ctx.slots.inject('sidebar.primaryNavigation', () => ctx.slots.register({ name: 'sidebar.primaryNavigation', id: 'desktop-primary-navigation', inject: () => ({ navigation, botNavigation, t: ctx.locale.bind(MODES_NS), workspaceHome: workspaceEnabled && ctx.locale.bind(WORKSPACE_CHROME_NS)('home') }) }, PrimaryNavigation))
       ctx.slots.inject('sidebar.workspaces.title', () => ctx.slots.register({ name: 'sidebar.workspaces.title', inject: () => ({ t: ctx.locale.bind(MODES_NS) }) }, ({ flat, t }) => t(flat ? 'all' : 'projects')))
-      ctx.slots.inject('desktop.mode.content', () => ctx.slots.register({ name: 'desktop.mode.content', id: 'desktop-chat-work', inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS), locale: ctx.locale, slots: ctx.slots, shortcuts: ctx.get?.('shortcuts'), botSidebarText: ctx.locale.bind(BOT_SIDEBAR_NS) }) }, DesktopModes))
+      ctx.slots.inject('desktop.mode.content', () => ctx.slots.register({ name: 'desktop.mode.content', id: 'desktop-chat-work', inject: () => ({ navigation, services, t: ctx.locale.bind(MODES_NS), locale: ctx.locale, slots: ctx.slots, shortcuts: ctx.get?.('shortcuts'), botSidebarText: ctx.locale.bind(BOT_SIDEBAR_NS) }) }, DesktopModes))
       ctx.slots.inject('sidebar.workspaces.collection', () => ctx.slots.register({ name: 'sidebar.workspaces.collection', id: 'desktop-shared-collection', inject: () => ({ navigation, botNavigation, t: ctx.locale.bind(MODES_NS), deleteText: ctx.locale.bind(CLOUD_DELETE_NS) }) }, SharedCollection))
       return navigation
     }
@@ -2684,6 +3061,16 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         subscribe: listener => ctx.on('theme/change', listener),
         snapshot: () => ctx.theme.getTheme().active.colorScheme
       }
+      if (typeof document !== 'undefined' && document.querySelector?.('link[href="/desktop-workspace/workspace.css"]')) {
+        ctx.effect(() => {
+          const root = document.documentElement
+          const before = root.classList.contains('dark')
+          const sync = () => root.classList.toggle('dark', themeStore.snapshot() === 'dark')
+          sync()
+          const off = themeStore.subscribe(sync)
+          return () => { off(); root.classList.toggle('dark', before) }
+        }, 'desktop workspace: mirror the active Harness palette')
+      }
       // Ship the card shell as the default UI: tokens stack over the active
       // palette through the theme registry, and the stylesheet is owned here.
       if (typeof ctx.inject === 'function') {
@@ -2734,7 +3121,14 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         name: 'shell.overlay', id: 'desktop-delete-session-dialog', locale: DELETE_SESSION_NS,
         inject: () => ({ deletion, t: deletionText })
       }, DeleteSessionDialog))
-      const navigation = installDesktopModes(ctx)
+      const services = {
+        sessions: ctx.sessions, workspace: ctx.uiWorkspace, deletion,
+        // These optional services belong to the Work view. Other slot occupants
+        // (including the enterprise deletion dialog) can activate independently.
+        get workspaces() { return ctx.get?.('workspaces')?.list },
+        getInput: scope => ctx.get?.('conversation')?.input.for(scope)
+      }
+      const navigation = installDesktopModes(ctx, services)
       installWorkCompletionNotifications(ctx, navigation)
       if (typeof ctx.inject === 'function') ctx.inject(['desktopWorkbenches'], scoped => {
         scoped.effect(() => navigation.bindWorkbench(scoped.desktopWorkbenches))
@@ -2853,7 +3247,11 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           })
         )
       )
-      ctx.slots.inject('conversation.hero.brand.title', () => ctx.slots.register({ name: 'conversation.hero.brand.title', inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS) }) }, ConversationBrandTitle))
+      ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
+        name: 'conversation.chat.assistant-actions', id: 'desktop-read-response',
+        inject: sessionId => ({ sessionId, navigation, services, t: ctx.locale.bind(MODES_NS) })
+      }, WorkSpeechAction))
+      ctx.slots.inject('conversation.hero.brand.title', () => ctx.slots.register({ name: 'conversation.hero.brand.title', inject: () => ({ navigation, services, t: ctx.locale.bind(MODES_NS) }) }, ConversationBrandTitle))
       ctx.slots.inject('sidebar.right.tab.document.unpreviewable', () =>
         ctx.slots.register({
           name: 'sidebar.right.tab.document.unpreviewable',

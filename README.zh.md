@@ -46,6 +46,7 @@ DSH Desktop 把本地 DeepSeek Harness 封装为可安装的桌面应用。它�
 
 DeepSeek Harness 已经提供 Agent Runtime 与 Web UI。DSH Desktop 在此基础上补齐真正的桌面宿主能力：
 
+- 从 LUOKUI-AI 总览进入 AI 对话、工作空间、模板与组件库。安装多代理、图像、代码或看板插件后，可从对应的工作空间入口打开。
 - 自动启动和停止 Harness，不需要另开 CLI 或浏览器标签页
 - 通过系统原生目录选择器添加和管理项目工作区
 - 支持 DeepSeek 官方模型与主流第三方模型提供方

@@ -3,12 +3,14 @@ import vm from 'node:vm'
 import React, { act } from 'react'
 import * as jsx from 'react/jsx-runtime'
 import { Context } from '@deepseek-ai/cordis'
+import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
 import { createRoot } from 'react-dom/client'
 import { JSDOM } from 'jsdom'
 import { afterEach, expect, it, vi } from 'vitest'
 
 // Coverage AC: AC-03, AC-30, AC-31, AC-56.
 const source = await readFile(new URL('../packages/dsh-desktop-enterprise/client.js', import.meta.url), 'utf8')
+const settingsSource = await readFile(new URL('../packages/dsh-desktop-settings/client.js', import.meta.url), 'utf8')
 const localeSource = await readFile(new URL('../node_modules/@deepseek-ai/dsh-client-locale/lib/client.js', import.meta.url), 'utf8')
 const SERVICE = 'http://192.168.106.109:13001'
 const LOGIN_LINK = 'luokuiai://login?server=http%3A%2F%2F192.168.106.109%3A13001'
@@ -98,7 +100,7 @@ async function mountEnterprise(initial, hooks = {}) {
   }
   const definitions = new Map()
   dom.window.__ModuleLoader__ = { load: value => definitions.set(value.id, value) }
-  vm.runInNewContext(localeSource + '\n' + source, {
+  vm.runInNewContext([localeSource, source, hooks.withUsage ? settingsSource : ''].join('\n'), {
     window: dom.window,
     document: dom.window.document,
     Date,
@@ -106,11 +108,14 @@ async function mountEnterprise(initial, hooks = {}) {
     fetch,
     CustomEvent: dom.window.CustomEvent
   })
-  const extension = definitions.get('dsh-desktop-enterprise').factory(name => {
+  const loadDependency = name => {
     if (name === 'react') return React
-    if (name === '@deepseek-ai/dsh-client-ui-primitives') return { Button: ({ variant, size, ...props }) => React.createElement('button', props) }
+    if (name === '@deepseek-ai/dsh-client-ui-primitives') return {
+      Button: ({ variant, size, ...props }) => React.createElement('button', props),
+      Tooltip: ({ children }) => children
+    }
     throw new Error(name)
-  })
+  }
   const { LocaleRuntime } = definitions.get('@deepseek-ai/dsh-client-locale').factory(name =>
     name === 'react' ? React : name === 'react/jsx-runtime' ? jsx : {})
   const localeContext = new Context()
@@ -126,20 +131,39 @@ async function mountEnterprise(initial, hooks = {}) {
     dom.window.close()
   }
   await act(async () => {
-    extension.apply({
+    const core = new SlotCore()
+    core.register({ name: 'root', children: { 'settings.section': { kind: 'list', scope: 'root' } } }, () => null)
+    const ctx = {
       locale,
       effect: callback => {
         const dispose = callback()
         if (dispose) disposers.push(dispose)
       },
       slots: {
-        inject: (_slot, callback) => callback(),
-        register: (config, component) => {
-          if (config.id === 'enterprise-account') root.render(React.createElement(component, config.inject()))
-          return () => {}
-        }
+        inject: (name, callback) => core.specDynamic(name) && callback(),
+        register: (config, component) => core.register(config, component)
       }
-    })
+    }
+    definitions.get('dsh-desktop-enterprise').factory(loadDependency).apply(ctx)
+    if (hooks.withUsage) {
+      // The account owner supplies the user. Its Settings child renders the name
+      // once the desktop usage bridge reports a ready summary.
+      dom.window.dshEnterpriseChat = {
+        state: async () => ({ connected: account.connected, epoch: 1, phase: 'ready' }),
+        subscribe: () => () => {},
+        usage: async () => ({
+          summary: { status: 'ready', data: { totals: { total_tokens: 0, input_tokens: 0, output_tokens: 0, message_count: 0 }, points: [] } },
+          storage: { status: 'ready', data: null }
+        })
+      }
+      definitions.get('dsh-desktop-settings').factory(loadDependency).apply(ctx)
+    }
+    const renderSlot = (name, props, options) => {
+      const [entry] = core.entriesOfSlot(name)
+      return entry ? React.createElement(entry.component, { ...entry.inject?.(), ...props }) : options?.fallback
+    }
+    const accountPage = core.entriesOfSlot('settings.section').find(entry => entry.options.id === 'enterprise-account')
+    root.render(React.createElement(accountPage.component, { ...accountPage.inject(), renderSlot }))
   })
   const text = () => dom.window.document.getElementById('root').textContent
   const click = async (name) => {
@@ -250,7 +274,7 @@ it.each(['zh', 'en'])('guides browser authorization and the manual-code fallback
 })
 
 it('replaces the login guidance with account details after successful sign-in', async () => {
-  const page = await mountEnterprise(idleAccount())
+  const page = await mountEnterprise(idleAccount(), { withUsage: true })
   await page.click('在浏览器中登录')
   await page.click('确认为可信来源')
   expect(page.document.querySelector('h2').textContent).toBe('账号与用量')

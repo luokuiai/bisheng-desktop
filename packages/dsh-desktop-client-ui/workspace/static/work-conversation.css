@@ -1,0 +1,234 @@
+/* The native session/attachment/editor slots remain in the Harness grid. */
+body[data-dsh-workspace-scene=chat] #dsh-panel-work {
+  --dsh-work-paper: var(--color-background-secondary-default, var(--dsw-alias-bg-layer-1));
+  --dsh-work-surface: var(--color-background-primary-default, var(--dsw-alias-bg-base));
+  --dsh-work-canvas: var(--color-background-full, var(--dsw-alias-bg-base));
+  --dsh-work-gap: 12px;
+  --dsh-work-history-width: 260px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 12px 12px 12px 8px;
+  grid-template-columns: minmax(0, 1fr) 0px auto;
+  background: var(--dsh-work-canvas, var(--dsw-alias-bg-base));
+  font-family: var(--font-inter), 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+body[data-dsh-workspace-scene=chat] .pI_x6G_frame:not([data-rightbar-collapsed]) #dsh-panel-work {
+  grid-template-columns: minmax(0, 1fr) min(var(--dsh-work-rightbar-width), 55%) auto;
+}
+body[data-dsh-workspace-scene=chat] #dsh-panel-work > .pI_x6G_centerCol {
+  grid-area: 1 / 1;
+  background: var(--dsh-work-paper);
+  position: relative;
+  border: none;
+  border-radius: 24px;
+  overflow: clip;
+  box-shadow: none;
+}
+body[data-dsh-workspace-scene=chat] #dsh-panel-work > [data-rightbar-col] { grid-area: 1 / 2; }
+body[data-dsh-workspace-scene=chat] #dsh-panel-work .wSkVaW_root {
+  background: var(--dsh-work-paper);
+  color: var(--dsw-alias-label-primary);
+}
+body[data-dsh-workspace-scene=chat] .wSkVaW_header {
+  padding: 8px 16px;
+  min-height: 48px;
+  border: 0;
+  -webkit-app-region: no-drag;
+}
+body[data-dsh-workspace-scene=chat] .wSkVaW_headerBlank {
+  height: 48px;
+  min-height: 48px;
+}
+.dshWorkChatBlankTitle {
+  display: none;
+  pointer-events: none;
+  align-self: start;
+  z-index: 1;
+  padding: 17px 16px 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  grid-area: 1 / 1;
+}
+.dshWorkContent:has(.wSkVaW_root[data-phase=hero]) .dshWorkChatBlankTitle { display: block; }
+body[data-dsh-workspace-scene=chat] .wSkVaW_body { --dsh-composer-side-clearance: 12px; --dsh-composer-card-max-width: 768px; }
+body[data-dsh-workspace-scene=chat] .wSkVaW_scrollBody { scrollbar-gutter: auto; margin: 0; }
+body[data-dsh-workspace-scene=chat] [data-phase=hero] .wSkVaW_scrollBody { justify-content: flex-start; }
+body[data-dsh-workspace-scene=chat] [data-phase=hero] .wSkVaW_composerSeat,
+body[data-dsh-workspace-scene=chat] [data-phase=hero] .wSkVaW_composerSeat > [data-slot],
+body[data-dsh-workspace-scene=chat] [data-phase=hero] .wSkVaW_composerHero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: min-content;
+}
+body[data-dsh-workspace-scene=chat] .wSkVaW_composerHero {
+  width: min(100%, 792px);
+  padding-bottom: 8px;
+  gap: 2px;
+}
+body[data-dsh-workspace-scene=chat] .wSkVaW_root[data-phase=active] .wSkVaW_composerSeat {
+  padding-bottom: 8px;
+  background: linear-gradient(transparent, var(--dsh-work-paper) 20px);
+}
+body[data-dsh-workspace-scene=chat] .pXSMma_root {
+  flex: 1 0 160px;
+  height: auto;
+  padding: 12px 16px;
+}
+body[data-dsh-workspace-scene=chat] .pXSMma_fishHitbox { display: none; }
+body[data-dsh-workspace-scene=chat] .pXSMma_titleGroup { min-width: 0; }
+body[data-dsh-workspace-scene=chat] .pXSMma_titleGroup > [data-slot] { min-width: 0; }
+.dshWorkWelcome { display: flex; align-items: center; flex-direction: column; gap: 4px; text-align: center; }
+.dshWorkWelcome strong { font-size: 22px; line-height: 28px; letter-spacing: -.035em; font-weight: 550; }
+.dshWorkIntro,.dshWorkPrompts button { color: var(--dsw-alias-label-secondary); font: 400 14px/20px var(--font-inter), 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+.dshWorkPrompts { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.dshWorkPrompts button {
+  border: none;
+  background: var(--dsh-work-surface);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px var(--dsw-alias-border-l1);
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+.dshWorkPrompts button:hover { background: var(--dsw-alias-interactive-bg-hover-solid); }
+body[data-dsh-workspace-scene=chat] .wSkVaW_heroWorkspaceRow {
+  order: 2;
+  flex-wrap: wrap;
+  margin: 0;
+  min-height: 24px;
+  color: var(--dsw-alias-label-secondary);
+  padding-inline: 12px;
+}
+body[data-dsh-workspace-scene=chat] #dsh-panel-work [data-composer-card],
+body[data-dsh-workspace-scene=chat] #dsh-panel-work [data-composer-card]:focus-within {
+  --dsw-elevation-stroke-color: transparent;
+  anchor-scope: --dsh-work-prompt;
+  padding: 0;
+  gap: 6px;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+body[data-dsh-workspace-scene=chat] .uV2eYG_cardWorkspaceTrigger::after { display: none; }
+body[data-dsh-workspace-scene=chat] .uV2eYG_promptRow {
+  anchor-name: --dsh-work-prompt;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 52px;
+  align-items: center;
+  border-radius: 26px;
+  background: var(--dsh-work-surface);
+  box-shadow: 0 1px 2px var(--dsw-alias-border-l2);
+}
+body[data-dsh-workspace-scene=chat] .uV2eYG_promptRow:focus-within { outline: 1px solid var(--dsw-alias-border-l2); }
+body[data-dsh-workspace-scene=chat] .uV2eYG_promptRow > .uV2eYG_accessory { padding: 0; }
+body[data-dsh-workspace-scene=chat] .uV2eYG_input,
+body[data-dsh-workspace-scene=chat] .uV2eYG_hero .uV2eYG_input { padding: 6px 4px; min-height: 36px; font-size: 14px; line-height: 24px; }
+body[data-dsh-workspace-scene=chat] .uV2eYG_placeholder { top: 6px; left: 4px; font-size: 14px; line-height: 24px; }
+body[data-dsh-workspace-scene=chat] .uV2eYG_row { padding: 0 4px; gap: 4px; container-type: normal; }
+body[data-dsh-workspace-scene=chat] .uV2eYG_tools,
+body[data-dsh-workspace-scene=chat] .uV2eYG_modes,
+body[data-dsh-workspace-scene=chat] .uV2eYG_trailing,
+body[data-dsh-workspace-scene=chat] .uV2eYG_standardControls { gap: 6px; }
+body[data-dsh-workspace-scene=chat] .uV2eYG_primary,
+body[data-dsh-workspace-scene=chat] .uV2eYG_add {
+  position: absolute;
+  position-anchor: --dsh-work-prompt;
+  top: calc(anchor(top) + 8px);
+  width: 36px; height: 36px;
+  transform: none;
+  z-index: 1;
+}
+body[data-dsh-workspace-scene=chat] .uV2eYG_primary { right: 8px; }
+body[data-dsh-workspace-scene=chat] .uV2eYG_primary:disabled { background: var(--dsw-alias-interactive-bg-hover-solid); color: var(--dsw-alias-label-tertiary); }
+body[data-dsh-workspace-scene=chat] .uV2eYG_add { left: 8px; background: var(--dsh-work-paper); }
+body[data-dsh-workspace-scene=chat] .uV2eYG_trailing .uV2eYG_primary:has(~ .uV2eYG_primary) {
+  position: static; width: 26px; height: 26px;
+}
+body[data-dsh-workspace-scene=chat] .wSkVaW_root .Sixlwa_bubble { border: none; padding: 11px 12px; border-radius: 16px; background: var(--dsh-work-surface); box-shadow: 0 1px 3px var(--dsw-alias-border-l2); }
+.dshWorkHistoryDock {
+  box-sizing: border-box;
+  width: 0;
+  min-width: 0;
+  grid-area: 1 / 3;
+  overflow: clip;
+  visibility: hidden;
+}
+.dshWorkHistoryDock[data-open] { visibility: visible; width: calc(var(--dsh-work-history-width) + 12px); }
+.dshWorkHistoryDock[data-motion] { transition: width 280ms ease-in-out, visibility 280ms; }
+.dshWorkHistoryCard {
+  box-sizing: border-box;
+  border-radius: 24px;
+  height: 100%;
+  padding: 12px;
+  width: var(--dsh-work-history-width);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  background: var(--dsh-work-paper, var(--dsw-alias-bg-layer-1));
+  color: var(--dsw-alias-label-primary);
+  font: 400 14px/20px var(--font-inter), 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.dshWorkHistoryDock .dshWorkHistoryCard { margin-inline-start: 12px; }
+.dshWorkHistoryCard button,.dshWorkHistoryToggle {
+  border: none; background: transparent; color: inherit; cursor: pointer; font: inherit;
+  box-sizing: border-box;
+}
+.dshWorkHistoryCard button:focus-visible,.dshWorkHistoryToggle:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: -2px; }
+.dshWorkHistoryCard button:disabled { cursor: default; opacity: .45; }
+.dshWorkHistoryNew,.dshWorkHistoryFooter button { display: flex; align-items: center; gap: 8px; }
+.dshWorkHistoryNew { width: 100%; padding: 8px; font-weight: 500 !important; border-radius: 10px; }
+.dshWorkHistoryNew:hover,.dshWorkHistoryFooter button:hover,.dshWorkHistoryToggle:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dshWorkRecent { display: flex; flex: 1; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; }
+.dshWorkHistoryLabel,.dshWorkHistoryEmpty,.dshWorkHistoryNotice { padding: 0 8px; color: var(--dsw-alias-label-tertiary); font-size: 13px; }
+.dshWorkHistoryLabel { font-weight: 500; padding-bottom: 4px; }
+.dshWorkHistoryRow { display: flex; align-items: center; border-radius: 8px; min-width: 0; }
+.dshWorkHistoryRow:is(:hover,:focus-within),.dshWorkHistoryRow[data-selected] { background: var(--dsw-alias-interactive-bg-hover); }
+.dshWorkHistoryTitle { display: flex; align-items: center; gap: 6px; flex: 1; overflow: hidden; text-align: start; padding: 6px 8px; min-width: 0; }
+.dshWorkHistoryTitle i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-state-business-primary); }
+.dshWorkHistoryTitle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-secondary); font-size: 13px; }
+.dshWorkHistoryEnd { position: relative; padding: 0 4px; min-width: 28px; text-align: center; }
+.dshWorkHistoryEnd time { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.dshWorkHistoryEnd .dshWorkHistoryMore { display: grid; place-items: center; opacity: 0; position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); border-radius: 6px; width: 24px; height: 24px; }
+.dshWorkHistoryRow:is(:hover,:focus-within) .dshWorkHistoryMore,.dshWorkHistoryMore[aria-expanded=true] { opacity: 1; }
+.dshWorkHistoryRow:is(:hover,:focus-within) time,.dshWorkHistoryEnd:has([aria-expanded=true]) time { visibility: hidden; }
+.dshWorkHistoryRow form { width: 100%; display: flex; padding-inline: 4px; }
+.dshWorkHistoryRow input { min-width: 0; flex: 1; padding: 6px; border-radius: 6px; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-base); color: inherit; font: inherit; }
+.dshWorkHistoryFooter { display: flex; align-items: center; justify-content: space-between; gap: 4px; border-top: 1px solid var(--dsw-alias-border-l1); padding-top: 12px; }
+.dshWorkHistoryFooter button { border-radius: 10px; padding: 6px 4px; font-size: 13px; }
+.dshWorkHistoryFooter .dshWorkExport { display: grid; place-items: center; border-radius: 50%; width: 26px; height: 26px; color: var(--dsw-alias-label-primary-foreground); background: var(--dsw-alias-state-business-primary); }
+.dshWorkHistoryToggle { display: grid; place-items: center; border-radius: 8px; height: 32px; width: 32px; color: var(--dsw-alias-label-secondary); }
+.dshWorkHistoryToggleSeat { display: inline-flex; flex: none; width: 30px; height: 29px; }
+.dshWorkHistoryModalControl { position: fixed; z-index: 1; -webkit-app-region: no-drag; }
+.dshWorkHistoryModalControl .dshWorkHistoryToggle { width: 100%; height: 100%; border-radius: 7px; padding: 0; }
+.dshWorkHistoryFallback { grid-area: 1 / 1; z-index: 2; justify-self: end; align-self: start; padding: 8px; }
+.dshWorkHistoryDrawer {
+  padding: 12px;
+  margin: 0 0 0 auto;
+  height: 100%;
+  width: min(344px, 100%);
+  max-height: none;
+  max-width: 100%;
+  border: none;
+  background: transparent;
+  box-sizing: border-box;
+}
+.dshWorkHistoryDrawer::backdrop { background: var(--dsw-alias-bg-mask-1); }
+.dshWorkHistoryDrawer .dshWorkHistoryCard { width: 100%; background: var(--dsw-alias-bg-base); box-shadow: 0 3px 12px var(--dsw-alias-border-l2); animation: dshWorkHistorySlide 280ms ease-in-out; }
+.dshWorkHistoryDrawer header { padding-inline: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 17px; }
+@keyframes dshWorkHistorySlide { from { transform: translateX(calc(100% + 12px)); } }
+@media (prefers-reduced-motion: reduce) {
+  .dshWorkHistoryDock[data-motion],.dshWorkPrompts button { transition: none; }
+  .dshWorkHistoryDrawer .dshWorkHistoryCard { animation: none; }
+}
+.dshWorkSpeak {
+  display: inline-grid; place-items: center; border: none; border-radius: 6px;
+  background: transparent; color: var(--dsw-alias-label-tertiary);
+  cursor: pointer; height: 28px; width: 28px;
+}
+.dshWorkSpeak:hover,.dshWorkSpeak[aria-pressed=true] { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }

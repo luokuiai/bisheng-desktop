@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { inspectSecureStorage, type SafeStorageAdapter } from './secure-storage'
+import { inspectSecureStorage, type SafeStorageAdapter, type SecureStorageInspection } from './secure-storage'
 
 export const ENTERPRISE_VAULT_VERSION = 2
 export const ENTERPRISE_VAULT_FILENAME = 'enterprise-credentials.v2'
@@ -118,22 +118,48 @@ export interface SafeStorageCryptoAdapter extends SafeStorageAdapter {
   decryptString(encrypted: NodeJS.ArrayBufferView): string
 }
 
+/** Electron's macOS async encryptor uses the same Keychain and legacy-compatible ciphertext. */
+export interface MacKeychainCrypto {
+  isAsyncEncryptionAvailable(): Promise<boolean>
+  encryptStringAsync(plainText: string): Promise<Buffer>
+  decryptStringAsync(encrypted: Buffer): Promise<{ result: string }>
+}
+
+function isMacCiphertext(bytes: Buffer): boolean {
+  // Electron 43's legacy decryptor enforces these encrypted envelope tags.
+  // Keep the same boundary when using its asynchronous implementation.
+  const prefix = bytes.toString('latin1', 0, 3)
+  return bytes.length > 3 && (prefix === 'v10' || prefix === 'v11')
+}
+
 export class SecureEnterpriseCredentialVault {
   private queue: Promise<unknown> = Promise.resolve()
-  readonly available: boolean
-  readonly unavailableReason?: string
+  private inspection?: SecureStorageInspection
 
   constructor(
     private readonly filename: string,
-    private readonly safeStorage: SafeStorageCryptoAdapter
+    private readonly safeStorage: SafeStorageCryptoAdapter,
+    private readonly macKeychain?: MacKeychainCrypto
   ) {
-    const inspection = inspectSecureStorage(safeStorage)
-    this.available = inspection.available
-    this.unavailableReason = inspection.reason
+    if (!macKeychain) this.inspection = inspectSecureStorage(safeStorage)
   }
 
-  async read(): Promise<EnterpriseVaultSnapshot> {
-    return this.enqueue(async () => this.snapshot(await this.readDocument()))
+  get available(): boolean | undefined { return this.inspection?.available }
+  get unavailableReason(): string | undefined { return this.inspection?.reason }
+
+  async checkAvailable(): Promise<boolean> {
+    if (this.macKeychain) {
+      const available = await this.macKeychain.isAsyncEncryptionAvailable().catch(() => false)
+      // A locked Keychain is retryable. Only a verified result is advertised to
+      // the UI; a permanent "unavailable" would hide its sign-in action.
+      this.inspection = available ? { available } : undefined
+      return available
+    }
+    return this.available === true
+  }
+
+  async read(beforeKeychainAccess?: () => Promise<void>): Promise<EnterpriseVaultSnapshot> {
+    return this.enqueue(async () => this.snapshot(await this.readDocument(beforeKeychainAccess)))
   }
 
   async replace(
@@ -141,7 +167,6 @@ export class SecureEnterpriseCredentialVault {
     session: EnterpriseCredentialSession
   ): Promise<EnterpriseVaultSnapshot> {
     return this.enqueue(async () => {
-      this.ensureAvailable()
       const current = await this.readDocument()
       if (current.generation !== expectedGeneration) {
         throw new EnterpriseVaultError('Enterprise credential vault generation is stale.', 'stale')
@@ -160,10 +185,10 @@ export class SecureEnterpriseCredentialVault {
     })
   }
 
-  async clear(): Promise<EnterpriseVaultSnapshot> {
+  async clear(options: { ifPresent?: boolean } = {}): Promise<EnterpriseVaultSnapshot> {
     return this.enqueue(async () => {
-      this.ensureAvailable()
       const current = await this.readDocument()
+      if (options.ifPresent && current.generation === 0 && !current.session) return this.snapshot(current)
       const next: VaultDocument = {
         version: ENTERPRISE_VAULT_VERSION,
         generation: current.generation + 1
@@ -180,8 +205,8 @@ export class SecureEnterpriseCredentialVault {
     }
   }
 
-  private ensureAvailable(): void {
-    if (!this.available) {
+  private async ensureAvailable(): Promise<void> {
+    if (!await this.checkAvailable()) {
       throw new EnterpriseVaultError(
         this.unavailableReason ?? 'Operating-system secure storage is unavailable.',
         'unavailable'
@@ -195,8 +220,8 @@ export class SecureEnterpriseCredentialVault {
     return next
   }
 
-  private async readDocument(): Promise<VaultDocument> {
-    this.ensureAvailable()
+  private async readDocument(beforeKeychainAccess?: () => Promise<void>): Promise<VaultDocument> {
+    if (!this.macKeychain) await this.ensureAvailable()
     let encrypted: Buffer
     try {
       encrypted = await readFile(this.filename)
@@ -206,10 +231,25 @@ export class SecureEnterpriseCredentialVault {
       }
       throw error
     }
+    if (this.macKeychain) {
+      if (!isMacCiphertext(encrypted)) {
+        await this.quarantine('decrypt')
+        throw new EnterpriseVaultError('Enterprise credential vault is not encrypted.', 'corrupt')
+      }
+      await beforeKeychainAccess?.()
+      await this.ensureAvailable()
+    }
     let text: string
     try {
-      text = this.safeStorage.decryptString(encrypted)
+      text = this.macKeychain
+        ? (await this.macKeychain.decryptStringAsync(encrypted)).result
+        : this.safeStorage.decryptString(encrypted)
     } catch {
+      if (this.macKeychain) {
+        // A denied or locked Keychain can leave a valid vault unreadable.
+        this.inspection = undefined
+        throw new EnterpriseVaultError('Enterprise credentials could not be unlocked in Keychain.', 'unavailable')
+      }
       await this.quarantine('decrypt')
       throw new EnterpriseVaultError('Enterprise credential vault could not be decrypted.', 'corrupt')
     }
@@ -226,8 +266,17 @@ export class SecureEnterpriseCredentialVault {
   }
 
   private async writeDocument(document: VaultDocument): Promise<void> {
-    this.ensureAvailable()
-    const encrypted = this.safeStorage.encryptString(JSON.stringify(document))
+    await this.ensureAvailable()
+    const text = JSON.stringify(document)
+    const encrypted = this.macKeychain
+      ? await this.macKeychain.encryptStringAsync(text).catch(() => {
+        this.inspection = undefined
+        throw new EnterpriseVaultError('Enterprise credentials could not be encrypted with Keychain.', 'unavailable')
+      })
+      : this.safeStorage.encryptString(text)
+    if (this.macKeychain && !isMacCiphertext(encrypted)) {
+      throw new EnterpriseVaultError('Keychain did not return encrypted credentials.', 'unavailable')
+    }
     await mkdir(dirname(this.filename), { recursive: true, mode: 0o700 })
     const temporary = `${this.filename}.${process.pid}.${Date.now()}.tmp`
     try {

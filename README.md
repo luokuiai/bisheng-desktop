@@ -56,6 +56,7 @@ Installed production builds with a configured update source check for updates sh
 
 DeepSeek Harness already provides the Agent runtime and Web UI. DSH Desktop adds the native host capabilities needed for a practical desktop product:
 
+- Opens on the LUOKUI-AI workspace overview, with AI chat, workspace tools, templates and a component library. Installed agent-team, image, code and board plugins open from their corresponding workspace entries.
 - Starts and stops Harness without requiring a separate CLI or browser tab
 - Uses the native system directory picker to add and manage project workspaces
 - Supports official DeepSeek models and mainstream third-party model providers

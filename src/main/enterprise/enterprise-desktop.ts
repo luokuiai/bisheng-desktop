@@ -10,6 +10,7 @@ import { EnterpriseService, type EnterprisePublicState } from './enterprise-serv
 import type { EnterpriseFetch } from './platform-fetch'
 import {
   ENTERPRISE_VAULT_FILENAME,
+  type MacKeychainCrypto,
   type SafeStorageCryptoAdapter,
   SecureEnterpriseCredentialVault
 } from './secure-credential-vault'
@@ -29,6 +30,8 @@ export async function startEnterpriseDesktop(options: {
   activateDesktop?: () => Promise<void> | void
   userDataPath: string
   safeStorage: SafeStorageCryptoAdapter
+  macKeychain?: MacKeychainCrypto
+  beforeKeychainAccess?: () => Promise<void>
   fetchImpl: EnterpriseFetch
   allowInsecureLoopback: boolean
   note?: (line: string) => void
@@ -36,7 +39,8 @@ export async function startEnterpriseDesktop(options: {
   await sweepWorkbenchVerifyDirectory().catch(() => undefined)
   const vault = new SecureEnterpriseCredentialVault(
     join(options.userDataPath, ENTERPRISE_VAULT_FILENAME),
-    options.safeStorage
+    options.safeStorage,
+    options.macKeychain
   )
   const listeners = new Set<(state: EnterprisePublicState) => void>()
   const service = new EnterpriseService({
@@ -62,7 +66,7 @@ export async function startEnterpriseDesktop(options: {
       options.note?.(parts.join(' '))
     }
   })
-  await service.restore()
+  await service.restore(options.beforeKeychainAccess)
 
   let broker: EnterpriseCredentialBroker | undefined
   try {
