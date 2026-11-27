@@ -2,8 +2,7 @@
 // surfaces share Harness's React instance and navigation controller.
 const groups = [
   ['/'],
-  ['/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/ai-profile', '/project-board', '/lab'],
-  ['/charts', '/icons', '/templates', '/admin', '/components', '/settings']
+  ['/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board']
 ]
 const pageSidebars = new Set(['/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/ai-profile', '/project-board', '/components'])
 const nativeSurfaces = new Map([
@@ -108,10 +107,8 @@ export function createWorkspaceChrome(React, loadPages) {
       groups.map((group, index) => h(React.Fragment, { key: group[0] },
         index > 0 && (compact
           ? h('span', { className: 'dshWorkspaceRailDivider', 'aria-hidden': true })
-          : h('div', { className: 'dshWorkspaceNavGroup' }, t(index === 1 ? 'spaces' : 'library'))),
-        group.map(dest => h(RouteButton, { key: dest, active: path, dest, t, navigate, compact }))))),
-    !compact && h('button', { type: 'button', className: 'dshWorkspaceLibrary', onClick: () => navigate('/components') },
-      h(Icon, { name: 'stack' }), h('span', null, h('strong', null, t('componentLibrary')), h('small', null, t('viewAll') + ' →'))))
+          : h('div', { className: 'dshWorkspaceNavGroup' }, t('spaces'))),
+        group.map(dest => h(RouteButton, { key: dest, active: path, dest, t, navigate, compact }))))))
   }
 
   function ChatNav({ path, navigation, t, compact, navRef }) {
@@ -141,6 +138,7 @@ export function createWorkspaceChrome(React, loadPages) {
     const moving = React.useRef(null)
     const scene = workspaceScene(path)
     const surface = native ? nativeSurfaces.get(path) : undefined
+    const accountPlacement = compact ? 'compact' : scene === 'workspace' ? 'expanded' : undefined
     const toggle = () => {
       const active = document.activeElement
       const inPageSidebar = active?.closest('[data-titlebar-sidebar]') || (surface === 'agents' && active?.closest('.bt-leftcol'))
@@ -192,6 +190,11 @@ export function createWorkspaceChrome(React, loadPages) {
       signal()
       return () => queueMicrotask(signal)
     }, [])
+    React.useLayoutEffect(() => {
+      const signal = () => document.dispatchEvent(new Event('luokui:workspace-account-slot-ready'))
+      signal()
+      return () => queueMicrotask(signal)
+    }, [accountPlacement])
     React.useEffect(() => {
       const macos = document.documentElement.dataset.platform === 'darwin'
       const handle = event => {
@@ -239,6 +242,7 @@ export function createWorkspaceChrome(React, loadPages) {
           h('span', { 'data-workspace-right-sidebar-slot': '' }))),
       h(DirectoryNav, { compact: true, path, t, navigate, navRef: railRef, inactive: !compact }),
       scene === 'workspace' && h(DirectoryNav, { path, t, navigate, navRef, inactive: compact }),
-      scene === 'chat' && h(ChatNav, { path, navigation, compact, t, navRef }))
+      scene === 'chat' && h(ChatNav, { path, navigation, compact, t, navRef }),
+      accountPlacement && h('div', { className: 'dshWorkspaceAccount', 'data-workspace-account-slot': accountPlacement }))
   }
 }

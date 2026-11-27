@@ -38,7 +38,7 @@ async function fixture(language = 'zh', settingsProtocolVersion = 1, signedIn = 
         open && React.createElement('span', { role: 'tooltip' }, label))
     },
     SegmentedControl: ({ id, value, options, onChange, label }) => React.createElement('div', { role: 'tablist', 'aria-label': label }, options.map(option => React.createElement('button', { key: option.value, role: 'tab', id: `${id}-${option.value}`, 'aria-selected': option.value === value, onClick: () => onChange(option.value) }, option.label))),
-    Menu: ({ open, anchor, children, listClassName }) => React.createElement('div', null, anchor, open && React.createElement('div', { role: 'menu', className: listClassName }, children)),
+    Menu: vi.fn(({ open, anchor, children, listClassName }) => React.createElement('div', null, anchor, open && React.createElement('div', { role: 'menu', className: listClassName }, children))),
     MenuItemButton: ({ children, onSelect, disabled }) => React.createElement('button', { type: 'button', role: 'menuitem', disabled, onClick: onSelect }, children),
     Modal: ({ open, onClose, title, description, children, footer }) => open ? React.createElement('div', { role: 'dialog', 'aria-label': title, onKeyDown: event => { if (event.key === 'Escape') onClose() } }, description, children, footer) : null,
     ...Object.fromEntries(['IconSettingsOutlineRegular', 'IconChecklistOutlineRegular', 'IconChecklistOutlineMedium', 'IconPaperPlaneOutlineMedium', 'IconAlarmClockOutlineMedium', 'IconGaugeOutlineMedium', 'IconApiOutlineMedium', 'IconInfoOutlineMedium', 'IconUserOutlineMedium', 'IconChevronDownOutlineRegular', 'IconCloseOutlineRegular'].map(name => [name, () => React.createElement('svg', { 'aria-hidden': true, 'data-icon': name })]))
@@ -50,7 +50,12 @@ async function fixture(language = 'zh', settingsProtocolVersion = 1, signedIn = 
   dom.window.__ModuleLoader__ = { load: entry => { definition = entry } }
   const resize = vi.fn()
   vm.runInNewContext(source, { window: dom.window, document: dom.window.document, AbortController, fetch: request, CustomEvent: dom.window.CustomEvent, ResizeObserver: class { observe = resize; disconnect = vi.fn() } })
-  const plugin = definition.factory(id => { if (id === 'react') return React; if (id === '@deepseek-ai/dsh-client-ui-primitives') return primitives; throw new Error(id) })
+  const plugin = definition.factory(id => {
+    if (id === 'react') return React
+    if (id === 'react-dom') return { createPortal }
+    if (id === '@deepseek-ai/dsh-client-ui-primitives') return primitives
+    throw new Error(id)
+  })
   await act(async () => plugin.apply({
     locale: { register: (ns, values) => { dictionaries.set(ns, values) }, bind: ns => (key, params = {}) => dictionaries.get(ns)[language][key]?.replace(/\{(\w+)\}/g, (_, name) => String(params[name] ?? '')) },
     effect: fn => { const dispose = fn(); if (dispose) effects.push(dispose) },
@@ -426,6 +431,38 @@ it.each([true, false])('dismisses the account menu when focus moves to native Ch
   await cleanup(); cleanup = undefined
   expect(remove.mock.calls.filter(([name]) => name === 'blur').length).toBe(removed + 1)
   remove.mockRestore()
+})
+
+it('moves the existing account launcher between the workspace footer and the native sidebar', async () => {
+  const f = await fixture()
+  const openSettings = vi.fn()
+  await f.render('settings.launcher', { wide: false, openSettings })
+  const signal = () => document.dispatchEvent(new window.Event('luokui:workspace-account-slot-ready'))
+  const seat = document.createElement('div')
+  seat.dataset.workspaceAccountSlot = 'expanded'
+  await act(async () => { document.body.append(seat); signal() })
+  const trigger = seat.querySelector('.dshAccountTrigger')
+  expect(document.querySelectorAll('.dshAccountTrigger')).toHaveLength(1)
+  expect(trigger.textContent).toContain('张三')
+  await click(trigger)
+  expect(seat.querySelector('[role="menu"]').classList.contains('dshAccountMenuWorkspace')).toBe(true)
+  expect(seat.querySelector('[role="menu"]').classList.contains('dshWorkspacePopup')).toBe(true)
+  expect(seat.querySelector('[role="menu"]').classList.contains('dshAccountMenuWide')).toBe(false)
+  expect(f.primitives.Menu.mock.lastCall[0].animatePresence).toBe(true)
+  const settings = [...seat.querySelectorAll('[role="menuitem"]')].find(item => item.textContent === '设置')
+  await click(settings)
+  expect(openSettings).toHaveBeenCalledOnce()
+  await act(async () => { seat.dataset.workspaceAccountSlot = 'compact'; signal() })
+  expect(seat.querySelector('.dshAccountTriggerRail')).toBe(trigger)
+  expect(trigger.querySelector('.dshAccountTriggerCopy')).toBeNull()
+  await click(trigger)
+  expect(seat.querySelector('[role="menu"].dshAccountMenuWorkspace')).not.toBeNull()
+  await act(async () => { seat.remove(); signal() })
+  expect(document.querySelectorAll('#root .dshAccountTriggerRail')).toHaveLength(1)
+  expect(document.querySelector('[role="menu"]')).toBeNull()
+  await click(document.querySelector('#root .dshAccountTriggerRail'))
+  expect(document.querySelector('#root [role="menu"]').classList.contains('dshWorkspacePopup')).toBe(false)
+  expect(f.primitives.Menu.mock.lastCall[0].animatePresence).toBe(false)
 })
 
 it('matches the expanded account menu to its trigger without shrinking the collapsed menu', async () => {

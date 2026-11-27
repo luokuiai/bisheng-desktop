@@ -1712,8 +1712,8 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         'templates/dashboard': '通用仪表盘', 'templates/marketing': '营销分析', 'templates/finance': '财务分析',
         'templates/hr': '人力资源', 'templates/medical-profile': '健康档案',
         toolbar: '桌面窗口工具栏', expand: '展开导航栏', collapse: '收起导航栏', workspace: '工作台',
-        navigation: '工作台导航', quickNavigation: '工作台快捷导航', spaces: '工作空间', library: '组件与管理',
-        componentLibrary: 'LUOKUI-AI 组件库', viewAll: '查看全部', views: '工作区视图',
+        navigation: '工作台导航', quickNavigation: '工作台快捷导航', spaces: '工作空间',
+        views: '工作区视图',
         dark: '切换深色模式', light: '切换浅色模式', native: '桌面会话与插件', unavailable: '工作台导航加载失败'
       },
       en: {
@@ -1724,8 +1724,8 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         'templates/dashboard': 'Dashboard', 'templates/marketing': 'Marketing analytics', 'templates/finance': 'Financial analytics',
         'templates/hr': 'Human resources', 'templates/medical-profile': 'Health profile',
         toolbar: 'Desktop toolbar', expand: 'Expand navigation', collapse: 'Collapse navigation', workspace: 'Workspace',
-        navigation: 'Workspace navigation', quickNavigation: 'Quick navigation', spaces: 'Workspace', library: 'Components & management',
-        componentLibrary: 'LUOKUI-AI library', viewAll: 'View all', views: 'Workspace views',
+        navigation: 'Workspace navigation', quickNavigation: 'Quick navigation', spaces: 'Workspace',
+        views: 'Workspace views',
         dark: 'Switch to dark mode', light: 'Switch to light mode', native: 'Desktop sessions and plugins', unavailable: 'Workspace navigation could not load'
       }
     }

@@ -2,7 +2,6 @@ import {
   RiBarChartBoxLine,
   RiChatAiLine,
   RiCodeSSlashLine,
-  RiFlaskLine,
   RiGroupLine,
   RiImageAiLine,
   RiKanbanView2,
@@ -43,11 +42,6 @@ export const workspaceRoutes = [
     id: "project-board", href: "/project-board", label: "任务看板", icon: RiKanbanView2,
     description: "跟踪代理相关工单，拖动流转状态，查看工单的 词元用量。",
     category: "协作", tone: "bg-chart-2/15 text-chart-2-active",
-  },
-  {
-    id: "lab", href: "/lab", label: "组件实验室", icon: RiFlaskLine,
-    description: "试用输入器、附件、任务进度、检索轨迹和澄清问卷。",
-    category: "组件", tone: "bg-accent-500/10 text-accent-500",
   },
 ] as const;
 

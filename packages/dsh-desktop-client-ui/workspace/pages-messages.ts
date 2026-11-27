@@ -1,7 +1,6 @@
-import { workspaceLibrary, workspaceRoutes } from './components/workspace/navigation'
+import { workspaceRoutes } from './components/workspace/navigation'
 
-const destinations = [...workspaceRoutes, ...workspaceLibrary]
-type Destination = typeof destinations[number]['id']
+type Destination = typeof workspaceRoutes[number]['id']
 type DestinationKey = `entry_${Destination}_${'label' | 'description' | 'category'}`
 const destinationEnglish: Record<Destination, readonly [string, string, string]> = {
   chat: ['AI chat', 'Chat with your assistant, browse your history and stop a response at any time.', 'Chat'],
@@ -10,17 +9,12 @@ const destinationEnglish: Record<Destination, readonly [string, string, string]>
   image: ['Image generation', 'Explore prompts, image generation, feedback and the gallery.', 'Template'],
   profile: ['AI activity', 'Review the contribution heatmap, agent activity and token usage trends.', 'Usage'],
   'project-board': ['Task board', 'Track agent tasks, move tickets between columns and inspect token usage.', 'Collaboration'],
-  lab: ['Component lab', 'Try message inputs, attachments, task progress, search trails and questionnaires.', 'Components'],
-  charts: ['Charts', 'Explore interactive charts for trends, distributions, conversions and activity.', 'Components'],
-  icons: ['Icon library', 'Find a workspace icon, preview its sizes and copy its React component.', 'Components'],
-  templates: ['Page templates', 'Open interactive templates for operations and AI workspaces.', 'Templates'],
-  admin: ['AI administration', 'Explore models, agents, runs, budgets and the audit log.', 'Administration'],
 }
 
 function destinationCopy(language: 'zh' | 'en') {
-  return Object.fromEntries(destinations.flatMap(item => {
+  return Object.fromEntries(workspaceRoutes.flatMap(item => {
     const [label, description, category] = language === 'en' ? destinationEnglish[item.id] :
-      [item.label, item.description, 'category' in item ? item.category : '组件']
+      [item.label, item.description, item.category]
     return [
       [`entry_${item.id}_label`, label],
       [`entry_${item.id}_description`, description],
@@ -31,10 +25,8 @@ function destinationCopy(language: 'zh' | 'en') {
 
 const copy = {
   welcome: ['与 AI 一起工作', 'Work with AI'],
-  welcomeHelp: ['从流式对话到多代理协作，打开一个场景，或在实验室试用每个 AI 组件。', 'Choose a workspace, from streaming chat to multi-agent collaboration, or try individual AI components in the lab.'],
+  welcomeHelp: ['选择一个工作空间，开始 AI 对话、开展多代理协作或处理其他任务。', 'Choose a workspace to start a chat, collaborate with multiple agents, or work on other tasks.'],
   startChat: ['开始对话', 'Start a chat'],
-  browseComponents: ['浏览 AI 组件', 'Browse AI components'],
-  library: ['组件、模板与管理', 'Components, templates and administration'],
   openSpaces: ['打开工作空间', 'Open a workspace'],
   destinations: ['个入口', 'destinations'],
   loadingWorkspace: ['正在打开工作区…', 'Opening workspace…'],

@@ -7,11 +7,15 @@ import { TaskComposer } from '../packages/dsh-desktop-client-ui/workspace/host/c
 import { ModelStatusPanel } from '../packages/dsh-desktop-client-ui/workspace/host/model-status'
 import { HarnessWorkspace } from '../packages/dsh-desktop-client-ui/workspace/app/harness/workspace'
 import { RightSidebarButton } from '../packages/dsh-desktop-client-ui/workspace/components/workspace/right-sidebar-control'
+import { ChatSidebar } from '../packages/dsh-desktop-client-ui/workspace/chat-sidebar'
+import HomePage from '../packages/dsh-desktop-client-ui/workspace/app/page'
 import TemplatesPage from '../packages/dsh-desktop-client-ui/workspace/app/templates/page'
 import SettingsPage from '../packages/dsh-desktop-client-ui/workspace/app/settings/page'
 import { PageBoundary } from '../packages/dsh-desktop-client-ui/workspace/host/page-boundary'
 import { inertWhen } from '../packages/dsh-desktop-client-ui/workspace/host/inert'
 import Links from '../packages/dsh-desktop-client-ui/workspace/host/link'
+
+vi.mock('../packages/dsh-desktop-client-ui/workspace/components/workspace/hero-agents', () => ({ HeroAgents: () => null }))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root, container, host, navigate
@@ -27,12 +31,37 @@ afterEach(async () => {
   await act(async () => root.unmount())
   expect(document.querySelector('.dshWorkspacePortal')).toBeNull()
   container.remove()
+  vi.unstubAllGlobals()
 })
 
 async function mount(component, props) {
   await act(async () => root.render(React.createElement(WorkspaceProvider, { path: '/', host, navigate },
     React.createElement(component, props))))
 }
+
+it.each([['zh-CN', '开始对话', '6 个入口'], ['en', 'Start a chat', '6 destinations']])(
+  'shows only the chat action and six workspace cards on the overview in %s', async (locale, chatLabel, count) => {
+    host.locale = locale
+    await mount(HomePage)
+    const [hero, workspaces] = container.querySelectorAll('main > section')
+    expect([...hero.querySelectorAll('a')].map(link => [link.getAttribute('href'), link.textContent.trim()]))
+      .toEqual([['/chat', chatLabel]])
+    expect(workspaces.querySelector('header').textContent).toContain(count)
+    expect([...workspaces.querySelectorAll('a')].map(link => link.getAttribute('href'))).toEqual([
+      '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/ai-profile', '/project-board'
+    ])
+    expect(container.querySelectorAll('main > section')).toHaveLength(2)
+    await act(async () => hero.querySelector('a').click())
+    expect(navigate).toHaveBeenCalledWith('/chat')
+  })
+
+it('omits AI activity from the shared workspace sidebar', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+  await mount(ChatSidebar, { path: '/chat', host, navigate })
+  const sidebar = container.querySelector('.dshWorkspaceChatSidebar')
+  expect(sidebar.querySelector('a[href="/project-board"]')).not.toBeNull()
+  expect(sidebar.querySelector('a[href="/ai-profile"]')).toBeNull()
+})
 
 it('keeps workbench links in the Harness document and forwards real settings actions', async () => {
   await mount(SettingsPage)

@@ -45,9 +45,10 @@ export function useStarterBase(): string {
 }
 
 export function starterNav(base: string): DashboardNavItem[] {
+  const sidebarRoutes = workspaceRoutes.filter(({ id }) => id !== "profile");
   return [
     { key: "home", label: "总览", icon: RiDashboardLine, href: base || "/" },
-    ...[...workspaceRoutes, ...workspaceTools].map(({ id, label, icon, href }) => ({ key: id, label, icon, href: `${base}${href}` })),
+    ...[...sidebarRoutes, ...workspaceTools].map(({ id, label, icon, href }) => ({ key: id, label, icon, href: `${base}${href}` })),
   ];
 }
 
