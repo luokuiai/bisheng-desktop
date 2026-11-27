@@ -112,6 +112,20 @@ The merged `latest-mac.yml` contains both architectures' ZIP and DMG entries; `l
 
 The browser owns the download; the desktop reports only that the download link was opened and permits reopening it. It does not track browser download progress or completion, verify browser-downloaded package hashes, run an installer, quit, or replace the app. Users save their work, quit BISHENG, and install from the browser download themselves. Opening failures are displayed without interrupting the running client. Native browser handoff and installation acceptance remain required on both platforms.
 
+## Workspace navigation and embedded modules
+
+The desktop workspace chrome renders one flat destination list from `packages/dsh-desktop-client-ui/workspace/static/workspace-chrome.js`. It does not group or replace the new workbench entries with the original platform menu. Each destination declares one of three kinds:
+
+| Kind | Route source | Content owner |
+| --- | --- | --- |
+| `local` | `/`, `/chat`, `/multi-agent-chat`, `/ai-chat`, `/ai-image-generation`, `/project-board` | `WorkspaceView` React page or the mapped Harness panel |
+| `panel` | `/plugins` | Existing Harness `main` panel `plugins` |
+| `remote` | `knowledge`, `channel`, `apps`, `skills`, `square` | `EnterpriseChatView` `WebContentsView` |
+
+Remote entries stay in the flat list from first paint so the menu never collapses to only the local items. Labels come from the enterprise navigation entry once it arrives; until that report exists the client uses its local fallback labels. After the report is received, entries the current account does not publish are removed. The enterprise document is loaded in the background even while its native view is hidden, because the workspace menu is built from its navigation report. Signing out or switching accounts clears `remotePageId` and returns the workspace to `/`.
+
+`DesktopModes` renders a dedicated content seat (`#dsh-panel-remote`) for embedded modules. The native view bounds are calculated from that seat and never from the window, because `WebContentsView` paints above DOM chrome regardless of `z-index`. The workspace toolbar and flat menu stay mounted during local, panel, and remote scenes, and the remote view is hidden whenever a host overlay, settings surface, or hosted app owns the content area.
+
 ## Desktop customization boundary
 
 Most of the product UI remains upstream Harness. DSH Desktop adds native host surfaces through Electron Main and preload code, uses Harness extension slots where available, and tracks unavoidable upstream package changes as reproducible `patch-package` files. This keeps the desktop layer reviewable while making upstream upgrades an explicit compatibility exercise.

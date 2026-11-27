@@ -489,15 +489,17 @@ window.__ModuleLoader__.load({
             result?.failed && React.createElement('button', { type: 'button', onClick: retry }, t('workspaceRetry'))))
     }
 
-    const workspacePanels = { '/ai-chat': 'code-workbench-layout', '/ai-image-generation': 'copylee-image-gen.paintings', '/project-board': 'super-kanban' }
-    const workspaceDestinations = new Set(['', 'chat', 'multi-agent-chat', 'ai-chat', 'ai-image-generation', 'ai-profile', 'project-board', 'lab', 'components', 'charts', 'icons', 'templates', 'admin', 'settings', 'model', 'harness'])
+    const workspacePanels = { '/plugins': 'plugins', '/ai-chat': 'code-workbench-layout', '/ai-image-generation': 'copylee-image-gen.paintings', '/project-board': 'super-kanban' }
+    const workspaceRemoteIds = new Set(['knowledge', 'channel', 'apps', 'skills', 'square'])
+    const workspaceDestinations = new Set(['', 'chat', 'multi-agent-chat', 'ai-chat', 'ai-image-generation', 'ai-profile', 'project-board', 'plugins', 'knowledge', 'channel', 'apps', 'skills', 'square', 'lab', 'components', 'charts', 'icons', 'templates', 'admin', 'settings', 'model', 'harness'])
     function createChatNavigation(ctx) {
-      let value = { mode: 'work', connected: false, phase: 'idle', epoch: undefined, items: [], page: 0, hasMore: false, historyPhase: 'idle', settingsOpen: false, signInPromptOpen: false, approvalsOpen: false, accountDialogOpen: false, settingsSurface: undefined, pageId: undefined, navigation: undefined, workLanding: false, nativeWork: true, panelOpen: false, activePanelId: null }
+      let value = { mode: 'work', connected: false, phase: 'idle', epoch: undefined, items: [], page: 0, hasMore: false, historyPhase: 'idle', settingsOpen: false, signInPromptOpen: false, approvalsOpen: false, accountDialogOpen: false, settingsSurface: undefined, pageId: undefined, remotePageId: undefined, navigation: undefined, workLanding: false, nativeWork: true, panelOpen: false, activePanelId: null }
       const enabled = typeof document !== 'undefined' && Boolean(document.querySelector?.('link[href="/desktop-workspace/workspace.css"]'))
       const trail = []
       value.workspacePath = enabled ? '/' : undefined
       const listeners = new Set()
       let active = false, revision = 0, historyRequest = 0, historyDirty = false
+      let pendingRemoteId
       const publish = (patch) => { value = { ...value, ...patch }; listeners.forEach(fn => fn()) }
       const hasPanel = id => ctx.slots.entries('main').some(entry => entry.options.key === id)
       const currentBot = () => readBotReturn(createBotNavigation(ctx.slots).snapshot())
@@ -513,13 +515,45 @@ window.__ModuleLoader__.load({
         routeRevision++
         leaveBot()
         closePanel()
-        publish({ workspacePath: undefined, workspaceNative: false, mode: 'work', pageId: undefined })
+        publish({ workspacePath: undefined, workspaceNative: false, mode: 'work', pageId: undefined, remotePageId: undefined })
+      }
+      /**
+       * Open an enterprise module inside the workspace chrome. Unlike the
+       * legacy chat-mode page switch, `workspacePath` stays set so the flat
+       * menu and toolbar remain mounted while the native view fills the
+       * content seat.
+       */
+      const openRemoteModule = async (id) => {
+        if (!workspaceRemoteIds.has(id)) return
+        if (!value.connected) { publish({ signInPromptOpen: true }); return }
+        const authorized = value.navigation?.entries.some(entry => entry.id === id)
+        // A missing report means the enterprise document has not loaded yet.
+        // Show the scene so the host can connect and finish on `applyState`.
+        if (value.navigation !== undefined && !authorized) return
+        const request = ++routeRevision
+        leaveBot()
+        ctx.layout.selectPanel(null)
+        publish({
+          mode: 'chat', workspacePath: '/' + id, workspaceNative: false,
+          pageId: id, remotePageId: id, signInPromptOpen: false
+        })
+        if (!authorized) { pendingRemoteId = id; return }
+        pendingRemoteId = undefined
+        const epoch = value.epoch
+        try {
+          await window.dshEnterpriseChat.openPage(id)
+        } catch {
+          if (!active || request !== routeRevision || epoch !== value.epoch) return
+          publish({ workspacePath: '/', remotePageId: undefined, pageId: undefined })
+          void readHostState()
+        }
       }
       const navigate = (path, remember = true, afterOpen) => {
         if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) return
         const url = new URL(path, 'https://workspace.invalid')
         if (url.origin !== 'https://workspace.invalid' || !workspaceDestinations.has(url.pathname.split('/')[1])) return
         const target = url.pathname
+        if (workspaceRemoteIds.has(target.slice(1))) return openRemoteModule(target.slice(1))
         const request = ++routeRevision
         const preview = url.searchParams.get('preview') === '1'
         const panel = !preview && workspacePanels[target]
@@ -530,7 +564,7 @@ window.__ModuleLoader__.load({
         if (remember && value.workspacePath && value.workspacePath !== workspacePath) trail.push(value.workspacePath)
         if (!bot) leaveBot()
         ctx.layout.selectPanel(nativePanel ? panel : null)
-        publish({ workspacePath, workspaceNative: native, mode: 'work', pageId: undefined, signInPromptOpen: false })
+        publish({ workspacePath, workspaceNative: native, mode: 'work', pageId: undefined, remotePageId: undefined, signInPromptOpen: false })
         if (bot) bot.open()
         if (target === '/chat' && workbenches && !value.nativeWork) {
           const leaving = workbenches.leave()
@@ -643,7 +677,7 @@ window.__ModuleLoader__.load({
         const dismissApp = mode === 'work' && value.mode !== 'work' && value.hostedApp
         leaveBot()
         if (value.workspaceNative && mode === 'chat') closePanel()
-        publish({ mode, workspacePath: mode === 'work' && value.workspacePath === '/chat' ? '/chat' : undefined, workspaceNative: false, pageId: undefined, signInPromptOpen: false })
+        publish({ mode, workspacePath: mode === 'work' && value.workspacePath === '/chat' ? '/chat' : undefined, workspaceNative: false, pageId: undefined, remotePageId: undefined, signInPromptOpen: false })
         if (dismissApp) void window.dshEnterpriseChat.closeHostedApp(false).catch(() => { if (active) void readHostState() })
         return true
       }
@@ -696,15 +730,27 @@ publish({ items: [...new Map(items.map(item => [item.id, item])).values()], page
         const conversationChanged = next.conversationId !== value.conversationId
         const becameReady = next.phase === 'ready' && value.phase !== 'ready'
         const clearHistory = identityChanged || !next.connected
+        const remotePageId = value.remotePageId && next.connected && !identityChanged &&
+          (next.navigation ? next.navigation.entries.some(entry => entry.id === value.remotePageId) : true)
+          ? value.remotePageId : undefined
+        const remoteLost = value.remotePageId !== undefined && remotePageId === undefined
 if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
         publish({
           ...next,
+          remotePageId,
+          ...(remoteLost ? { workspacePath: '/', workspaceNative: false } : {}),
           hostedApp: next.connected ? next.hostedApp : undefined,
           ...(clearHistory ? { items: [], page: 0, hasMore: false, historyPhase: 'idle' } : {}),
           signInPromptOpen: next.connected ? false : value.signInPromptOpen,
           pageId: next.navigation?.entries.find(entry => entry.active)?.id,
           mode: next.connected ? signedIn && !value.workspacePath ? 'chat' : value.mode : 'work'
         })
+        if (pendingRemoteId !== undefined && next.navigation !== undefined) {
+          const id = pendingRemoteId
+          pendingRemoteId = undefined
+          if (next.connected && next.navigation.entries.some(entry => entry.id === id)) void openRemoteModule(id)
+        }
+        if (!next.connected) pendingRemoteId = undefined
         if (signedIn) window.dispatchEvent(new CustomEvent('dsh-desktop:close-settings'))
         if (next.connected && next.phase === 'ready' && (refresh || identityChanged || signedIn || conversationChanged || becameReady)) void refreshHistory()
       }
@@ -728,7 +774,7 @@ if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
       return {
         snapshot: () => value,
         subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn) },
-        select, open, refreshHistory, deletion, navigate, openDesktop, host, registerPageLocale,
+        select, open, refreshHistory, deletion, navigate, openDesktop, openRemoteModule, hasPanel, host, registerPageLocale,
         canGoBack: () => trail.length > 0,
         goBack() { navigate(trail.pop() || '/', false) },
         requestDelete(id, title, epoch) {
@@ -764,6 +810,7 @@ if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
           }
           catch { if (active && epoch === value.epoch) void readHostState() }
         },
+        openRemoteModule,
         choose(mode) {
           if (!select(mode)) return false
           if (mode === 'chat' && value.conversationId !== 'new') void open('new')
@@ -826,7 +873,7 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
             if (panelOpen && value.mode !== 'work') select('work')
             const route = enabled && panelOpen && Object.keys(workspacePanels).find(path => workspacePanels[path] === activePanelId)
             const leavingPanel = value.workspaceNative && !panelOpen && value.activePanelId && value.workspacePath !== '/multi-agent-chat'
-            publish({ panelOpen, activePanelId, ...(route ? { workspacePath: route, workspaceNative: true } :
+            publish({ panelOpen, activePanelId, remotePageId: undefined, ...(route ? { workspacePath: route, workspaceNative: true } :
               leavingPanel ? { workspacePath: '/', workspaceNative: false } : panelOpen ? { workspacePath: undefined, workspaceNative: false } : {}) })
           }
           const unsubscribe = ctx.layout.panelInfo.subscribe(panel)
@@ -1203,10 +1250,11 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
     function DesktopModes({ work, rightbarWidth, resizeHandle, navigation, services, t, locale, slots, shortcuts, botSidebarText }) {
       const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
       const { mode, settingsOpen, settingsSurface } = state
-      const workspaceView = Boolean(state.workspacePath && state.workspacePath !== '/chat' && !state.workspaceNative && !state.panelOpen)
+      const workspaceView = Boolean(state.workspacePath && state.workspacePath !== '/chat' && !state.remotePageId && !state.workspaceNative && !state.panelOpen)
       const workspaceDockOpen = mode === 'chat' && state.phase === 'ready' && state.workspaceDockOpen === true
       React.useEffect(() => navigation.start(), [navigation])
       const panel = React.useRef(null)
+      const remoteSeat = React.useRef(null)
       const hostedSeat = React.useRef(null)
       const [animateWork, setAnimateWork] = React.useState(false)
       const tabs = React.useRef({})
@@ -1255,7 +1303,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
               else modes.style.removeProperty('--dsh-plugin-rail-inset')
             }
           }
-          const rect = panel.current?.getBoundingClientRect()
+          const rect = (state.remotePageId ? remoteSeat.current : panel.current)?.getBoundingClientRect()
           if (!rect) return
           const sidebar = document.querySelector('[data-dsh-sidebar-root]')
           // The preview overlays the grid. Crop the native view behind it without
@@ -1290,18 +1338,22 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
             ? Math.max(0, Math.round((Number.parseFloat(modesStyle.borderTopLeftRadius) || 0) - (Number.parseFloat(modesStyle.borderTopWidth) || 0)))
             : 0
           const chatVisible = mode === 'chat' && !state.workspacePath && !surfaceOpen && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
+          const remotePageVisible = mode === 'chat' && Boolean(state.remotePageId) && !surfaceOpen && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
           const settingsVisible = remote && !hostOverlayOpen && state.connected && remote.bounds.width > 0 && remote.bounds.height > 0
           const wideSidebar = chatVisible && document.querySelector('[data-dsh-sidebar-root][data-dsh-sidebar-wide="true"]')?.getBoundingClientRect()
-          const overlayBounds = settingsVisible ? remote.bounds : chatVisible ? { x: Math.max(baseX, previewRight), y, height: rect.height, wideSidebar } : undefined
+          const overlayBounds = settingsVisible ? remote.bounds
+            : chatVisible ? { x: Math.max(baseX, previewRight), y, height: rect.height, wideSidebar }
+              : remotePageVisible ? { x: rect.x, y, height: rect.height } : undefined
           const floatingRight = overlays.fitBeside(overlayBounds)
           const visibleLeft = Math.min(rect.right, Math.max(baseX, previewRight, floatingRight))
           const x = preview ? baseX : visibleLeft
           const remoteBounds = remote && { ...remote.bounds, x: Math.max(remote.bounds.x, floatingRight),
             width: Math.max(0, remote.bounds.width - Math.max(0, floatingRight - remote.bounds.x)) }
-          const hostedRect = chatVisible ? hostedSeat.current?.getBoundingClientRect() : undefined
-          if (hostedRect) panel.current.style.setProperty('--dsh-hosted-start-offset', `${visibleLeft - rect.x}px`)
+          const hostedRect = chatVisible || remotePageVisible ? hostedSeat.current?.getBoundingClientRect() : undefined
+          const hostedOffsetTarget = state.remotePageId ? remoteSeat.current : panel.current
+          if (hostedRect && hostedOffsetTarget) hostedOffsetTarget.style.setProperty('--dsh-hosted-start-offset', `${visibleLeft - rect.x}px`)
           void bridge.present({
-            visible: remote ? settingsVisible && remoteBounds.width > 0 : chatVisible,
+            visible: remote ? settingsVisible && remoteBounds.width > 0 : remotePageVisible || chatVisible,
             ...(remote ? { settings: remote.section } : {}),
             ...(palette ? { palette } : {}),
             radius,
@@ -1371,6 +1423,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         syncRails()
         if (modes) resize.observe(modes)
         if (panel.current) resize.observe(panel.current)
+        if (remoteSeat.current) resize.observe(remoteSeat.current)
         if (hostedSeat.current) resize.observe(hostedSeat.current)
         const sidebar = document.querySelector('[data-dsh-sidebar-root]')
         if (sidebar) {
@@ -1404,7 +1457,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           if (railInset) modes?.style.removeProperty('--dsh-plugin-rail-inset')
           overlays.dispose(); interaction.disconnect(); resize.disconnect(); botSidebarState.disconnect(); chromeLayout.disconnect(); theme.disconnect(); unsubscribeLocale(); window.removeEventListener('resize', present)
         }
-      }, [mode, state.workspacePath, surfaceOpen, hostedAppSlug, settingsSurface, state.connected, state.settingsProtocolVersion, workspaceDockOpen, locale])
+      }, [mode, state.workspacePath, state.remotePageId, surfaceOpen, hostedAppSlug, settingsSurface, state.connected, state.settingsProtocolVersion, workspaceDockOpen, locale])
       React.useEffect(() => () => {
         void window.dshEnterpriseChat?.present({ visible: false, bounds: { x: 0, y: 48, width: 0, height: 0 }, theme: 'light' }).catch(() => {})
       }, [])
@@ -1431,12 +1484,16 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         showModePicker && React.createElement('header', { className: 'dshModesHeader' },
           React.createElement('div', { role: 'tablist', 'aria-label': t('label'), className: 'dshModesTabs', onKeyDown: keyDown },
             ...['chat', 'work'].map((key) => React.createElement('button', { key, id: `dsh-mode-${key}`, type: 'button', role: 'tab', 'aria-selected': mode === key, 'aria-controls': `dsh-panel-${key}`, tabIndex: mode === key ? 0 : -1, ref: (node) => { tabs.current[key] = node }, onClick: (event) => { setAnimateWork(event.detail > 0 && key === 'work'); select(key) } }, t(key))))),
-        React.createElement('section', { id: 'dsh-panel-work', role: 'tabpanel', 'aria-label': t('work'), hidden: workspaceView || (mode !== 'work' && !state.workspacePath), className: 'dshModeBody dshWorkContent', 'data-reveal-controls': animateWork, onTransitionEnd: event => { if (event.propertyName === 'clip-path') setAnimateWork(false) }, style: { '--dsh-work-rightbar-width': `${rightbarWidth ?? 0}px` } }, work, resizeHandle,
+        React.createElement('section', { id: 'dsh-panel-work', role: 'tabpanel', 'aria-label': t('work'), hidden: workspaceView || Boolean(state.remotePageId) || (mode !== 'work' && !state.workspacePath), className: 'dshModeBody dshWorkContent', 'data-reveal-controls': animateWork, onTransitionEnd: event => { if (event.propertyName === 'clip-path') setAnimateWork(false) }, style: { '--dsh-work-rightbar-width': `${rightbarWidth ?? 0}px` } }, work, resizeHandle,
           services && mode === 'work' && state.workspacePath === '/chat' && state.nativeWork && !state.panelOpen &&
             React.createElement(WorkConversationPart, { component: 'WorkHistory', services, t, rightbarWidth })),
         workspaceView && React.createElement(WorkspaceView, { navigation, path: state.workspacePath, t }),
+        state.remotePageId && React.createElement('section', {
+          ref: remoteSeat, id: 'dsh-panel-remote', role: 'tabpanel', 'aria-label': t('chat'),
+          className: 'dshModeBody dshRemoteContent', 'data-dsh-remote-module': state.remotePageId
+        }, hostedApp ? React.createElement(HostedAppContent, { key: hostedAppSlug, app: hostedApp, seat: hostedSeat, sourcePath: state.path, t }) : null),
         React.createElement('section', { ref: panel, id: 'dsh-panel-chat', role: 'tabpanel', 'aria-label': t('chat'), hidden: mode !== 'chat' || Boolean(state.workspacePath), className: 'dshModeBody' },
-          hostedApp ? React.createElement(HostedAppContent, { key: hostedAppSlug, app: hostedApp, seat: hostedSeat, sourcePath: state.path, t }) : React.createElement('div', { className: 'dshChatStatus', role: 'status' },
+          hostedApp && !state.remotePageId ? React.createElement(HostedAppContent, { key: hostedAppSlug, app: hostedApp, seat: hostedSeat, sourcePath: state.path, t }) : React.createElement('div', { className: 'dshChatStatus', role: 'status' },
             React.createElement('p', null, state.phase === 'error' ? t('error') : state.phase === 'ready' ? '' : t('loading')),
             state.connected && state.phase === 'error' && React.createElement('button', { type: 'button', onClick: () => { void window.dshEnterpriseChat.retry().catch(() => {}) } }, t('retry')))))
     }
@@ -1718,6 +1775,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       zh: {
         home: '总览', chat: 'AI 对话', 'multi-agent-chat': '多代理协作', 'ai-chat': '代码工作台',
         'ai-image-generation': '图像生成', 'ai-profile': 'AI 活动档案', 'project-board': '任务看板',
+        plugins: '插件', knowledge: '知识空间', channel: '订阅', apps: '应用', skills: '工具与技能', square: '发现广场',
         lab: '组件实验室', charts: '数据图表', icons: '图标库', templates: '整页模板', admin: 'AI 管理后台',
         components: 'AI 组件目录', settings: '设置', model: '模型连接', harness: '任务执行台',
         'templates/dashboard': '通用仪表盘', 'templates/marketing': '营销分析', 'templates/finance': '财务分析',
@@ -1730,6 +1788,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       en: {
         home: 'Overview', chat: 'AI chat', 'multi-agent-chat': 'Multi-agent chat', 'ai-chat': 'Code workspace',
         'ai-image-generation': 'Image generation', 'ai-profile': 'AI activity', 'project-board': 'Task board',
+        plugins: 'Plugins', knowledge: 'Knowledge', channel: 'Subscriptions', apps: 'Apps', skills: 'Tools and skills', square: 'Discover',
         lab: 'Component lab', charts: 'Charts', icons: 'Icons', templates: 'Page templates', admin: 'AI administration',
         components: 'AI components', settings: 'Settings', model: 'Model connection', harness: 'Task console',
         'templates/dashboard': 'Dashboard', 'templates/marketing': 'Marketing analytics', 'templates/finance': 'Financial analytics',

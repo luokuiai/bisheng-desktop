@@ -63,6 +63,19 @@ it('omits AI activity from the shared workspace sidebar', async () => {
   expect(sidebar.querySelector('a[href="/ai-profile"]')).toBeNull()
 })
 
+it('renders the shared flat destination list when the chat scene receives one', async () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+  const icon = () => null
+  const items = [
+    { key: 'home', label: '总览', icon, href: '/' },
+    { key: 'knowledge', label: '知识空间', icon, href: '/knowledge' }
+  ]
+  await mount(ChatSidebar, { path: '/chat', host, navigate, items, selected: 'knowledge' })
+  const sidebar = container.querySelector('.dshWorkspaceChatSidebar')
+  expect([...sidebar.querySelectorAll('nav')[0].querySelectorAll('a')].map(link => link.getAttribute('href'))).toEqual(['/', '/knowledge'])
+  expect(sidebar.querySelector('a[href="/knowledge"]').getAttribute('aria-current')).toBe('page')
+})
+
 it('keeps workbench links in the Harness document and forwards real settings actions', async () => {
   await mount(SettingsPage)
   await act(async () => container.querySelectorAll('button')[1].click())

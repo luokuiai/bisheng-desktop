@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createWorkspaceChrome, sidebarShortcut, workspaceScene } from '../packages/dsh-desktop-client-ui/workspace/static/workspace-chrome.js'
+import { buildDestinations, createWorkspaceChrome, sidebarShortcut, workspaceScene } from '../packages/dsh-desktop-client-ui/workspace/static/workspace-chrome.js'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root, container
@@ -54,7 +54,7 @@ it('opens directory links, switches to the persistent rail and transfers focus o
   expect(theme.set).toHaveBeenCalledWith('dark')
 })
 
-it('shows only workspace links in the expanded sidebar and shortcut rail', async () => {
+it('shows one flat list of workbench and native panel entries in the expanded sidebar and shortcut rail', async () => {
   const Chrome = createWorkspaceChrome(React, vi.fn())
   const navigate = vi.fn()
   await act(async () => root.render(React.createElement(Chrome, {
@@ -62,9 +62,10 @@ it('shows only workspace links in the expanded sidebar and shortcut rail', async
   })))
   for (const surface of ['.dshWorkspaceDirectory', '.dshWorkspaceRail']) {
     expect([...container.querySelectorAll(`${surface} [data-workspace-route]`)].map(button => button.dataset.workspaceRoute))
-      .toEqual(['/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board'])
+      .toEqual(['/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
+        '/plugins', '/knowledge', '/channel', '/apps', '/skills', '/square'])
   }
-  expect([...container.querySelectorAll('.dshWorkspaceNavGroup')].map(group => group.textContent)).toEqual(['spaces'])
+  expect(container.querySelector('.dshWorkspaceNavGroup')).toBeNull()
   container.querySelector('.dshWorkspaceToolbar [title="settings"]').click()
   expect(navigate).toHaveBeenCalledWith('/settings')
 })
@@ -139,4 +140,44 @@ it('keeps one toolbar and one right-side portal when the native plugin replaces 
   expect(document.body.dataset.dshWorkspaceNative).toBe('image')
   await render('/', false)
   expect(document.body.hasAttribute('data-dsh-workspace-native')).toBe(false)
+})
+
+it('merges the authorized enterprise entries after the new workbench entries without groups', () => {
+  const entries = ['square', 'apps', 'channel', 'knowledge', 'skills']
+    .map(id => ({ id, label: `label:${id}`, path: `/${id}`, active: false, primary: true }))
+  expect(buildDestinations({ entries, navigationReported: true }).map(item => item.route)).toEqual([
+    '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
+    '/plugins', '/knowledge', '/channel', '/apps', '/skills', '/square'
+  ])
+  expect(buildDestinations({ entries: [], navigationReported: false }).map(item => item.route)).toEqual([
+    '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
+    '/plugins', '/knowledge', '/channel', '/apps', '/skills', '/square'
+  ])
+  expect(buildDestinations({
+    entries: entries.filter(entry => entry.id === 'knowledge'), navigationReported: true
+  }).map(item => item.route)).toEqual([
+    '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board', '/plugins', '/knowledge'
+  ])
+  expect(buildDestinations({ entries, navigationReported: true, hasPanel: () => false }).map(item => item.route))
+    .not.toContain('/plugins')
+})
+
+it('dispatches remote entries without navigating the local workspace route', async () => {
+  const snapshot = { connected: true, navigation: { entries: [
+    { id: 'knowledge', label: '知识空间', path: '/knowledge', active: false, primary: true }
+  ] } }
+  const navigation = {
+    navigate: vi.fn(), openRemoteModule: vi.fn(), hasPanel: () => true,
+    subscribe: () => () => {},
+    snapshot: () => snapshot
+  }
+  const Chrome = createWorkspaceChrome(React, vi.fn())
+  await act(async () => root.render(React.createElement(Chrome, { path: '/', navigation, theme, t: key => key })))
+  const labels = [...container.querySelectorAll('.dshWorkspaceDirectory .dshWorkspaceRoute')]
+    .filter(button => button.dataset.workspaceRoute === '/knowledge')
+  expect(labels).toHaveLength(1)
+  expect(labels[0].textContent).toContain('知识空间')
+  labels[0].click()
+  expect(navigation.openRemoteModule).toHaveBeenCalledWith('knowledge')
+  expect(navigation.navigate).not.toHaveBeenCalledWith('/knowledge')
 })

@@ -285,6 +285,11 @@ body[data-dsh-workspace-native=agents][data-dsh-workspace-density=expanded] > .b
   --bt-lc-clear:0px;
   padding-block-start:6px;
 }
+/* The flat workspace menu owns the left edge. Keep the Bot rail inside the
+   content column instead of painting over the menu. */
+html body[data-dsh-workspace-native=agents] > .bt-leftcol[data-left] {
+  left:var(--dsh-workspace-track) !important;
+}
 html body[data-dsh-desktop-ui=dsh][data-dsh-workspace-native=agents][data-dsh-workspace-density=expanded] .dshModes {
   margin-inline-start:var(--dsh-plugin-rail-inset, 0px);
   width:calc(100% - var(--dsh-plugin-rail-inset, 0px));

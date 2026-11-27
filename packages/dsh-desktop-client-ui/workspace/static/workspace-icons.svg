@@ -19,4 +19,10 @@
   <symbol id="moon" viewBox="0 0 24 24"><path d="M20.2 15.2A8.8 8.8 0 0 1 8.8 3.8a8.7 8.7 0 1 0 11.4 11.4Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="desktop" viewBox="0 0 24 24"><path d="M3 4h18v13H3ZM8 21h8m-4-4v4" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="stack" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 17l9 5 9-5" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="plugins" viewBox="0 0 24 24"><path d="M9 3v4m6-4v4M7 7h10a2 2 0 0 1 2 2v3a5 5 0 0 1-10 0V9a2 2 0 0 1 2-2Zm5 10v4" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="knowledge" viewBox="0 0 24 24"><path d="M5 3h14v18H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 14h14M8 7h7" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="channel" viewBox="0 0 24 24"><path d="M5 3h14v18l-7-4-7 4V3Zm7 3v8m-4-4h8" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="apps" viewBox="0 0 24 24"><path d="M8 5V3h8v2M3 7h18v14H3V7Zm0 5h18M9 10v5h6v-5" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="skills" viewBox="0 0 24 24"><path d="M7 3h10l3 7-8 11L4 10l3-7Zm-3 7h16M9 3l3 7 3-7M12 10v11" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="square" viewBox="0 0 24 24"><path d="M3 4h6v6H3V4Zm12 0h6v6h-6V4ZM3 14h6v6H3v-6Zm12 0h6v6h-6v-6Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>

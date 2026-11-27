@@ -1,8 +1,22 @@
 // The titlebar is loaded independently of the heavier page catalogue. The two
 // surfaces share Harness's React instance and navigation controller.
-const groups = [
-  ['/'],
-  ['/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board']
+const localEntries = [
+  { id: '/', kind: 'local', route: '/', icon: 'home' },
+  { id: '/chat', kind: 'local', route: '/chat', icon: 'chat' },
+  { id: '/multi-agent-chat', kind: 'local', route: '/multi-agent-chat', icon: 'multi-agent-chat' },
+  { id: '/ai-chat', kind: 'local', route: '/ai-chat', icon: 'ai-chat' },
+  { id: '/ai-image-generation', kind: 'local', route: '/ai-image-generation', icon: 'ai-image-generation' },
+  { id: '/project-board', kind: 'local', route: '/project-board', icon: 'project-board' }
+]
+const pluginEntry = { id: 'plugins', kind: 'panel', route: '/plugins', panelId: 'plugins', icon: 'plugins' }
+// The original platform menu keeps its published order. Entries are emitted
+// only after the enterprise document authorizes them for the current account.
+const remoteEntries = [
+  { moduleId: 'knowledge', icon: 'knowledge' },
+  { moduleId: 'channel', icon: 'channel' },
+  { moduleId: 'apps', icon: 'apps' },
+  { moduleId: 'skills', icon: 'skills' },
+  { moduleId: 'square', icon: 'square' }
 ]
 const pageSidebars = new Set(['/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/ai-profile', '/project-board', '/components'])
 const nativeSurfaces = new Map([
@@ -28,6 +42,48 @@ const pageKey = path => path.startsWith('/admin/') ? 'admin' : path.slice(1) || 
 const activeRoute = (path, dest) => path === dest || (dest !== '/' && path.startsWith(dest + '/'))
 const mark = '/desktop-workspace/luokui-ai-logo.png'
 const iconFile = '/desktop-workspace/workspace-icons.svg'
+const EMPTY_STATE = {}
+const EMPTY_SUBSCRIBE = () => () => {}
+const EMPTY_SNAPSHOT = () => EMPTY_STATE
+
+/**
+ * One flat destination list for the whole shell. New workbench entries come
+ * first, then the native plugin panel and the authorized enterprise modules.
+ * The caller renders this list as-is: no group headings and no replacement of
+ * either set by the other.
+ */
+export function buildDestinations({ entries = [], navigationReported = false, hasPanel } = {}) {
+  const destinations = localEntries.map(entry => ({ ...entry }))
+  if (hasPanel ? hasPanel('plugins') : true) destinations.push({ ...pluginEntry })
+  for (const { moduleId, icon } of remoteEntries) {
+    const entry = entries.find(item => item?.id === moduleId)
+    // Until the enterprise document reports its menu, keep every original
+    // entry visible. Once it does, only hide what this account cannot use.
+    if (navigationReported && !entry) continue
+    destinations.push({
+      id: 'remote:' + moduleId, kind: 'remote', moduleId, icon,
+      route: '/' + moduleId, ...(entry ? { label: entry.label } : {})
+    })
+  }
+  return destinations
+}
+
+/** The flat list as sidebar rows for the `/chat` scene. */
+export function sidebarDestinations(React, destinations, t) {
+  return destinations.map(destination => ({
+    key: destination.id,
+    label: destination.label || t(pageKey(destination.route)),
+    icon: sidebarIcon(React, destination.icon),
+    href: destination.route
+  }))
+}
+
+function sidebarIcon(React, name) {
+  return function SidebarGlyph({ className, 'aria-hidden': hidden }) {
+    return React.createElement('svg', { className, viewBox: '0 0 24 24', 'aria-hidden': hidden ?? true },
+      React.createElement('use', { href: iconFile + '#' + name }))
+  }
+}
 
 // Some template sidebars sit inside their own padded flex item. Animate its
 // occupied width, preserving the authored panel width and any focused editor.
@@ -80,14 +136,18 @@ export function createWorkspaceChrome(React, loadPages) {
     catch { return false }
   }
 
-  function RouteButton({ dest, active, t, navigate, compact = false }) {
-    const name = pageKey(dest)
-    const label = t(name)
+  function RouteButton({ destination, active, t, navigate, openRemote, compact = false }) {
+    const label = destination.label || t(pageKey(destination.route))
+    const dest = destination.route
+    const open = () => destination.kind === 'remote'
+      ? (openRemote ? openRemote(destination.moduleId) : navigate(dest))
+      : navigate(dest)
     return h('button', {
       type: 'button', className: 'dshWorkspaceRoute', 'data-workspace-route': dest,
-      title: compact ? label : undefined, 'aria-label': label, 'aria-current': activeRoute(active, dest) ? 'page' : undefined,
-      onClick: () => navigate(dest)
-    }, h(Icon, { name }), !compact && h('span', null, label))
+      'data-workspace-kind': destination.kind,
+      title: compact ? label : undefined, 'aria-label': label, 'aria-current': active ? 'page' : undefined,
+      onClick: open
+    }, h(Icon, { name: destination.icon }), !compact && h('span', null, label))
   }
 
   // The Harness host and template builds can use different React majors.
@@ -97,21 +157,19 @@ export function createWorkspaceChrome(React, loadPages) {
     node?.toggleAttribute('inert', inactive)
   }
 
-  function DirectoryNav({ compact, path, t, navigate, navRef, inactive }) {
+  function DirectoryNav({ compact, destinations, activeId, t, navigate, openRemote, navRef, inactive }) {
     return h('aside', {
       ref: navigationRef(navRef, inactive), className: compact ? 'dshWorkspaceRail' : 'dshWorkspaceDirectory',
       'aria-hidden': inactive || undefined
     }, compact && h('button', { type: 'button', className: 'dshWorkspaceRailBrand',
       title: t('home'), 'aria-label': t('home'), onClick: () => navigate('/') }, h('img', { src: mark, alt: '' })),
     h('nav', { 'aria-label': compact ? t('quickNavigation') : t('navigation') },
-      groups.map((group, index) => h(React.Fragment, { key: group[0] },
-        index > 0 && (compact
-          ? h('span', { className: 'dshWorkspaceRailDivider', 'aria-hidden': true })
-          : h('div', { className: 'dshWorkspaceNavGroup' }, t('spaces'))),
-        group.map(dest => h(RouteButton, { key: dest, active: path, dest, t, navigate, compact }))))))
+      destinations.map(destination => h(RouteButton, {
+        key: destination.id, destination, active: destination.id === activeId, t, navigate, openRemote, compact
+      }))))
   }
 
-  function ChatNav({ path, navigation, t, compact, navRef }) {
+  function ChatNav({ navigation, destinations, activeId, t, compact, navRef }) {
     const [Sidebar, setSidebar] = React.useState(null)
     React.useEffect(() => {
       let mounted = true
@@ -124,19 +182,33 @@ export function createWorkspaceChrome(React, loadPages) {
       })
       return () => { mounted = false }
     }, [])
+    const items = sidebarDestinations(React, destinations, t)
     return h('div', { ref: navigationRef(navRef, compact), className: 'dshWorkspaceChatNav', 'aria-hidden': compact || undefined },
-      Sidebar ? h(Sidebar, { path, navigate: navigation.navigate, host: navigation.host })
-        : h(DirectoryNav, { path, t, navigate: navigation.navigate, inactive: compact }))
+      Sidebar ? h(Sidebar, { path: '/chat', navigate: navigation.navigate, host: navigation.host, items, selected: activeId })
+        : h(DirectoryNav, { destinations, activeId, t, navigate: navigation.navigate,
+          openRemote: moduleId => navigation.openRemoteModule?.(moduleId), inactive: compact }))
   }
 
   return function WorkspaceChrome({ path, native = false, navigation, theme, shortcuts, expandBotSidebar, t }) {
     const [compact, setCompact] = React.useState(readCompact)
     const dark = React.useSyncExternalStore(theme.subscribe, theme.snapshot) === 'dark'
+    const state = React.useSyncExternalStore(navigation.subscribe ?? EMPTY_SUBSCRIBE, navigation.snapshot ?? EMPTY_SNAPSHOT)
+    const destinations = buildDestinations({
+      entries: state.navigation?.entries,
+      navigationReported: state.navigation !== undefined,
+      hasPanel: navigation.hasPanel
+    })
+    const activeId = (state.remotePageId && 'remote:' + state.remotePageId) ||
+      (state.mode === 'work' && state.activePanelId &&
+        destinations.find(destination => destination.panelId === state.activePanelId)?.id) ||
+      destinations.find(destination => destination.kind !== 'remote' && activeRoute(path, destination.route))?.id
     const toggleRef = React.useRef(null)
     const navRef = React.useRef(null)
     const railRef = React.useRef(null)
     const moving = React.useRef(null)
-    const scene = workspaceScene(path)
+    // Native panels replace the page body entirely, so their routes keep the
+    // shared directory instead of falling back to a page-owned sidebar.
+    const scene = native ? 'workspace' : workspaceScene(path)
     const surface = native ? nativeSurfaces.get(path) : undefined
     const accountPlacement = compact ? 'compact' : scene === 'workspace' ? 'expanded' : undefined
     const toggle = () => {
@@ -209,8 +281,9 @@ export function createWorkspaceChrome(React, loadPages) {
       return () => window.removeEventListener('keydown', handle, true)
     }, [compact, shortcuts, scene, surface])
     const navigate = navigation.navigate
+    const openRemote = moduleId => navigation.openRemoteModule?.(moduleId)
     const labelKey = pageKey(path)
-    const title = t(labelKey)
+    const title = destinations.find(destination => destination.id === activeId)?.label || t(labelKey)
     const tool = (icon, label, activate, extra = {}) => h('button', {
       type: 'button', className: 'dshWorkspaceTool', 'aria-label': label, title: label, onClick: activate, ...extra
     }, h(Icon, { name: icon }))
@@ -223,7 +296,9 @@ export function createWorkspaceChrome(React, loadPages) {
           }
         }),
         compact ? h('nav', { className: 'dshWorkspaceTabs', 'aria-label': t('views') },
-          ['/', '/chat'].map(dest => h(RouteButton, { key: dest, dest, active: path, navigate, t })),
+          destinations.filter(destination => destination.route === '/' || destination.route === '/chat')
+            .map(destination => h(RouteButton, { key: destination.id, destination, active: destination.id === activeId,
+              navigate, openRemote, t })),
           path !== '/' && path !== '/chat' && h('span', { className: 'dshWorkspaceCurrentTab' }, title))
         : h('div', { className: 'dshWorkspaceBreadcrumb' },
           h('button', { type: 'button', className: 'dshWorkspaceBrand', 'aria-label': t('home'), onClick: () => navigate('/') },
@@ -240,9 +315,9 @@ export function createWorkspaceChrome(React, loadPages) {
           tool('settings', t('settings'), () => navigate('/settings')),
           tool(dark ? 'sun' : 'moon', t(dark ? 'light' : 'dark'), () => theme.set(dark ? 'light' : 'dark')),
           h('span', { 'data-workspace-right-sidebar-slot': '' }))),
-      h(DirectoryNav, { compact: true, path, t, navigate, navRef: railRef, inactive: !compact }),
-      scene === 'workspace' && h(DirectoryNav, { path, t, navigate, navRef, inactive: compact }),
-      scene === 'chat' && h(ChatNav, { path, navigation, compact, t, navRef }),
+      h(DirectoryNav, { compact: true, destinations, activeId, t, navigate, openRemote, navRef: railRef, inactive: !compact }),
+      scene === 'workspace' && h(DirectoryNav, { destinations, activeId, t, navigate, openRemote, navRef, inactive: compact }),
+      scene === 'chat' && h(ChatNav, { navigation, destinations, activeId, compact, t, navRef }),
       accountPlacement && h('div', { className: 'dshWorkspaceAccount', 'data-workspace-account-slot': accountPlacement }))
   }
 }

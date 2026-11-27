@@ -787,7 +787,7 @@ it('leaves failed remote settings without blocking the original conversation', a
   } finally { f.host.dispose() }
 })
 
-it('pushes hidden account changes even before a Chat owner exists', async () => {
+it('loads workspace navigation for a hidden Chat surface and releases it on logout', async () => {
   const f = fixture()
   let window = undefined as typeof f.owner | undefined
   const host = new EnterpriseChatView(f.enterprise as any, vi.fn(), () => window)
@@ -799,13 +799,18 @@ it('pushes hidden account changes even before a Chat owner exists', async () => 
     expect(window.webContents.send).toHaveBeenLastCalledWith('enterprise-chat:changed', expect.objectContaining({ connected: true, phase: 'idle' }))
     expect(f.enterprise.webSession).not.toHaveBeenCalled()
     host.present(window, { ...presentation, visible: false })
+    await flush()
+    // The workspace menu needs the document's navigation report even while
+    // the native Chat view is hidden behind a local page.
+    expect(f.enterprise.webSession).toHaveBeenCalledTimes(1)
+    expect(fake.views).toHaveLength(1)
     window.webContents.send.mockClear()
     f.change({ connected: true, connectionKey: 'tenant-b' })
-    expect(window.webContents.send).toHaveBeenLastCalledWith('enterprise-chat:changed', expect.objectContaining({ connected: true, phase: 'idle' }))
-    expect(f.enterprise.webSession).not.toHaveBeenCalled()
+    await flush()
+    expect(window.webContents.send).toHaveBeenLastCalledWith('enterprise-chat:changed', expect.objectContaining({ connected: true }))
+    expect(f.enterprise.webSession).toHaveBeenCalledTimes(2)
     f.change({ connected: false, connectionKey: 'tenant-b' })
     expect(window.webContents.send).toHaveBeenLastCalledWith('enterprise-chat:changed', expect.objectContaining({ connected: false }))
-    expect(fake.views).toHaveLength(0)
   } finally { host.dispose(); f.host.dispose() }
 })
 

@@ -121,7 +121,9 @@ export class EnterpriseChatView {
     this.unsubscribe = enterprise.subscribe((state) => {
       if (!state.connected || (this.key !== undefined && state.connectionKey !== this.key)) this.clear()
       this.notify()
-      if (state.connected && !this.view && this.state.phase !== 'error' && this.presentation?.visible && this.owner && !this.owner.isDestroyed()) {
+      // The workspace menu is built from this document's navigation report, so
+      // load it in the background even while the native view is not visible.
+      if (state.connected && !this.view && this.state.phase !== 'error' && this.presentation && this.owner && !this.owner.isDestroyed()) {
         void this.connect()
       }
     })
@@ -149,7 +151,7 @@ export class EnterpriseChatView {
       })
     }
     this.layout()
-    if (this.presentation.visible && this.state.phase !== 'error' && this.enterprise.snapshot().connected && !this.view) void this.connect()
+    if (this.state.phase !== 'error' && this.enterprise.snapshot().connected && !this.view) void this.connect()
     if (this.view) void this.syncSettings()
     return this.snapshot()
   }

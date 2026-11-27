@@ -241,6 +241,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     localeListenerCount: () => localeListeners.size,
     async navigation(entries, path = '/skills') { snapshot = { ...snapshot, navigation: { entries, homeLabel: 'Welcome' }, path, conversationId: undefined }; await act(async () => chatListener(snapshot)) },
     navigate: (...args) => navigate(...args),
+    controller: registrations.get('desktop.mode.content')?.props.navigation,
     async click(mode) { await act(async () => container.querySelector(`#dsh-mode-${mode}`).click()) },
     async account(next, epoch = 1) {
       snapshot = { connected: next, phase: 'ready', epoch, conversationId: 'new', settingsProtocolVersion: 1 }
@@ -260,6 +261,19 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   }
 }
 const mountWorkspaceRoutes = (connected = false) => mount(connected, {}, false, undefined, false, { workspaceRoutes: true })
+
+it('routes the plugin entry to the existing plugins main panel', async () => {
+  const { navigation, registerPanel } = await mountWorkspaceRoutes()
+  registerPanel('plugins')
+  await Promise.resolve()
+  navigation.navigate('/plugins')
+  expect(navigation.snapshot().workspacePath).toBe('/plugins')
+  expect(navigation.snapshot().workspaceNative).toBe(true)
+  expect(navigation.snapshot().activePanelId).toBe('plugins')
+  navigation.navigate('/')
+  expect(navigation.snapshot().workspacePath).toBe('/')
+  expect(navigation.snapshot().workspaceNative).toBe(false)
+})
 
 it('routes registered workspace panels and their previews through the host selection', async () => {
   const { navigation, registerPanel, selectPanel } = await mountWorkspaceRoutes()
@@ -781,6 +795,71 @@ it('shares account navigation across Chat and Work and keeps Plugins directly ac
   await ui.account(false)
   expect(sidebar.querySelector('[data-navigation-id=plugins]')).not.toBeNull()
   expect(sidebar.querySelector('[data-navigation-id=more]')).toBeNull()
+})
+
+it('opens an enterprise module inside the workspace chrome without unmounting the flat menu', async () => {
+  const ui = await mount(true)
+  await ui.navigation([
+    { id: 'knowledge', label: '知识点', path: '/knowledge', primary: true, active: true }
+  ], '/knowledge')
+  await act(async () => { await ui.controller.openRemoteModule('knowledge') })
+  const state = ui.controller.snapshot()
+  expect(state.remotePageId).toBe('knowledge')
+  expect(state.workspacePath).toBe('/knowledge')
+  expect(state.mode).toBe('chat')
+  expect(window.dshEnterpriseChat.openPage).toHaveBeenLastCalledWith('knowledge')
+  expect(container.querySelector('#dsh-panel-work').hidden).toBe(true)
+  expect(container.querySelector('#dsh-panel-chat').hidden).toBe(true)
+  expect(container.querySelector('#dsh-panel-remote').dataset.dshRemoteModule).toBe('knowledge')
+  expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }))
+
+  await act(async () => { ui.controller.navigate('/') })
+  expect(ui.controller.snapshot().remotePageId).toBeUndefined()
+  expect(container.querySelector('#dsh-panel-remote')).toBeNull()
+  expect(ui.controller.snapshot().workspacePath).toBe('/')
+})
+
+it('removes an embedded enterprise module when the account changes or signs out', async () => {
+  const ui = await mount(true)
+  await ui.navigation([
+    { id: 'knowledge', label: '知识点', path: '/knowledge', primary: true, active: true }
+  ], '/knowledge')
+  await act(async () => { await ui.controller.openRemoteModule('knowledge') })
+  expect(ui.controller.snapshot().remotePageId).toBe('knowledge')
+
+  await ui.navigation([
+    { id: 'skills', label: 'Skills', path: '/skills', primary: true, active: true }
+  ], '/skills')
+  expect(ui.controller.snapshot().remotePageId).toBeUndefined()
+  expect(ui.controller.snapshot().workspacePath).toBe('/')
+
+  await act(async () => { await ui.controller.openRemoteModule('skills') })
+  expect(ui.controller.snapshot().remotePageId).toBe('skills')
+  await ui.account(false)
+  expect(ui.controller.snapshot().remotePageId).toBeUndefined()
+  expect(ui.controller.snapshot().workspacePath).toBe('/')
+})
+
+it('bounds the embedded enterprise view by the workspace content seat', async () => {
+  const seat = { x: 240, y: 48, left: 240, top: 48, right: 1240, bottom: 848, width: 1000, height: 800, toJSON: () => ({}) }
+  const empty = { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) }
+  const original = HTMLElement.prototype.getBoundingClientRect
+  HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.id === 'dsh-panel-remote' ? seat : empty
+  }
+  try {
+    const ui = await mount(true)
+    await ui.navigation([
+      { id: 'knowledge', label: '知识点', path: '/knowledge', primary: true, active: true }
+    ], '/knowledge')
+    await act(async () => { await ui.controller.openRemoteModule('knowledge') })
+    expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({
+      visible: true,
+      bounds: expect.objectContaining({ x: 240, y: 48, width: 1000, height: 800 })
+    }))
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect = original
+  }
 })
 
 const navigationEntries = count => Array.from({ length: count }, (_, index) => ({ id: `page-${index + 1}`, label: `Page ${index + 1}`, active: false }))
