@@ -165,7 +165,7 @@ async function mountEnterprise(initial, hooks = {}) {
       return entry ? React.createElement(entry.component, { ...entry.inject?.(), ...props }) : options?.fallback
     }
     const accountPage = core.entriesOfSlot('settings.section').find(entry => entry.options.id === 'enterprise-account')
-    root.render(React.createElement(accountPage.component, { ...accountPage.inject(), renderSlot }))
+    root.render(React.createElement(accountPage.component, { ...accountPage.inject(), renderSlot, controls: hooks.controls }))
   })
   const text = () => dom.window.document.getElementById('root').textContent
   const click = async (name) => {
@@ -187,12 +187,22 @@ async function mountEnterprise(initial, hooks = {}) {
   return { text, click, requests, deliverLoginLink, flushTimer, document: dom.window.document }
 }
 
-it('drops the trusted-source prompt after sign-in and shows it again only on the next browser login', async () => {
-  const { text, click, requests, deliverLoginLink } = await mountEnterprise(idleAccount())
+it.each([false, true])('preserves trusted-source confirmation and logout with BoardUI enabled=%s', async board => {
+  const controls = board ? {
+    Button: ({ variant, size, ...props }) => React.createElement('button', { ...props, 'data-board-button': variant }),
+    Input: ({ label, onChange, ...props }) => React.createElement('label', null, label,
+      React.createElement('input', { ...props, 'data-board-input': '', onChange: event => onChange(event.target.value) }))
+  } : undefined
+  const { text, click, requests, deliverLoginLink } = await mountEnterprise(idleAccount(), { controls })
   expect(document.querySelector('input[type="url"]').value).toBe(SERVICE)
+  expect(document.querySelector('input[type="url"]').hasAttribute('data-board-input')).toBe(board)
+  const login = [...document.querySelectorAll('button')].find(item => item.textContent === '在浏览器中登录')
+  expect(board ? login.dataset.boardButton : login.classList.contains('login')).toBe(board ? 'primary' : true)
 
   await click('在浏览器中登录')
   expect(text()).toContain('确认为可信来源')
+  expect(requests.some(item => item.path === '/api/enterprise.login.start')).toBe(false)
+  expect(document.querySelectorAll('[role="dialog"] [data-board-button]')).toHaveLength(board ? 2 : 0)
 
   await click('确认为可信来源')
   expect(requests.find(item => item.path === '/api/enterprise.login.start').body).toEqual({
@@ -201,6 +211,10 @@ it('drops the trusted-source prompt after sign-in and shows it again only on the
   })
   expect(text()).toContain('退出登录')
   expect(text()).not.toContain('确认为可信来源')
+  const refresh = document.querySelector('button[aria-label="刷新"]')
+  expect(refresh.hasAttribute('data-board-button')).toBe(board)
+  await act(async () => refresh.click())
+  expect(requests.some(item => item.path === '/api/enterprise.refresh')).toBe(true)
 
   await deliverLoginLink(LOGIN_LINK)
   expect(requests.some(item => item.path === '/api/enterprise.deep-link.inspect')).toBe(true)

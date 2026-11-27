@@ -1,5 +1,5 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-settings-general/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-settings-general/lib/client.js
-index a71fc13..b3077ad 100644
+index a71fc13..b52f1fe 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-settings-general/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-settings-general/lib/client.js
 @@ -63,7 +63,7 @@ window.__ModuleLoader__.load({
@@ -11,15 +11,27 @@ index a71fc13..b3077ad 100644
  			document.head.appendChild(tag);
  		}
  		var SettingsRoot_module_css_default = {
-@@ -272,8 +272,24 @@ window.__ModuleLoader__.load({
+@@ -272,22 +272,71 @@ window.__ModuleLoader__.load({
  		* header button, a mask click, and document-level Escape (mounted only while
  		* open, so the listener lifetime is the panel's).
  		*/
 -		function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }) {
-+		function SettingsPanel({ rows, actionItems, renderSlot, activeId, onSelect, onClose }) {
- 			const active = rows.find((r) => r.id === activeId)?.id ?? rows[0]?.id;
+-			const active = rows.find((r) => r.id === activeId)?.id ?? rows[0]?.id;
++		function SettingsPanel(props) {
++			const open = props.open ?? true;
++			const lastActiveId = (0, react.useRef)(props.activeId);
++			(0, react.useLayoutEffect)(() => {
++				if (open) lastActiveId.current = props.activeId;
++			}, [open, props.activeId]);
++			const render = (controls, exiting = false) => (0, react_jsx_runtime.jsx)(SettingsPanelContent, { ...props, activeId: exiting ? lastActiveId.current : props.activeId, controls, exiting });
++			return props.renderSlot("settings.controls", { open, render }, { fallback: open ? render() : null });
++		}
++		function SettingsPanelContent({ rows, actionItems, renderSlot, activeId, onSelect, onClose, controls, exiting }) {
++			const activeRow = rows.find((row) => row.id === activeId) ?? rows[0];
++			const active = activeRow?.id;
 +			const renderEntry = (row, overrides) => (0, react_jsx_runtime.jsxs)("button", {
 +								type: "button",
++								"data-dsh-settings-nav-entry": true,
 +								className: clsx(SettingsRoot_module_css_default.navCell, row.id === active && SettingsRoot_module_css_default.active),
 +								"aria-current": row.id === active ? "true" : void 0,
 +								"data-modal-autofocus": row.id === active ? "" : void 0,
@@ -35,17 +47,54 @@ index a71fc13..b3077ad 100644
 +								})]
 +							}, row.id);
  			const titleId = (0, react.useId)();
++			const closeLabelId = (0, react.useId)();
  			const panel = (0, react.useRef)(null);
- 			(0, _deepseek_ai_dsh_client_ui_primitives.useModalLayer)(panel, true, onClose);
-@@ -288,6 +304,7 @@ window.__ModuleLoader__.load({
+-			(0, _deepseek_ai_dsh_client_ui_primitives.useModalLayer)(panel, true, onClose);
++			const dismiss = () => {
++				if (!exiting) onClose?.();
++			};
++			(0, _deepseek_ai_dsh_client_ui_primitives.useModalLayer)(panel, true, dismiss);
++			(0, react.useLayoutEffect)(() => {
++				const element = panel.current;
++				if (!exiting || !element) return;
++				const children = [...element.children].filter((child) => !child.hasAttribute("inert"));
++				for (const child of children) child.setAttribute("inert", "");
++				element.focus();
++				return () => {
++					for (const child of children) child.removeAttribute("inert");
++				};
++			}, [exiting]);
++			(0, react.useEffect)(() => {
++				window.dispatchEvent(new CustomEvent("dsh-desktop:settings-visibility", { detail: { open: true } }));
++				return () => window.dispatchEvent(new CustomEvent("dsh-desktop:settings-visibility", { detail: { open: false } }));
++			}, []);
+ 			return (0, react_dom.createPortal)((0, react_jsx_runtime.jsxs)("div", {
+ 				className: SettingsRoot_module_css_default.overlay,
++				"data-dsh-settings-overlay": true,
+ 				role: "presentation",
+ 				children: [(0, react_jsx_runtime.jsx)("div", {
+ 					className: SettingsRoot_module_css_default.mask,
++					"data-dsh-settings-backdrop": true,
+ 					"aria-hidden": "true",
+-					onClick: onClose
++					onClick: dismiss
+ 				}), (0, react_jsx_runtime.jsxs)("div", {
  					ref: panel,
  					tabIndex: -1,
  					"data-shortcut-modal": "settings",
 +					"data-dsh-settings-section": active,
++					"data-dsh-settings-exiting": exiting ? "" : void 0,
  					className: SettingsRoot_module_css_default.panel,
  					role: "dialog",
  					"aria-modal": "true",
-@@ -302,19 +319,7 @@ window.__ModuleLoader__.load({
+@@ -296,37 +345,42 @@ window.__ModuleLoader__.load({
+ 						className: SettingsRoot_module_css_default.nav,
+ 						children: [(0, react_jsx_runtime.jsx)("div", {
+ 							className: SettingsRoot_module_css_default.navTitle,
++							"data-dsh-settings-nav-title": true,
+ 							id: titleId,
+ 							tabIndex: -1,
+ 							"data-modal-autofocus": active === void 0 ? "" : void 0,
  							children: renderSlot("settings.header", {})
  						}), (0, react_jsx_runtime.jsx)("div", {
  							className: SettingsRoot_module_css_default.navList,
@@ -66,41 +115,58 @@ index a71fc13..b3077ad 100644
  						})]
  					}), (0, react_jsx_runtime.jsxs)("div", {
  						className: SettingsRoot_module_css_default.content,
-@@ -322,10 +327,11 @@ window.__ModuleLoader__.load({
+ 						children: [(0, react_jsx_runtime.jsxs)("div", {
  							className: SettingsRoot_module_css_default.header,
- 							children: [(0, react_jsx_runtime.jsx)("div", {
+-							children: [(0, react_jsx_runtime.jsx)("div", {
++							"data-dsh-settings-header": true,
++							children: [active === "general" && (0, react_jsx_runtime.jsx)("h2", {
++								"data-dsh-settings-title": true,
++								children: activeRow.label
++							}), (0, react_jsx_runtime.jsx)("div", {
  								className: SettingsRoot_module_css_default.actions,
 -								children: renderSlot("settings.action", {})
+-							}), (0, react_jsx_runtime.jsxs)("button", {
 +								children: renderSlot("settings.actions.layout", { items: actionItems.map((id) => ({ id, render: () => renderSlot("settings.action", {}, { only: id }) })) }, { fallback: renderSlot("settings.action", {}) })
- 							}), (0, react_jsx_runtime.jsxs)("button", {
++							}), controls?.CloseButton ? (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
++								(0, react_jsx_runtime.jsx)("span", {
++									id: closeLabelId,
++									className: SettingsRoot_module_css_default.hiddenLabel,
++									children: renderSlot("settings.close", {})
++								}),
++								(0, react_jsx_runtime.jsx)(controls.CloseButton, {
++									"data-dsh-settings-close": true,
++									"aria-labelledby": closeLabelId,
++									onClick: dismiss
++								})
++							] }) : (0, react_jsx_runtime.jsxs)("button", {
  								type: "button",
  								className: SettingsRoot_module_css_default.close,
+-								onClick: onClose,
 +								"data-dsh-settings-close": true,
- 								onClick: onClose,
++								onClick: dismiss,
  								children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCloseOutlineRegular, { size: 14 }), (0, react_jsx_runtime.jsx)("span", {
  									className: SettingsRoot_module_css_default.hiddenLabel,
-@@ -334,6 +340,7 @@ window.__ModuleLoader__.load({
+ 									children: renderSlot("settings.close", {})
+@@ -334,7 +388,8 @@ window.__ModuleLoader__.load({
  							})]
  						}), (0, react_jsx_runtime.jsx)("div", {
  							className: SettingsRoot_module_css_default.options,
+-							children: active !== void 0 && renderSlot("settings.section", { close: onClose }, { only: active })
 +							"data-dsh-settings-content": true,
- 							children: active !== void 0 && renderSlot("settings.section", { close: onClose }, { only: active })
++							children: active !== void 0 && renderSlot("settings.section", { close: dismiss, controls, exiting }, { only: active })
  						})]
  					})]
-@@ -346,8 +353,11 @@ window.__ModuleLoader__.load({
+ 				})]
+@@ -346,7 +401,7 @@ window.__ModuleLoader__.load({
  		* @returns the settings shell element tree.
  		*/
  		function SettingsRoot(props) {
 -			const { wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t, useDesktopUpdate, openDesktopUpdate, useStore, actions, useShortcuts } = props;
 +			const { wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t, useDesktopUpdate, openDesktopUpdate, useStore, actions, useShortcuts, useActionItems } = props;
  			const { open, activeId } = useStore((state) => state);
-+			(0, react.useEffect)(() => {
-+				window.dispatchEvent(new CustomEvent("dsh-desktop:settings-visibility", { detail: { open } }));
-+			}, [open]);
  			const shortcut = useShortcuts((rows) => rows.find((row) => row.id === "settings.open"));
  			const { close, openSection } = actions;
- 			const [requestedOnboarding, setRequestedOnboarding] = (0, react.useState)();
-@@ -356,14 +366,24 @@ window.__ModuleLoader__.load({
+@@ -356,14 +411,24 @@ window.__ModuleLoader__.load({
  			const [holdConnecting, setHoldConnecting] = (0, react.useState)(false);
  			const connectingShownAt = (0, react.useRef)(void 0);
  			const rows = useSections((s) => s);
@@ -129,7 +195,7 @@ index a71fc13..b3077ad 100644
  			const onboardingStep = requestedOnboarding !== void 0 ? onboardingSteps.find((step) => step.id === requestedOnboarding) : onboardingActive ? onboardingSteps.find((step) => !completedOnboarding.has(step.id)) : void 0;
  			(0, react.useEffect)(() => {
  				if (onboardingActive) return;
-@@ -446,6 +466,7 @@ window.__ModuleLoader__.load({
+@@ -446,6 +511,7 @@ window.__ModuleLoader__.load({
  							}
  						}, { fallback: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Tooltip, {
  							disabled: open,
@@ -137,29 +203,51 @@ index a71fc13..b3077ad 100644
  							label: t("trigger"),
  							shortcutKeys: shortcut?.keys,
  							children: (0, react_jsx_runtime.jsx)("button", {
-@@ -481,6 +502,7 @@ window.__ModuleLoader__.load({
+@@ -479,8 +545,10 @@ window.__ModuleLoader__.load({
+ 						})
+ 					]
  				}),
- 				open && (0, react_jsx_runtime.jsx)(SettingsPanel, {
+-				open && (0, react_jsx_runtime.jsx)(SettingsPanel, {
++				(0, react_jsx_runtime.jsx)(SettingsPanel, {
++					open,
  					rows,
 +					actionItems,
  					renderSlot,
  					activeId,
  					onSelect: actions.select,
-@@ -632,10 +654,11 @@ window.__ModuleLoader__.load({
+@@ -632,10 +700,11 @@ window.__ModuleLoader__.load({
  		* @param props - composed slot props (contract/slots.ts).
  		* @returns the section element tree.
  		*/
 -		function GeneralSection({ renderSlot }) {
-+		function GeneralSection({ renderSlot, useItems }) {
++		function GeneralSection({ renderSlot, useItems, controls }) {
 +			const items = useItems((s) => s);
  			return (0, react_jsx_runtime.jsx)("div", {
  				className: GeneralSection_module_css_default.section,
 -				children: renderSlot("settings.general.item", {})
-+				children: renderSlot("settings.general.layout", { items: items.map((id) => ({ id, render: () => renderSlot("settings.general.item", {}, { only: id }) })) }, { fallback: renderSlot("settings.general.item", {}) })
++				children: renderSlot("settings.general.layout", { items: items.map((id) => ({ id, render: () => renderSlot("settings.general.item", { controls }, { only: id }) })) }, { fallback: renderSlot("settings.general.item", { controls }) })
  			});
  		}
  		//#endregion
-@@ -1075,7 +1098,20 @@ window.__ModuleLoader__.load({
+@@ -687,7 +756,7 @@ window.__ModuleLoader__.load({
+ 		* @param props - accepted preference, writer and localized copy.
+ 		* @returns the General Settings row.
+ 		*/
+-		function DeveloperToolsRow({ useDeveloperTools, setEnabled, t }) {
++		function DeveloperToolsRow({ useDeveloperTools, setEnabled, t, controls }) {
+ 			const enabled = useDeveloperTools((value) => value);
+ 			const [busy, setBusy] = (0, react.useState)(false);
+ 			const [failed, setFailed] = (0, react.useState)(false);
+@@ -706,7 +775,7 @@ window.__ModuleLoader__.load({
+ 						role: "alert",
+ 						children: t("developerTools.error")
+ 					})
+-				] }), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Switch, {
++				] }), (0, react_jsx_runtime.jsx)(controls?.Switch ?? _deepseek_ai_dsh_client_ui_primitives.Switch, {
+ 					checked: enabled,
+ 					disabled: busy,
+ 					label: t("developerTools.title"),
+@@ -1075,7 +1144,20 @@ window.__ModuleLoader__.load({
  		* section, each once its slot declaration is on the ledger.
  		* @param ctx - client root context.
  		*/
@@ -180,7 +268,7 @@ index a71fc13..b3077ad 100644
  			ctx.slots.inject("settings.general.item", () => ctx.slots.register({
  				name: "settings.general.item",
  				id: "developer-tools",
-@@ -1133,6 +1169,7 @@ window.__ModuleLoader__.load({
+@@ -1133,6 +1215,7 @@ window.__ModuleLoader__.load({
  				},
  				hooks: {
  					shortcuts: ctx.shortcuts.catalog,
@@ -188,16 +276,17 @@ index a71fc13..b3077ad 100644
  					desktopUpdate: desktopUpdate.store,
  					connectionState: connection.state,
  					sections: {
-@@ -1243,6 +1280,8 @@ window.__ModuleLoader__.load({
+@@ -1243,6 +1326,9 @@ window.__ModuleLoader__.load({
  							kind: "single",
  							scope: "root"
  						},
 +						"settings.navigation": { kind: "single", scope: "root" },
++						"settings.controls": { kind: "single", scope: "root" },
 +						"settings.actions.layout": { kind: "single", scope: "root" },
  						"settings.header": {
  							kind: "single",
  							scope: "root"
-@@ -1295,8 +1334,9 @@ window.__ModuleLoader__.load({
+@@ -1295,8 +1381,9 @@ window.__ModuleLoader__.load({
  				id: "general",
  				order: 0,
  				label: () => t("general.nav"),
@@ -229,7 +318,7 @@ index 6a66973..519c56a 100644
  //# sourceMappingURL=GeneralSection.d.ts.map
 \ No newline at end of file
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-settings-general/lib/types/client/shell-contract.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-settings-general/lib/types/client/shell-contract.d.ts
-index fe02ea2..2fbe29c 100644
+index fe02ea2..f7ae81e 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-settings-general/lib/types/client/shell-contract.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-settings-general/lib/types/client/shell-contract.d.ts
 @@ -36,6 +36,8 @@ export type SettingsRootInjected = {
@@ -246,6 +335,7 @@ index fe02ea2..2fbe29c 100644
   * visibility and section selection with application commands.
   */
 -export type SettingsRootComponentProps = PropsRuntime<'sidebar.settings'> & PropsRenderSlots<'settings.launcher' | 'settings.trigger' | 'settings.header' | 'settings.action' | 'settings.close' | 'settings.section' | 'settings.onboarding'> & InjectFace<SettingsRootInjected> & PropsLocale<'settings'> & PropsStore<ReturnType<typeof createSettingsShellStore>>;
-+export type SettingsRootComponentProps = PropsRuntime<'sidebar.settings'> & PropsRenderSlots<'settings.navigation' | 'settings.actions.layout' | 'settings.launcher' | 'settings.trigger' | 'settings.header' | 'settings.action' | 'settings.close' | 'settings.section' | 'settings.onboarding'> & InjectFace<SettingsRootInjected> & PropsLocale<'settings'> & PropsStore<ReturnType<typeof createSettingsShellStore>>;
- //# sourceMappingURL=shell-contract.d.ts.map
+-//# sourceMappingURL=shell-contract.d.ts.map
 \ No newline at end of file
++export type SettingsRootComponentProps = PropsRuntime<'sidebar.settings'> & PropsRenderSlots<'settings.controls' | 'settings.navigation' | 'settings.actions.layout' | 'settings.launcher' | 'settings.trigger' | 'settings.header' | 'settings.action' | 'settings.close' | 'settings.section' | 'settings.onboarding'> & InjectFace<SettingsRootInjected> & PropsLocale<'settings'> & PropsStore<ReturnType<typeof createSettingsShellStore>>;
++//# sourceMappingURL=shell-contract.d.ts.map

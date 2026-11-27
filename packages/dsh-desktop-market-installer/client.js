@@ -151,7 +151,14 @@ window.__ModuleLoader__.load({
       return Array.isArray(entries) && entries.some((entry) => entry?.id === 'dshmarket')
     }
 
-    function BuiltInImageControl({ t }) {
+    function marketButton(controls, variant) {
+      return controls?.Button
+        ? { variant }
+        : { className: `dshDesktopMarketButton ${variant === 'secondary' ? 'dshDesktopMarketSecondary' : 'dshDesktopMarketPrimary'}` }
+    }
+
+    function BuiltInImageControl({ t, controls }) {
+      const Button = controls?.Button ?? 'button'
       const [state, setState] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [restart, setRestart] = React.useState(false)
@@ -167,8 +174,7 @@ window.__ModuleLoader__.load({
         return () => { active = false }
       }, [retry])
       if (!state && !error) return null
-      const enable = async event => {
-        event.preventDefault()
+      const enable = async () => {
         setBusy(true); setError('')
         try {
           const result = await globalThis.dshDesktop.setBuiltInImageGenerationEnabled(true)
@@ -190,11 +196,14 @@ window.__ModuleLoader__.load({
         React.createElement('span', { className: 'dshDesktopBuiltInImageTitle' }, t('builtInImageTitle')),
         state && React.createElement('p', { className: 'dshDesktopBuiltInImageHint' }, t(restart ? 'builtInImagePending' : state.enabled ? 'builtInImageEnabled' : 'builtInImageDisabled')),
         state?.marketActive && !restart && !state.enabled && React.createElement('p', { className: 'dshDesktopBuiltInImageHint' }, t('builtInImageConflict')),
-        state && !state.enabled && React.createElement('label', { className: 'dshDesktopBuiltInImageLabel' },
-          React.createElement('input', { type: 'checkbox', role: 'switch', checked: restart, disabled: busy || restart || state.marketActive, onChange: enable }), t('builtInImageEnable')),
+        state && !state.enabled && (controls?.Switch
+          ? React.createElement('div', { className: 'dshDesktopBuiltInImageLabel' },
+            React.createElement(controls.Switch, { label: t('builtInImageEnable'), checked: restart, disabled: busy || restart || state.marketActive, onChange: enable }), t('builtInImageEnable'))
+          : React.createElement('label', { className: 'dshDesktopBuiltInImageLabel' },
+            React.createElement('input', { type: 'checkbox', role: 'switch', checked: restart, disabled: busy || restart || state.marketActive, onChange: enable }), t('builtInImageEnable'))),
         error && React.createElement('p', { className: 'dshDesktopMarketError', role: 'alert' }, t(error)),
-        !state && error && React.createElement('button', { className: 'dshDesktopMarketButton dshDesktopMarketSecondary', type: 'button', onClick: () => { setError(''); setRetry(value => value + 1) } }, t('builtInImageRetry')),
-        restart && React.createElement('button', { className: 'dshDesktopMarketButton dshDesktopMarketSecondary', type: 'button', disabled: busy, onClick: restartHarness }, t('builtInImageRestart')))
+        !state && error && React.createElement(Button, { ...marketButton(controls, 'secondary'), type: 'button', onClick: () => { setError(''); setRetry(value => value + 1) } }, t('builtInImageRetry')),
+        restart && React.createElement(Button, { ...marketButton(controls, 'secondary'), type: 'button', disabled: busy, onClick: restartHarness }, t('builtInImageRestart')))
     }
 
     async function readStatus() {
@@ -208,7 +217,8 @@ window.__ModuleLoader__.load({
       return payload
     }
 
-    function UninstallConfirm({ t, busy, onCancel, onConfirm }) {
+    function UninstallConfirm({ t, busy, onCancel, onConfirm, controls }) {
+      const Button = controls?.Button ?? 'button'
       React.useEffect(() => {
         const onKeyDown = (event) => {
           if (event.key === 'Escape' && !busy) onCancel()
@@ -256,20 +266,20 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'dshDesktopMarketModalActions' },
             React.createElement(
-              'button',
+              Button,
               {
                 type: 'button',
-                className: 'dshDesktopMarketButton dshDesktopMarketSecondary',
+                ...marketButton(controls, 'secondary'),
                 disabled: busy,
                 onClick: onCancel
               },
               t('cancel')
             ),
             React.createElement(
-              'button',
+              Button,
               {
                 type: 'button',
-                className: 'dshDesktopMarketButton dshDesktopMarketPrimary',
+                ...marketButton(controls, 'danger'),
                 disabled: busy,
                 onClick: onConfirm,
                 autoFocus: true
@@ -281,7 +291,8 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function MarketManagementTab({ t }) {
+    function MarketManagementTab({ t, controls }) {
+      const Button = controls?.Button ?? 'button'
       const [status, setStatus] = React.useState()
       const [error, setError] = React.useState()
       const [confirming, setConfirming] = React.useState(false)
@@ -474,20 +485,20 @@ window.__ModuleLoader__.load({
               { className: 'dshDesktopMarketActions' },
               removed
                 ? React.createElement(
-                    'button',
+                    Button,
                     {
                       type: 'button',
-                      className: 'dshDesktopMarketButton dshDesktopMarketPrimary',
+                      ...marketButton(controls, 'primary'),
                       disabled: restarting,
                       onClick: () => void restart()
                     },
                     restarting ? t('restarting') : t('restart')
                   )
                 : React.createElement(
-                    'button',
+                    Button,
                     {
                       type: 'button',
-                      className: 'dshDesktopMarketButton dshDesktopMarketSecondary',
+                      ...marketButton(controls, 'secondary'),
                       disabled: uninstalling || !status,
                       onClick: () => setConfirming(true)
                     },
@@ -510,6 +521,7 @@ window.__ModuleLoader__.load({
         confirming
           ? React.createElement(UninstallConfirm, {
               t,
+              controls,
               busy: uninstalling,
               onCancel: () => setConfirming(false),
               onConfirm: () => void uninstall()
@@ -518,7 +530,8 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function MarketInstallerSection({ t }) {
+    function MarketInstallerSection({ t, controls }) {
+      const Button = controls?.Button ?? 'button'
       const [status, setStatus] = React.useState()
       const [error, setError] = React.useState()
       const [restarting, setRestarting] = React.useState(false)
@@ -701,20 +714,20 @@ window.__ModuleLoader__.load({
             { className: 'dshDesktopMarketActions' },
             installed
               ? React.createElement(
-                  'button',
+                  Button,
                   {
                     type: 'button',
-                    className: 'dshDesktopMarketButton dshDesktopMarketPrimary',
+                    ...marketButton(controls, 'primary'),
                     disabled: restarting,
                     onClick: () => void restart()
                   },
                   restarting ? t('restarting') : t('restart')
                 )
               : React.createElement(
-                  'button',
+                  Button,
                   {
                     type: 'button',
-                    className: 'dshDesktopMarketButton dshDesktopMarketPrimary',
+                    ...marketButton(controls, 'primary'),
                     disabled: busy || (!status && !error),
                     onClick: () => void install()
                   },

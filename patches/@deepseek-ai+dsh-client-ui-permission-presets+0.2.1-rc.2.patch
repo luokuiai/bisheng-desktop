@@ -1,0 +1,78 @@
+diff --git a/node_modules/@deepseek-ai/dsh-client-ui-permission-presets/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-permission-presets/lib/client.js
+index a0b3825..df42278 100644
+--- a/node_modules/@deepseek-ai/dsh-client-ui-permission-presets/lib/client.js
++++ b/node_modules/@deepseek-ai/dsh-client-ui-permission-presets/lib/client.js
+@@ -461,7 +461,7 @@ window.__ModuleLoader__.load({
+ 		* @param props - composed slot props.
+ 		* @returns the row, or null when the host does not expose permission settings.
+ 		*/
+-		function PermissionRow({ load, select, usePermission, t }) {
++		function PermissionRow({ load, select, usePermission, t, controls }) {
+ 			const state = usePermission((snapshot) => snapshot);
+ 			const [open, setOpen] = (0, react.useState)(false);
+ 			const [confirmingFullAccess, setConfirmingFullAccess] = (0, react.useState)(false);
+@@ -481,6 +481,18 @@ window.__ModuleLoader__.load({
+ 			const optionLabel = (option) => displayPermissionPreset(option.id, option.label, t);
+ 			const label = selected !== void 0 ? optionLabel(selected) : busy ? t("loading") : t("unavailable");
+ 			const description = state.error ?? t("description");
++			const disabled = busy || !state.writable || state.options.length === 0;
++			const options = state.options.map((option) => ({ id: option.id, label: optionLabel(option) }));
++			const onSelect = (id) => {
++				setOpen(false);
++				if (id === state.currentValue) return;
++				if (id === "danger-full-access") {
++					setAcknowledged(false);
++					setConfirmingFullAccess(true);
++					return;
++				}
++				select(id);
++			};
+ 			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsxs)("div", {
+ 				className: PermissionRow_module_css_default.row,
+ 				children: [(0, react_jsx_runtime.jsxs)("div", {
+@@ -493,26 +505,21 @@ window.__ModuleLoader__.load({
+ 						role: state.error === null ? void 0 : "alert",
+ 						children: description
+ 					})]
+-				}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
++				}), controls?.Select ? (0, react_jsx_runtime.jsx)(controls.Select, {
++					label: t("title"),
++					value: state.currentValue,
++					placeholder: label,
++					options,
++					disabled,
++					onChange: onSelect
++				}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
+ 					open,
+ 					onClose: () => {
+ 						setOpen(false);
+ 					},
+-					items: state.options.map((option) => ({
+-						id: option.id,
+-						label: optionLabel(option)
+-					})),
++					items: options,
+ 					selectedId: state.currentValue,
+-					onSelect: (id) => {
+-						setOpen(false);
+-						if (id === state.currentValue) return;
+-						if (id === "danger-full-access") {
+-							setAcknowledged(false);
+-							setConfirmingFullAccess(true);
+-							return;
+-						}
+-						select(id);
+-					},
++					onSelect,
+ 					align: "end",
+ 					portal: true,
+ 					anchor: (0, react_jsx_runtime.jsxs)("button", {
+@@ -520,7 +527,7 @@ window.__ModuleLoader__.load({
+ 						className: PermissionRow_module_css_default.selector,
+ 						"aria-haspopup": "menu",
+ 						"aria-expanded": open,
+-						disabled: busy || !state.writable || state.options.length === 0,
++						disabled,
+ 						onClick: () => {
+ 							setOpen((value) => !value);
+ 						},

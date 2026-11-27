@@ -9,13 +9,14 @@
 - 未登录时入口主行显示未登录、副行显示本机模式，菜单抬头说明登录后可使用企业功能，不重复同一句话。
 - 账号读取或操作失败时，菜单在提示下方给出重试行：操作失败重试该操作，读取失败重新读取账号。
 - 企业文档可在既有导航上报中附带待处理审批数量，入口头像与消息项显示该数量，超过 99 显示 99+。未上报、为 0 或未登录时不显示角标。
-- 设置使用 DSH 默认的平级导航、通用设置行、标题操作和插件页签。Bisheng 的四个分区各有导航图标（账号与安全用户、用量与存储仪表、AI 助手接入 API、关于与帮助信息）：`dsh-desktop-settings` 注册 `settings.navigation` owner，逐行调用外壳的 `renderEntry` 并只传入图标覆盖，按钮、选中态与焦点仍由外壳负责；原生分区沿用上游按 id 选择的图标，未命中时回退齿轮。注册表只保留 id/order/label/priority，所以图标不能挂在分区注册项上。模型、Agent 预设、执行偏好、插件清单与第三方贡献直接可达，不另加高级设置折叠层。
+- 设置沿用 DSH 的平级导航、通用设置行和插件页签。Bisheng 的四个分区各有导航图标（账号与安全用户、用量与存储仪表、AI 助手接入 API、关于与帮助信息）：`dsh-desktop-settings` 注册 `settings.navigation` owner，逐行调用外壳的 `renderEntry` 并只传入图标覆盖，按钮、选中态与焦点仍由外壳负责；原生分区沿用上游按 id 选择的图标，未命中时回退齿轮。注册表只保留 id/order/label/priority，所以图标不能挂在分区注册项上。模型、Agent 预设、执行偏好、插件清单与第三方贡献直接可达，不另加高级设置折叠层。
+- 设置标题栏隐藏「打开配置文件」。关于与帮助显示 LUOKUI-AI 版本，提供检查更新、查看日志和安全模式与插件恢复。
 - Bisheng 通过既有扩展点加入账号与安全、用量与存储、按权限开放的个人 AI 接入及关于与帮助。企业模型列表与恢复入口直接展示。账号与安全只呈现原生内容，不再嵌入网页的基本信息与安全设置；账号资料与改密仍由网页端和管理端负责。
 - 消息属于独立面板，包含我的审批、我的申请和通知，不注册为设置页。面板沿用设置弹窗的左右布局：左侧为带图标的分节导航，右侧为关闭按钮与内容区。嵌入区宽度需不小于 768px，网页的审批列表/详情双栏挂在该视口断点上；弹窗按此留出余量，窗口放不下时随 100% 收缩并回到网页自身的单栏形态。
 
 ## 组件与数据归属
 
-`dsh-desktop-settings` 复用 Harness 0.2.0-rc.2 已有的 single/root `settings.launcher`，账号菜单使用 UI primitives 的 Menu / MenuItemButton，消息面板使用 Modal。不再向 `settings.navigation`、`settings.general.layout`、`settings.actions.layout`、`settings.plugins.layout` 注册布局贡献，直接使用 owner 的默认 fallback；既有兼容接缝未在本次变更中修改。
+`dsh-desktop-settings` 复用 Harness 已有的 single/root `settings.launcher`，账号菜单使用 UI primitives 的 Menu / MenuItemButton，消息面板使用 Modal。`settings.general.layout` 为通用设置行分组，`settings.actions.layout` 按 ID 隐藏 `open-document`。插件页、添加模型和 Agent 预设指南通过 `settings.controls` 复用 Board UI Tabs，保留功能方的选中状态、禁用规则和已挂载内容。消息加载状态使用放大至 32px 的 Harness `StateDot`。
 
 DSH 原生组件与各 feature-owned rows 保持原挂载位置及生命周期，不复制设置组件、不移动 React DOM、不改变 slot 竞争规则。设置状态仍由 Harness 服务持有，企业身份由主进程企业服务管理，账号资料和云端用量仍由 Bisheng 后端维护，不迁移用户配置。
 
@@ -28,6 +29,8 @@ DSH 原生组件与各 feature-owned rows 保持原挂载位置及生命周期�
 个人接入以及三类审批/通知内容复用现有隔离 WebContentsView 和 cookie session。用量与存储改由桌面设置插件原生呈现：模型用量不带卡片外框，指标切换使用 Harness `SegmentedControl`，热力图与输入/输出、消息数仍来自企业统计。主进程通过身份所有的隔离 cookie session 固定读取 `/api/v1/dsh/me/usage-summary` 与 `/api/v1/quota/effective`；只向可信宿主主 frame 返回经校验的每日用量和个人知识文件额度（GB），不开放任意 URL、不传 cookie。每日统计限定上海时区、最多 366 桶；请求限时、响应限量，身份变化丢弃旧响应。页面卸载释放订阅，不轮询。原生页面不发布嵌入区域几何，旧 preload 缺少 usage 方法时显示重启提示。网页源码、后端数据口径与独立浏览器页面不变。网页仅在原生嵌入且 `dshSettings=1` 时采用内容模式；独立浏览器保留原设置布局及语言偏好。退出、凭据、文件和进程能力继续由宿主持有，网页不获得通用 IPC。
 
 主进程通过 `settingsProtocolVersion: 1` 声明内容协议，宿主贡献与唯一几何 presenter 均检查版本。内容挂载后，网页通过受限 preload 报告就绪；主进程核对 origin、主 frame、实际路径、分区、查询参数和身份 generation 后才显示。完整导航或离开设置路径后撤销就绪状态，重新加载必须重新报告。旧宿主或旧网页缺少协议时显示兼容提示，不把先前的聊天或知识空间显示到设置区域。
+
+网页接受站内导航后若在 3 秒内没有为当前分区报告就绪，主进程在相同隔离视图中按内容模式直接加载一次。切换分区、关闭面板或改变身份时取消待执行的恢复，完整加载仍须通过就绪校验。导航已经就绪时继续使用站内切换。
 
 嵌入网页沿用宿主配色：唯一 presenter 从当前 Harness 主题解析层级、文字与描边 token，折算为不透明通道随 present 下发；主进程据此改写页面的两套变量：`rgb(var())` 消费的 `--bg-page`、`--arco-gray-*`、`--fill-*`、`--text-*` 与描边三元组，以及设置容器 `bg-background`、`bg-card` 等通过 `hsl(var())` 消费的 shadcn 色阶；并用同一表面色作为视图底色，避免加载时闪出异色。网页外壳会在布局根 `.dsh-web-chat` 上按 `body[data-dsh-chat-theme]` 再声明一遍色阶，只改 `html` 会被遮住，因此同一组声明同时落在根与该布局作用域。改写只作用于宿主暗色的模块作用域，Chat 路由保持既有主题处理，浅色沿用网页自身设计，品牌色、状态色不改写。采样失败时不下发色板并在下次呈现时重试。主进程日志 `[enterprise-chat] appearance` 记录主题、下发的表面色、页面根解析到的 `--bg-page` 与布局根实际底色，每次变化记一行，用于判断色板是否真正到达页面。
 

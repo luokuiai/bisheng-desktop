@@ -1,5 +1,5 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-agent-preset/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-agent-preset/lib/client.js
-index af47dcc..fe375ca 100644
+index af47dcc..286bb66 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-agent-preset/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-agent-preset/lib/client.js
 @@ -905,6 +905,7 @@ window.__ModuleLoader__.load({
@@ -18,7 +18,106 @@ index af47dcc..fe375ca 100644
  			...guideZh,
  			builtInGroup: "内置",
  			customGroup: "自定义",
-@@ -1611,7 +1613,7 @@ window.__ModuleLoader__.load({
+@@ -1516,10 +1518,28 @@ window.__ModuleLoader__.load({
+ 		* @param props - localized guide, initial page, and close callback.
+ 		* @returns the modal reader with independent scroll positions for each page.
+ 		*/
+-		function PresetGuideDialog({ guide, initialPage, t, onClose }) {
++		function PresetGuideDialog({ guide, initialPage, t, onClose, controls }) {
+ 			const [page, setPage] = (0, react.useState)(initialPage);
+ 			const guideId = (0, react.useId)();
+ 			const content = (0, react.useRef)(null);
++			const renderPage = (section) => section === "usage" ? (0, react_jsx_runtime.jsx)(GuideUsage, {
++				text: t(guide.usage),
++				t
++			}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
++				text: t(guide.explanation),
++				labels: {
++					code: {
++						copyLabel: t("guideCopy"),
++						copiedLabel: t("guideCopied"),
++						toolbarLabels: {
++							codeLabel: t("codeBlock.title"),
++							wrapLabel: t("codeBlock.wrap"),
++							unwrapLabel: t("codeBlock.unwrap")
++						}
++					},
++					footnotes: t("guideFootnotes")
++				}
++			});
+ 			(0, react.useLayoutEffect)(() => {
+ 				content.current?.querySelector("[role=\"tab\"][aria-selected=\"true\"]")?.focus();
+ 			}, []);
+@@ -1549,9 +1569,8 @@ window.__ModuleLoader__.load({
+ 								children: [(0, react_jsx_runtime.jsx)("h2", {
+ 									className: PresetGuideDialog_module_css_default.guideTitle,
+ 									children: t(guide.name)
+-								}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+-									variant: "ghost",
+-									className: PresetGuideDialog_module_css_default.guideClose,
++								}), (0, react_jsx_runtime.jsx)(controls?.CloseButton ?? _deepseek_ai_dsh_client_ui_primitives.Button, {
++									...(controls?.CloseButton ? {} : { variant: "ghost", className: PresetGuideDialog_module_css_default.guideClose }),
+ 									"aria-label": t("close"),
+ 									onClick: onClose,
+ 									children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCloseOutlineRegular, { size: 18 })
+@@ -1561,7 +1580,20 @@ window.__ModuleLoader__.load({
+ 								children: t(guide.intro)
+ 							})]
+ 						}),
+-						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.SegmentedTabs, {
++						controls?.Tabs ? (0, react_jsx_runtime.jsx)(controls.Tabs, {
++							label: t("guideSections"),
++							value: page,
++							onChange: setPage,
++							fill: true,
++							tabListClassName: PresetGuideDialog_module_css_default.guideTabs,
++							items: ["explanation", "usage"].map((section) => ({
++								id: section,
++								label: t(section === "usage" ? "howToUse" : "modeExplanation"),
++								keepMounted: true,
++								panelClassName: PresetGuideDialog_module_css_default.guidePanel,
++								render: () => renderPage(section)
++							}))
++						}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.SegmentedTabs, {
+ 							className: PresetGuideDialog_module_css_default.guideTabs,
+ 							label: t("guideSections"),
+ 							value: page,
+@@ -1578,7 +1610,7 @@ window.__ModuleLoader__.load({
+ 								panelId: `${guideId}-usage-panel`
+ 							}]
+ 						}),
+-						["explanation", "usage"].map((section) => (0, react_jsx_runtime.jsx)("div", {
++						!controls?.Tabs && ["explanation", "usage"].map((section) => (0, react_jsx_runtime.jsx)("div", {
+ 							id: `${guideId}-${section}-panel`,
+ 							role: "tabpanel",
+ 							"aria-labelledby": `${guideId}-${section}-tab`,
+@@ -1586,24 +1618,7 @@ window.__ModuleLoader__.load({
+ 							"data-guide-page": section,
+ 							hidden: page !== section,
+ 							tabIndex: 0,
+-							children: section === "usage" ? (0, react_jsx_runtime.jsx)(GuideUsage, {
+-								text: t(guide.usage),
+-								t
+-							}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, {
+-								text: t(guide.explanation),
+-								labels: {
+-									code: {
+-										copyLabel: t("guideCopy"),
+-										copiedLabel: t("guideCopied"),
+-										toolbarLabels: {
+-											codeLabel: t("codeBlock.title"),
+-											wrapLabel: t("codeBlock.wrap"),
+-											unwrapLabel: t("codeBlock.unwrap")
+-										}
+-									},
+-									footnotes: t("guideFootnotes")
+-								}
+-							})
++							children: renderPage(section)
+ 						}, section))
+ 					]
+ 				})
+@@ -1611,7 +1626,7 @@ window.__ModuleLoader__.load({
  		}
  		//#endregion
  		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetSection.module.css.mjs
@@ -27,8 +126,13 @@ index af47dcc..fe375ca 100644
  		const tagId = "@deepseek-ai/dsh-client-ui-agent-preset/AgentPresetSection.module.css";
  		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
  			const tag = document.createElement("style");
-@@ -1689,6 +1691,85 @@ window.__ModuleLoader__.load({
- 		function AgentPresetSection({ useAgentPresetSection, load, view, closeView, makeDefault, startCreatorDraft, close: closeSettings, useDeveloperTools, t }) {
+@@ -1686,9 +1701,89 @@ window.__ModuleLoader__.load({
+ 		* @param props Settings actions, snapshot hooks and localized text.
+ 		* @returns The preset settings section.
+ 		*/
+-		function AgentPresetSection({ useAgentPresetSection, load, view, closeView, makeDefault, startCreatorDraft, close: closeSettings, useDeveloperTools, t }) {
++		function AgentPresetSection({ useAgentPresetSection, load, view, closeView, makeDefault, startCreatorDraft, close: closeSettings, useDeveloperTools, t, controls }) {
++			const Button = controls?.Button ?? _deepseek_ai_dsh_client_ui_primitives.Button;
  			const state = useAgentPresetSection((value) => value);
  			const developerTools = useDeveloperTools((enabled) => enabled);
 +			const chinese = document.documentElement.lang?.toLowerCase().startsWith("zh");
@@ -113,7 +217,23 @@ index af47dcc..fe375ca 100644
  			const [guide, setGuide] = (0, react.useState)(null);
  			const viewTrigger = (0, react.useRef)(null);
  			const closeViewOnUnmount = (0, react.useRef)(closeView);
-@@ -1722,21 +1803,53 @@ window.__ModuleLoader__.load({
+@@ -1709,34 +1804,67 @@ window.__ModuleLoader__.load({
+ 			const viewedRow = viewed === null ? void 0 : state.rows.find((row) => row.id === viewed.id);
+ 			const viewedTitle = viewed === null ? "" : viewedRow === void 0 ? viewed.title : presetDisplayText(viewedRow, t).name;
+ 			const creator = startCreatorDraft !== void 0 && state.rows.some((row) => row.id === "cordis") ? startCreatorDraft : void 0;
+-			const creatorButton = creator === void 0 ? null : (0, react_jsx_runtime.jsxs)("button", {
++			const creatorButton = creator === void 0 ? null : (0, react_jsx_runtime.jsxs)(controls?.Button ?? "button", {
+ 				type: "button",
+-				className: AgentPresetSection_module_css_default.creatorButton,
++				...(controls?.Button ? { variant: "primary", leadingIcon: _deepseek_ai_dsh_client_ui_primitives.IconPlusOutlineRegular } : { className: AgentPresetSection_module_css_default.creatorButton }),
+ 				disabled: state.saving,
+ 				onClick: () => {
+ 					creator();
+ 					closeSettings();
+ 				},
+-				children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPlusOutlineRegular, { size: 14 }), t("creatorDraft")]
++				children: controls?.Button ? t("creatorDraft") : [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPlusOutlineRegular, { size: 14 }), t("creatorDraft")]
+ 			});
  			return (0, react_jsx_runtime.jsxs)("section", {
  				className: AgentPresetSection_module_css_default.section,
  				children: [
@@ -128,12 +248,14 @@ index af47dcc..fe375ca 100644
 +                            children: t("nav")
 +                        }), (0, react_jsx_runtime.jsxs)("div", {
 +                            "data-dsh-preset-actions": "",
-+                            children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-+                                variant: "outline", disabled: importBusy,
-+                                icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutlineRegular, { size: 16 }),
++                            children: [(0, react_jsx_runtime.jsx)(Button, {
++                                variant: controls?.Button ? "secondary" : "outline", disabled: importBusy,
++                                ...(controls?.Button
++                                    ? { leadingIcon: _deepseek_ai_dsh_client_ui_primitives.IconArchiveOutlineRegular }
++                                    : { icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutlineRegular, { size: 16 }) }),
 +                                onClick: () => importInput.current?.click(), children: t("desktopImport")
-+                            }), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-+                                variant: "outline",
++                            }), (0, react_jsx_runtime.jsx)(Button, {
++                                variant: controls?.Button ? "secondary" : "outline",
 +                                onClick: () => window.open("https://www.dshdesktop.com/preset/", "_blank", "noopener,noreferrer"),
 +                                children: t("desktopAwesome")
 +                            })]
@@ -146,10 +268,9 @@ index af47dcc..fe375ca 100644
 +					(0, react_jsx_runtime.jsxs)("div", {
 +						"data-dsh-preset-search": "",
 +						children: [
-+							(0, react_jsx_runtime.jsx)("input", {
++							(0, react_jsx_runtime.jsx)(controls?.Input ?? "input", {
 +								type: "search", value: search, placeholder: t("desktopSearch"),
-+								"aria-label": t("desktopSearch"), onChange: (event) => setSearch(event.target.value),
-+
++								"aria-label": t("desktopSearch"), onChange: controls?.Input ? setSearch : (event) => setSearch(event.target.value),
 +							}),
 +
 +							(0, react_jsx_runtime.jsx)("input", {
@@ -172,7 +293,31 @@ index af47dcc..fe375ca 100644
  						const entry = builtIn ? null : creatorButton;
  						if (rows.length === 0 && entry === null) return null;
  						return (0, react_jsx_runtime.jsxs)("section", {
-@@ -1834,17 +1947,28 @@ window.__ModuleLoader__.load({
+@@ -1811,9 +1939,9 @@ window.__ModuleLoader__.load({
+ 												className: AgentPresetSection_module_css_default.cardFoot,
+ 												children: [help === void 0 ? null : (0, react_jsx_runtime.jsxs)("div", {
+ 													className: AgentPresetSection_module_css_default.cardHelp,
+-													children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
++													children: [(0, react_jsx_runtime.jsx)(Button, {
+ 														variant: "ghost",
+-														className: AgentPresetSection_module_css_default.helpButton,
++														className: controls?.Button ? void 0 : AgentPresetSection_module_css_default.helpButton,
+ 														"aria-label": `${t("modeExplanation")}: ${display.name}`,
+ 														onClick: () => {
+ 															setGuide({
+@@ -1822,9 +1950,9 @@ window.__ModuleLoader__.load({
+ 															});
+ 														},
+ 														children: t("modeExplanation")
+-													}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
++													}), (0, react_jsx_runtime.jsx)(Button, {
+ 														variant: "ghost",
+-														className: AgentPresetSection_module_css_default.helpButton,
++														className: controls?.Button ? void 0 : AgentPresetSection_module_css_default.helpButton,
+ 														"aria-label": `${t("howToUse")}: ${display.name}`,
+ 														onClick: () => {
+ 															setGuide({
+@@ -1834,17 +1962,28 @@ window.__ModuleLoader__.load({
  														},
  														children: t("howToUse")
  													})]
@@ -192,9 +337,9 @@ index af47dcc..fe375ca 100644
 +													side: "top",
 +													align: "end",
 +													portal: true,
-+													children: (0, react_jsx_runtime.jsx)("button", {
++													children: (0, react_jsx_runtime.jsx)(controls?.Button ?? "button", {
 +														type: "button",
-+														className: AgentPresetSection_module_css_default.iconButton,
++														...(controls?.Button ? { variant: "ghost", size: "xs", iconOnly: true, leadingIcon: _deepseek_ai_dsh_client_ui_primitives.IconBrowseOutlineRegular } : { className: AgentPresetSection_module_css_default.iconButton }),
 +														"aria-label": `${t("view")}: ${display.name}`,
 +														onClick: (event) => {
 +															viewTrigger.current = event.currentTarget;
@@ -202,7 +347,7 @@ index af47dcc..fe375ca 100644
 +														},
 +														children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBrowseOutlineRegular, {})
 +													})
-+											}), !builtIn && (0, react_jsx_runtime.jsx)("button", {
++											}), !builtIn && (0, react_jsx_runtime.jsx)(controls?.Button ?? "button", {
 +												type: "button",
 +												"aria-label": `${copy.export}: ${display.name}`,
 +												title: copy.export,
@@ -212,7 +357,13 @@ index af47dcc..fe375ca 100644
  											})]
  										}, row.id);
  									})
-@@ -1861,6 +1985,34 @@ window.__ModuleLoader__.load({
+@@ -1856,11 +1995,41 @@ window.__ModuleLoader__.load({
+ 					guide === null ? null : (0, react_jsx_runtime.jsx)(PresetGuideDialog, {
+ 						guide: guide.content,
+ 						initialPage: guide.page,
++						controls,
+ 						t,
+ 						onClose: () => {
  							setGuide(null);
  						}
  					}),
@@ -224,8 +375,9 @@ index af47dcc..fe375ca 100644
 +						footer: (0, react_jsx_runtime.jsxs)("div", {
 +							style: { display: "flex", gap: 8, justifyContent: "flex-end" },
 +							children: [
-+								(0, react_jsx_runtime.jsx)("button", { type: "button", disabled: importBusy, onClick: () => { setImportDraft(null); setImportFile(null); setTransferError(null); }, children: copy.cancel }),
-+								(0, react_jsx_runtime.jsx)("button", {
++								(0, react_jsx_runtime.jsx)(controls?.Button ?? "button", { type: "button", disabled: importBusy, onClick: () => { setImportDraft(null); setImportFile(null); setTransferError(null); }, children: copy.cancel }),
++								(0, react_jsx_runtime.jsx)(controls?.Button ?? "button", {
++									...(controls?.Button ? { variant: "primary" } : {}),
 +									type: "button", disabled: importBusy || !/^[a-z0-9][a-z0-9-]*$/.test(importId.trim().toLowerCase()) || importDraft?.conflict && importId.trim().toLowerCase() === importDraft.agentPreset,
 +									onClick: () => { void confirmImport(); }, children: copy.install
 +								})

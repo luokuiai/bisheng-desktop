@@ -17,6 +17,26 @@ it('applies the dark contribution palette and themed images inside Harness page 
   expect(selectors).toContain(':scope:where(.dark, .dark *) .theme-logo-dark')
 })
 
+it('keeps the workspace page background off embedded settings control wrappers', async () => {
+  const root = new URL('../node_modules/@deepseek-ai/dsh-web-frontend/dist/desktop-workspace/', import.meta.url)
+  const sheet = postcss.parse(await readFile(new URL('workspace.css', root), 'utf8'))
+  const scope = sheet.nodes.find(node => node.type === 'atrule' && node.name === 'scope' && node.params.includes('.dshSettingsControl'))
+  const pageBackgrounds = []
+  scope?.walkDecls('background-color', declaration => {
+    if (declaration.parent.type === 'rule' && declaration.value === 'var(--color-background-full)') pageBackgrounds.push(declaration.parent.selector)
+  })
+  expect(pageBackgrounds).toContain(':scope:not(:where(.dshSettingsControl))')
+  expect(pageBackgrounds).not.toContain(':scope')
+})
+
+it('keeps the shared settings modal close button circular under the Harness corner style', async () => {
+  const root = new URL('../node_modules/@deepseek-ai/dsh-web-frontend/dist/desktop-workspace/', import.meta.url)
+  const sheet = postcss.parse(await readFile(new URL('workspace.css', root), 'utf8'))
+  const scope = sheet.nodes.find(node => node.type === 'atrule' && node.name === 'scope' && node.params.includes('.dshSettingsControl') && node.params.includes('.dshWorkspacePortal'))
+  const closeButton = scope?.nodes.find(node => node.type === 'rule' && node.selector === '.dshModalCloseButton')
+  expect(closeButton?.nodes).toEqual(expect.arrayContaining([expect.objectContaining({ prop: 'corner-shape', value: 'round' })]))
+})
+
 it('isolates CSS Modules and their animations from plugin dialogs sharing the document', async () => {
   const root = new URL('../node_modules/@deepseek-ai/dsh-web-frontend/dist/desktop-workspace/', import.meta.url)
   const sheet = postcss.parse(await readFile(new URL('pages.css', root), 'utf8'))

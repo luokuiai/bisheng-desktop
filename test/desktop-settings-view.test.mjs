@@ -40,7 +40,8 @@ async function fixture(language = 'zh', settingsProtocolVersion = 1, signedIn = 
     SegmentedControl: ({ id, value, options, onChange, label }) => React.createElement('div', { role: 'tablist', 'aria-label': label }, options.map(option => React.createElement('button', { key: option.value, role: 'tab', id: `${id}-${option.value}`, 'aria-selected': option.value === value, onClick: () => onChange(option.value) }, option.label))),
     Menu: vi.fn(({ open, anchor, children, listClassName }) => React.createElement('div', null, anchor, open && React.createElement('div', { role: 'menu', className: listClassName }, children))),
     MenuItemButton: ({ children, onSelect, disabled }) => React.createElement('button', { type: 'button', role: 'menuitem', disabled, onClick: onSelect }, children),
-    Modal: ({ open, onClose, title, description, children, footer }) => open ? React.createElement('div', { role: 'dialog', 'aria-label': title, onKeyDown: event => { if (event.key === 'Escape') onClose() } }, description, children, footer) : null,
+    Modal: ({ open, onClose, title, description, children, footer, className }) => open ? React.createElement('div', { role: 'dialog', 'aria-label': title, className, onKeyDown: event => { if (event.key === 'Escape') onClose() } }, description, children, footer) : null,
+    StateDot: ({ state, size }) => React.createElement('svg', { 'aria-hidden': true, 'data-state': state, width: size }),
     ...Object.fromEntries(['IconSettingsOutlineRegular', 'IconChecklistOutlineRegular', 'IconChecklistOutlineMedium', 'IconPaperPlaneOutlineMedium', 'IconAlarmClockOutlineMedium', 'IconGaugeOutlineMedium', 'IconApiOutlineMedium', 'IconInfoOutlineMedium', 'IconUserOutlineMedium', 'IconChevronDownOutlineRegular', 'IconCloseOutlineRegular'].map(name => [name, () => React.createElement('svg', { 'aria-hidden': true, 'data-icon': name })]))
   }
   const registrations = [], effects = [], dictionaries = new Map()
@@ -186,8 +187,8 @@ async function builtInComponents(packageName, names) {
   const path = require.resolve(`${packageName}/package.json`).replace('package.json', 'lib/client.js')
   const code = (await readFile(path, 'utf8')).replace('exports.apply = apply;', `${names.map(name => `exports.${name} = ${name};`).join(' ')} exports.apply = apply;`)
   let definition
-  vm.runInNewContext(code, { window: { __ModuleLoader__: { load: next => { definition = next } } }, document, CustomEvent: window.CustomEvent })
-  const icons = Object.fromEntries(['Settings', 'User', 'Data', 'AgentPreset', 'Personalization', 'Archive'].map(name => [`Icon${name}OutlineMedium`, () => React.createElement('svg')]))
+  vm.runInNewContext(code, { window: { __ModuleLoader__: { load: next => { definition = next } }, dispatchEvent: window.dispatchEvent.bind(window) }, document, CustomEvent: window.CustomEvent })
+  const icons = Object.fromEntries(['Settings', 'User', 'Data', 'AgentPreset', 'Personalization', 'Archive', 'Light', 'Dark', 'Followsystem'].map(name => [`Icon${name}OutlineMedium`, () => React.createElement('svg')]))
   return definition.factory(id => ({
     react: React,
     'react/jsx-runtime': jsxRuntime,
@@ -198,33 +199,183 @@ async function builtInComponents(packageName, names) {
   })[id])
 }
 
-it.each(['zh', 'en'])('uses DSH flat navigation, General rows and header actions with Bisheng sections (%s)', async language => {
+it.each(['zh', 'en'])('groups General rows without dropping extension sections or actions (%s)', async language => {
   const f = await fixture(language)
   const { SettingsPanel, GeneralSection } = await builtInComponents('@deepseek-ai/dsh-client-ui-settings-general', ['SettingsPanel', 'GeneralSection'])
-  const mounted = new Map(), selected = vi.fn()
+  const mounted = new Map(), selected = vi.fn(), close = vi.fn(), actionClicked = vi.fn()
   function Entry({ id }) {
     React.useEffect(() => { mounted.set(id, (mounted.get(id) || 0) + 1) }, [id])
     return React.createElement('div', { 'data-row': id }, id)
   }
-  const ids = ['language', 'appearance', 'font-size', 'shortcuts', 'permissions', 'plugin-extra']
-  const rows = ['general', 'models', 'plugins', 'enterprise-account', 'desktop-usage', 'agent-presets', 'third-party-extra', 'desktop-about'].map(id => ({ id, label: id }))
+  const ids = ['permission', 'language', 'appearance', 'font-size', 'shortcuts', 'composer-enter', 'plugin-extra', 'current-version']
+  const visibleIds = ids.filter(id => id !== 'current-version')
+  const generalTitle = language === 'zh' ? '常规' : 'General'
+  const rows = ['general', 'models', 'plugins', 'enterprise-account', 'desktop-usage', 'agent-presets', 'third-party-extra', 'desktop-about'].map(id => ({ id, label: id === 'general' ? generalTitle : id }))
+  const actionItems = ['open-document', 'third-party-action']
   const renderSlot = (name, props, options) => {
     if (name === 'settings.header') return language === 'zh' ? '设置' : 'Settings'
-    if (name === 'settings.action') return ['open-document', 'third-party-action'].map(id => React.createElement('button', { key: id, 'data-action': id }, id))
+    if (name === 'settings.action') return actionItems.filter(id => !options?.only || id === options.only)
+      .map(id => React.createElement('button', { key: id, 'data-action': id, onClick: () => actionClicked(id) }, id))
     if (name === 'settings.close') return 'Close'
-    if (name === 'settings.general.item') return ids.map(id => React.createElement(Entry, { key: id, id }))
+    if (name === 'settings.general.item') return ids.filter(id => !options?.only || id === options.only).map(id => React.createElement(Entry, { key: id, id }))
     if (name === 'settings.section') return React.createElement(GeneralSection, { useItems: fn => fn(ids), renderSlot })
     return f.renderSlot(name, props, options)
   }
-  await f.mount(SettingsPanel, { rows, activeId: 'general', actionItems: ['open-document', 'third-party-action'], renderSlot, onSelect: selected, onClose() {} })
+  await f.mount(SettingsPanel, { rows, activeId: 'general', actionItems, renderSlot, onSelect: selected, onClose: close })
   expect([...document.querySelectorAll('nav button')].map(node => node.textContent)).toEqual(rows.map(row => row.label))
+  expect(document.querySelector('[data-dsh-settings-title]').textContent).toBe(generalTitle)
   expect(document.querySelector('details')).toBeNull()
-  expect([...document.querySelectorAll('[data-row]')].map(node => node.dataset.row)).toEqual(ids)
-  expect([...mounted.values()]).toEqual(ids.map(() => 1))
-  expect(document.querySelectorAll('[data-action="open-document"]')).toHaveLength(1)
-  expect(document.querySelectorAll('[data-action="third-party-action"]')).toHaveLength(1)
+  expect([...document.querySelectorAll('[data-row]')].map(node => node.dataset.row)).toEqual(visibleIds)
+  const groups = [...document.querySelectorAll('.dshSettingsGeneralGroup')]
+  expect(groups.map(group => [...group.querySelectorAll('[data-row]')].map(row => row.dataset.row))).toEqual([
+    ['permission'], ['language', 'appearance', 'font-size'], ['shortcuts', 'composer-enter'], ['plugin-extra']
+  ])
+  expect([...document.querySelectorAll('.dshSettingsGeneralGroup > h3')].map(node => node.textContent)).toEqual(language === 'zh'
+    ? ['外观与语言', '交互'] : ['Appearance and language', 'Interaction'])
+  expect([...mounted.values()]).toEqual(visibleIds.map(() => 1))
+  expect([...document.querySelectorAll('[data-action]')].map(node => node.dataset.action)).toEqual(['third-party-action'])
+  await click(document.querySelector('[data-action="third-party-action"]'))
+  expect(actionClicked).toHaveBeenCalledWith('third-party-action')
+  await click(document.querySelector('[data-dsh-settings-close]'))
+  expect(close).toHaveBeenCalledOnce()
   await click([...document.querySelectorAll('nav button')].find(node => node.textContent === 'third-party-extra'))
   expect(selected).toHaveBeenCalledWith('third-party-extra')
+})
+
+it('keeps the three native appearance cards and their persisted selection', async () => {
+  const f = await fixture()
+  const { AppearanceRow } = await builtInComponents('@deepseek-ai/dsh-client-ui-theme', ['AppearanceRow'])
+  const setTheme = vi.fn()
+  const render = preference => f.mount(AppearanceRow, {
+    setTheme, t: key => key, useStore: read => read({ preference })
+  })
+  await render('system')
+  const buttons = [...document.querySelectorAll('button[aria-pressed]')]
+  expect(buttons[0].parentElement.previousElementSibling.textContent).toBe('appearance.title')
+  expect(buttons.map(button => button.textContent)).toEqual(['appearance.light', 'appearance.dark', 'appearance.system'])
+  expect(buttons.every(button => button.firstElementChild?.tagName === 'svg')).toBe(true)
+  expect(buttons.map(button => button.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true'])
+  await click(buttons[1])
+  expect(setTheme).toHaveBeenCalledExactlyOnceWith('dark')
+  await render('dark')
+  expect(buttons.map(button => button.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false'])
+})
+
+it('keeps the active settings section visible and inert during exit and cancels exit on reopen', async () => {
+  const f = await fixture()
+  const { SettingsPanel } = await builtInComponents('@deepseek-ai/dsh-client-ui-settings-general', ['SettingsPanel'])
+  window.matchMedia = () => ({ matches: true })
+  vi.useFakeTimers()
+  try {
+    const selected = vi.fn()
+    const visibility = vi.fn()
+    window.addEventListener('dsh-desktop:settings-visibility', visibility)
+    const render = (open, activeId) => f.mount(SettingsPanel, {
+      open, activeId, rows: [{ id: 'general', label: 'General' }, { id: 'models', label: 'Models' }],
+      actionItems: [], renderSlot: f.renderSlot, onSelect: selected
+    })
+    await render(true, 'models')
+    const panel = document.querySelector('[data-dsh-settings-section]')
+    await render(false, undefined)
+    expect(panel.getAttribute('data-dsh-settings-section')).toBe('models')
+    expect(panel.hasAttribute('data-dsh-settings-exiting')).toBe(true)
+    expect(panel.querySelector('nav').hasAttribute('inert')).toBe(true)
+    expect(visibility.mock.calls.at(-1)[0].detail.open).toBe(true)
+    await act(async () => vi.advanceTimersByTime(150))
+    await render(true, 'general')
+    await act(async () => vi.advanceTimersByTime(300))
+    expect(panel.isConnected).toBe(true)
+    expect(panel.querySelector('nav').hasAttribute('inert')).toBe(false)
+    await render(false, undefined)
+    await act(async () => vi.advanceTimersByTime(300))
+    expect(panel.isConnected).toBe(false)
+    expect(visibility.mock.calls.at(-1)[0].detail.open).toBe(false)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('passes desktop controls to feature-owned rows and keeps their settings writers', async () => {
+  const f = await fixture()
+  const { SettingsPanel, GeneralSection, DeveloperToolsRow } = await builtInComponents('@deepseek-ai/dsh-client-ui-settings-general', ['SettingsPanel', 'GeneralSection', 'DeveloperToolsRow'])
+  const { LanguageRow } = await builtInComponents('@deepseek-ai/dsh-client-locale', ['LanguageRow'])
+  const setLocale = vi.fn()
+  const setEnabled = vi.fn(async () => { throw new Error('Save failed') })
+  const controls = {
+    Select: ({ value, label, options, onChange }) => React.createElement('select', {
+      value, 'aria-label': label, onChange: event => onChange(event.target.value)
+    }, options.map(option => React.createElement('option', { key: option.id, value: option.id }, option.label))),
+    Switch: ({ disabled, checked, label, onChange }) => React.createElement('button', {
+      role: 'switch', disabled, 'aria-checked': checked, onClick: () => onChange(!checked)
+    }, label)
+  }
+  const items = {
+    language: props => React.createElement(LanguageRow, {
+      ...props, t: () => 'Language', setLocale,
+      useStore: select => select({ active: 'zh', options: [{ id: 'zh', label: '简体中文' }, { id: 'en', label: 'English' }] })
+    }),
+    'developer-tools': props => React.createElement(DeveloperToolsRow, {
+      ...props, t: key => key, useDeveloperTools: select => select(false), setEnabled
+    })
+  }
+  const renderSlot = (name, props, options) => {
+    if (name === 'settings.controls') return props.render(controls)
+    if (name === 'settings.section') return React.createElement(GeneralSection, { ...props, useItems: select => select(Object.keys(items)), renderSlot })
+    if (name === 'settings.general.item') return items[options?.only]?.(props)
+    return f.renderSlot(name, props, options)
+  }
+  await f.mount(SettingsPanel, { rows: [{ id: 'general', label: 'General' }], actionItems: [], activeId: 'general', renderSlot })
+  const panel = document.querySelector('[data-dsh-settings-section]')
+  const content = panel.querySelector('[data-dsh-settings-content]')
+  expect(window.getComputedStyle(panel).overflow).toBe('visible')
+  expect(window.getComputedStyle(content).overflowY).toBe('auto')
+  const language = document.querySelector('select[aria-label="Language"]')
+  expect(language.value).toBe('zh')
+  await act(async () => {
+    language.value = 'en'
+    language.dispatchEvent(new window.Event('change', { bubbles: true }))
+  })
+  expect(setLocale).toHaveBeenCalledExactlyOnceWith('en')
+  const toggle = document.querySelector('[role=switch]')
+  await click(toggle)
+  expect(setEnabled).toHaveBeenCalledExactlyOnceWith(true)
+  expect(toggle.getAttribute('aria-checked')).toBe('false')
+  expect(toggle.disabled).toBe(false)
+  expect(document.querySelector('[role=alert]').textContent).toBe('developerTools.error')
+})
+
+it('publishes the embedded settings bounds after the panel entrance finishes', async () => {
+  const f = await fixture()
+  const { SettingsPanel } = await builtInComponents('@deepseek-ai/dsh-client-ui-settings-general', ['SettingsPanel'])
+  const state = { connected: true, settingsProtocolVersion: 1, navigation: { settings: { aiAccess: true } } }
+  let resolveState
+  window.dshEnterpriseChat.state = () => new Promise(resolve => { resolveState = resolve })
+  await act(async () => f.update(state))
+  const surface = vi.fn()
+  window.addEventListener('dsh-desktop:settings-surface', surface)
+  const aiAccess = f.registrations.find(row => row.options.id === 'desktop-ai-access')
+  const controls = { Spinner: () => React.createElement('span') }
+  await f.mount(SettingsPanel, {
+    rows: [{ id: 'desktop-ai-access', label: 'AI 助手接入' }],
+    activeId: 'desktop-ai-access',
+    actionItems: [],
+    renderSlot: (name, props, options) => name === 'settings.section'
+      ? React.createElement(aiAccess.Component, { ...aiAccess.options.inject(), controls })
+      : f.renderSlot(name, props, options),
+    onClose() {}
+  })
+  const panel = document.querySelector('[data-dsh-settings-section]')
+  const entrance = { animationName: 'dshSettingsEnter', playState: 'running' }
+  panel.getAnimations = () => [entrance]
+  await act(async () => resolveState(state))
+  expect(panel.querySelector('.dshSettingsLoading [data-state="ongoing"]')?.getAttribute('width')).toBe('32')
+  expect(surface).not.toHaveBeenCalled()
+  entrance.playState = 'finished'
+  const end = new window.Event('animationend')
+  Object.defineProperty(end, 'animationName', { value: entrance.animationName })
+  panel.dispatchEvent(end)
+  expect(surface).toHaveBeenCalledOnce()
+  expect(surface.mock.calls[0][0].detail.section).toBe('ai-access')
 })
 
 it('gives the Bisheng sections their own nav glyphs through the shell\'s native rows', async () => {
@@ -248,12 +399,16 @@ it('gives the Bisheng sections their own nav glyphs through the shell\'s native 
   expect(selected).toHaveBeenCalledWith('desktop-usage')
 })
 
-it.each(['zh', 'en'])('shows the desktop brand, version, and About actions (%s)', async language => {
+it.each(['zh', 'en'])('shows the desktop version and About actions without a divider (%s)', async language => {
   const f = await fixture(language)
   const entry = f.registrations.find(row => row.options.id === 'desktop-about')
   await f.mount(entry.Component, entry.options.inject())
-  expect(document.querySelector('.dshSettingsVersions dt')?.textContent).toBe(language === 'zh' ? 'LUOKUI-AI 版本' : 'LUOKUI-AI version')
-  expect(document.querySelector('.dshSettingsVersions dd')?.textContent).toBe('1.0.1')
+  const versions = document.querySelector('.dshSettingsVersions')
+  expect([...versions.children].map(node => node.textContent))
+    .toEqual([language === 'zh' ? 'LUOKUI-AI 版本' : 'LUOKUI-AI version', '1.0.1'])
+  const styles = document.querySelector('style[data-plugin-css="dsh-desktop-settings"]').sheet
+  const versionRule = [...styles.cssRules].find(rule => rule.selectorText === '.dshSettingsVersions')
+  expect(versionRule.style.getPropertyValue('border-bottom')).toBe('')
   expect(document.querySelector('details')).toBeNull()
   expect([...document.querySelectorAll('button')].map(node => node.textContent)).toEqual(language === 'zh' ? ['检查更新', '查看日志', '安全模式与插件恢复'] : ['Check for updates', 'Show logs', 'Safe Mode and plugin recovery'])
   await click(document.querySelectorAll('button')[2])
@@ -377,6 +532,38 @@ it('uses DSH plugin tabs for inventory and enterprise contributions without an A
   expect(document.querySelector('[role=tabpanel]:not([hidden])').textContent).toBe('desktop-workbenches')
   await click(tabs[0])
   expect([...mounted.values()]).toEqual([1, 1, 1])
+})
+
+it('delegates plugin tabs to Board UI and keeps visited contributions mounted', async () => {
+  const f = await fixture()
+  const { PluginsSettingsSection } = await builtInComponents('@deepseek-ai/dsh-client-ui-settings-plugins', ['PluginsSettingsSection'])
+  const rows = ['inventory', 'enterprise-market', 'desktop-workbenches'].map(id => ({ id, label: id }))
+  const controls = {
+    Tabs: vi.fn(({ value, items, onChange }) => React.createElement(React.Fragment, null,
+      items.map(({ id, label }) => React.createElement('button', { key: id, onClick: () => onChange(id) }, label)),
+      items.filter(item => item.id === value || item.keepMounted).map(item =>
+        React.createElement('div', { key: item.id, hidden: item.id !== value }, item.render()))))
+  }
+  const mounted = vi.fn()
+  function PluginPage({ id }) {
+    React.useEffect(() => { mounted(id) }, [id])
+    return id
+  }
+  await f.mount(PluginsSettingsSection, {
+    t: key => key,
+    controls,
+    useTabs: select => select(rows),
+    renderSlot: (name, props, options) => {
+      if (name !== 'settings.plugins.tab') return f.renderSlot(name, props, options)
+      expect(props.controls).toBe(controls)
+      return React.createElement(PluginPage, { id: options.only })
+    }
+  })
+  expect(controls.Tabs.mock.lastCall[0]).toMatchObject({ value: 'inventory', label: 'tabs' })
+  await click(document.querySelectorAll('button')[1])
+  expect(controls.Tabs.mock.lastCall[0]).toMatchObject({ value: 'enterprise-market' })
+  await click(document.querySelectorAll('button')[0])
+  expect(mounted.mock.calls).toEqual([['inventory'], ['enterprise-market']])
 })
 
 const click = async node => { expect(node).not.toBeNull(); await act(async () => node.click()) }
@@ -540,15 +727,21 @@ it('opens approvals outside Settings and releases the document surface when dism
   expect(surface.mock.calls.at(-1)[0].detail.section).toBe('my-tasks')
   const rail = [...document.querySelectorAll('[data-dsh-approvals-nav] button')]
   expect(rail.map(cell => cell.textContent)).toEqual(['我的审批', '我的申请', '通知'])
+  const title = document.querySelector('.dshApprovalsTitle')
+  expect(title.textContent).toBe('我的审批')
   expect(rail[0].getAttribute('aria-current')).toBe('true')
   await click(rail[1])
+  expect(title.textContent).toBe('我的申请')
   expect(surface.mock.calls.at(-1)[0].detail.section).toBe('my-requests')
   expect(rail[1].getAttribute('aria-current')).toBe('true')
   expect(rail[0].getAttribute('aria-current')).toBeNull()
   await act(async () => window.dispatchEvent(new window.CustomEvent('dsh-desktop:settings-focus', { detail: { section: 'my-requests', direction: 'previous' } })))
   expect(document.activeElement).toBe(rail[1])
   await act(async () => rail[1].dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
-  expect(surface.mock.calls.at(-1)[0].detail.section).toBe('notifications')
+  const notificationSurface = surface.mock.calls.at(-1)[0].detail
+  expect(title.textContent).toBe('通知')
+  expect(notificationSurface.section).toBe('notifications')
+  expect(notificationSurface.element).toBe(document.querySelector('[data-dsh-approvals-content] .dshSettingsRemote'))
   expect(document.activeElement).toBe(rail[2])
   await act(async () => window.dispatchEvent(new window.CustomEvent('dsh-desktop:settings-focus', { detail: { section: 'notifications', direction: 'next' } })))
   expect(document.activeElement).toBe(document.querySelector('[data-dsh-approvals-close]'))
@@ -562,6 +755,86 @@ it('opens approvals outside Settings and releases the document surface when dism
   await act(async () => window.dispatchEvent(new window.CustomEvent('dsh-desktop:close-settings')))
   expect(document.querySelector('[role=dialog]')).toBeNull()
   expect(document.activeElement).toBe(document.querySelector('.dshAccountTrigger'))
+})
+
+it.each(['animationend', 'animationcancel'])('publishes the message surface when the entrance emits %s', async eventName => {
+  const f = await fixture()
+  const surface = vi.fn()
+  const state = { connected: true, settingsProtocolVersion: 1 }
+  let resolveState
+  window.dshEnterpriseChat.state = () => new Promise(resolve => { resolveState = resolve })
+  window.addEventListener('dsh-desktop:settings-surface', surface)
+  await f.render('settings.launcher', { wide: true })
+  await click(document.querySelector('.dshAccountTrigger'))
+  await click(menuItem('消息'))
+  const dialog = document.querySelector('.dshApprovalsDialog')
+  const entrance = { animationName: 'dshSettingsEnter', playState: 'running' }
+  dialog.getAnimations = () => [entrance]
+  await act(async () => resolveState(state))
+  expect(surface).not.toHaveBeenCalled()
+  entrance.playState = eventName === 'animationend' ? 'finished' : 'idle'
+  const event = new window.Event(eventName, { bubbles: true })
+  Object.defineProperty(event, 'animationName', { value: entrance.animationName })
+  dialog.querySelector('.dshSettingsRemote').dispatchEvent(event)
+  expect(surface).not.toHaveBeenCalled()
+  dialog.dispatchEvent(event)
+  expect(surface).toHaveBeenCalledOnce()
+  expect(surface.mock.calls[0][0].detail.section).toBe('my-tasks')
+})
+
+it('withdraws the native message surface before the closing animation removes the modal', async () => {
+  const f = await fixture()
+  const surface = vi.fn(), visibility = vi.fn()
+  window.matchMedia = () => ({ matches: true })
+  window.addEventListener('dsh-desktop:settings-surface', surface)
+  window.addEventListener('dsh-desktop:approvals-visibility', visibility)
+  await f.render('settings.launcher', { wide: true })
+  await click(document.querySelector('.dshAccountTrigger'))
+  await click(menuItem('消息'))
+  vi.useFakeTimers()
+  try {
+    await click(document.querySelector('[data-dsh-approvals-close]'))
+    expect(document.querySelector('.dshSettingsExiting [data-dsh-approvals]').hasAttribute('inert')).toBe(true)
+    expect(surface.mock.calls.at(-1)[0].detail.close).toBe(true)
+    expect(visibility.mock.calls.at(-1)[0].detail.open).toBe(true)
+    await act(async () => vi.advanceTimersByTime(300))
+    expect(document.querySelector('.dshApprovalsDialog')).toBeNull()
+    expect(visibility.mock.calls.at(-1)[0].detail.open).toBe(false)
+    expect(document.activeElement).toBe(document.querySelector('.dshAccountTrigger'))
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it.each([
+  ['zh', '消息', '正在加载...'],
+  ['en', 'Messages', 'Loading...']
+])('shows one spinner above the shared loading label in each message section (%s)', async (language, messagesLabel, loadingLabel) => {
+  const f = await fixture(language)
+  await f.render('settings.launcher', { wide: true })
+  await click(document.querySelector('.dshAccountTrigger'))
+  await click(menuItem(messagesLabel))
+  const content = document.querySelector('[data-dsh-approvals-content]')
+  const buttons = [...document.querySelectorAll('[data-dsh-approvals-nav] button')]
+  expect(buttons).toHaveLength(3)
+  for (const button of buttons) {
+    await click(button)
+    const status = content.querySelector('[role=status]')
+    expect(status.children).toHaveLength(2)
+    expect(status.firstElementChild.getAttribute('data-state')).toBe('ongoing')
+    expect(status.firstElementChild.getAttribute('width')).toBe('32')
+    expect(status.lastElementChild.textContent).toBe(loadingLabel)
+  }
+
+  const state = { connected: true, settingsProtocolVersion: 1, settingsSection: 'notifications' }
+  await act(async () => f.update({ ...state, phase: 'error' }))
+  expect(content.querySelector('[data-state=ongoing]')).toBeNull()
+  await click(content.querySelector('[role=alert] button'))
+  expect(window.dshEnterpriseChat.retry).toHaveBeenCalledOnce()
+  expect(content.querySelector('[data-state=ongoing]')).not.toBeNull()
+
+  await act(async () => f.update({ ...state, phase: 'ready', settingsReady: true }))
+  expect(content.querySelector('[role=status]')).toBeNull()
 })
 
 it('uses native phone pairing and keeps a failed action retryable', async () => {

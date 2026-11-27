@@ -1,0 +1,24 @@
+diff --git a/node_modules/@deepseek-ai/dsh-client-ui-shortcuts/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-shortcuts/lib/client.js
+index 0b006b2..030b6ad 100644
+--- a/node_modules/@deepseek-ai/dsh-client-ui-shortcuts/lib/client.js
++++ b/node_modules/@deepseek-ai/dsh-client-ui-shortcuts/lib/client.js
+@@ -529,7 +529,7 @@ window.__ModuleLoader__.load({
+ 		* @param props - shared dialog action and localized labels.
+ 		* @returns the settings row.
+ 		*/
+-		function ShortcutsRow({ actions, t, useCatalog }) {
++		function ShortcutsRow({ actions, t, useCatalog, controls }) {
+ 			const shortcut = useCatalog((rows) => rows.find((row) => row.id === "shortcuts.open"));
+ 			return (0, react_jsx_runtime.jsxs)("div", {
+ 				className: Reference_module_css_default.setting,
+@@ -546,8 +546,8 @@ window.__ModuleLoader__.load({
+ 					disabled: !shortcut?.keys.length,
+ 					label: t("global-hint"),
+ 					shortcutKeys: shortcut?.keys,
+-					children: (0, react_jsx_runtime.jsx)("button", {
+-						className: Reference_module_css_default.button,
++					children: (0, react_jsx_runtime.jsx)(controls?.Button ?? "button", {
++						className: controls?.Button ? void 0 : Reference_module_css_default.button,
+ 						type: "button",
+ 						"aria-label": t("view"),
+ 						"aria-keyshortcuts": shortcut?.aria,

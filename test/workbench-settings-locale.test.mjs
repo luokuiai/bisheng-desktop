@@ -60,13 +60,34 @@ function setup({ enabled, publicMarket }) {
     invalidate,
     fetch,
     notifyAccountChanged: () => windowEvents.dispatchEvent(new Event('dsh-desktop:enterprise-account-changed')),
-    render: () => renderToStaticMarkup(tab.Component()),
+    render: (props) => renderToStaticMarkup(tab.Component(props)),
+    storedEnabled: () => storage.get('dsh-workbench-enabled'),
     switchLanguage: active => { snapshot = { active, revision: snapshot.revision + 1 }; listeners.forEach(listener => listener()) },
     dispose: () => dispose.reverse().forEach(cleanup => cleanup())
   }
 }
 
 describe('workbench settings locale', () => {
+  it('renders the supplied settings switch and persists its changes', () => {
+    const ui = setup({ enabled: false, publicMarket: true })
+    const BoardSwitch = vi.fn(({ label, checked }) =>
+      React.createElement('button', { role: 'switch', 'aria-label': label, 'aria-checked': checked, 'data-board-switch': '' }))
+    const props = { controls: { Switch: BoardSwitch } }
+    try {
+      expect(ui.render(props)).toContain('data-board-switch=""')
+      const [initial] = BoardSwitch.mock.lastCall
+      expect(initial).toMatchObject({ label: 'Show workbenches in the sidebar', checked: false })
+      initial.onChange(true)
+      expect(ui.storedEnabled()).toBe('true')
+      expect(ui.invalidate).toHaveBeenCalled()
+      expect(ui.render(props)).toContain('aria-checked="true"')
+      const [enabled] = BoardSwitch.mock.lastCall
+      enabled.onChange(false)
+      expect(ui.storedEnabled()).toBe('false')
+      expect(ui.render(props)).toContain('aria-checked="false"')
+    } finally { ui.dispose() }
+  })
+
   it('refreshes capability on account changes and unsubscribes on disposal', () => {
     const ui = setup({ enabled: true, publicMarket: true })
     try {

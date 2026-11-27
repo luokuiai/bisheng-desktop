@@ -62,7 +62,7 @@ window.__ModuleLoader__.load({
       .dshImageCard :focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
       .dshImageHeader:focus-visible{outline-offset:-2px}.dshImageSave:focus-visible{outline-offset:1px}
       .dshImageFetch{appearance:none;align-self:flex-start;font:inherit;font-size:13px;line-height:1.5;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:5px 14px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}.dshImageFetch:disabled{opacity:.4;cursor:default}
-      .dshImageHostControl{border-bottom:.5px solid var(--dsw-alias-border-l2);padding:12px 0;display:flex;flex-direction:column;gap:8px}.dshImageHostControl label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--dsw-alias-label-primary);cursor:pointer}.dshImageHostControl input{accent-color:var(--dsw-alias-brand-primary)}
+      .dshImageHostControl{border-bottom:.5px solid var(--dsw-alias-border-l2);padding:12px 0;display:flex;flex-direction:column;gap:8px}.dshImageHostControl>label,.dshImageHostSwitch{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--dsw-alias-label-primary)}.dshImageHostControl>label{cursor:pointer}.dshImageHostControl input{accent-color:var(--dsw-alias-brand-primary)}
     `
     const emptyDrafts = {
       bytedance: { baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seedream-4-5-251128', configured: false, validation: null, apiKey: '' },
@@ -104,7 +104,8 @@ window.__ModuleLoader__.load({
             'aria-haspopup': 'menu', 'aria-expanded': open && !disabled, onClick: () => setOpen(previous => !previous) },
             h('span', { id: `${id}-value`, className: 'dshImageSelectValue' }, options.find(option => option.id === value)?.label || value), h(IconChevronDownOutlineRegular)) }))
     }
-    function ImageCard({ t, callApi }) {
+    function ImageCard({ t, callApi, controls }) {
+      const Button = controls?.Button ?? 'button'
       const [expanded, setExpanded] = React.useState(false)
       const [saved, setSaved] = React.useState(null)
       const [drafts, setDrafts] = React.useState({})
@@ -173,8 +174,7 @@ window.__ModuleLoader__.load({
         }, () => { if (active) setHostError(true) })
         return () => { active = false }
       }, [])
-      const toggleHost = async event => {
-        const enabled = event.target.checked
+      const toggleHost = async enabled => {
         setHostBusy(true); setHostError(false)
         try {
           const result = await globalThis.dshDesktop.setBuiltInImageGenerationEnabled(enabled)
@@ -226,33 +226,39 @@ window.__ModuleLoader__.load({
       }
       const field = (key, label, type = 'text', placeholder) => h('label', { className: 'dshImageField', key },
         t(label), h('input', { name: key, type, value: draft[key], placeholder, autoComplete: 'off', spellCheck: false, onChange: event => edit(key, event.target.value) }))
+      const renderSelect = props => controls?.Select
+        ? h('div', { className: 'dshImageField' }, h('span', null, props.label), h(controls.Select, props))
+        : h(ImageSelect, props)
       return h('section', { className: `dshImageCard${expanded ? ' dshImageCardOpen' : ''}`, 'data-testid': 'image-generation-card' },
         h('button', { className: 'dshImageHeader', type: 'button', 'aria-expanded': expanded, 'aria-controls': `${id}-body`, onClick: () => setExpanded(value => !value) },
           h('span', { className: 'dshImageHeading' }, h('span', { className: 'dshImageTitle' }, t('title')), h('span', { className: 'dshImageDescription' }, t('description'))),
           h(IconChevronDownOutlineRegular, { className: 'dshImageChevron' })),
         expanded && h('form', { id: `${id}-body`, className: 'dshImageBody', onSubmit: save, 'aria-busy': busy || fetching || loading },
           hostEnabled !== null && h('div', { className: 'dshImageHostControl' },
-            h('label', null, h('input', { type: 'checkbox', role: 'switch', checked: hostEnabled, disabled: hostBusy, onChange: toggleHost }), t('builtInEnabled')),
+            controls?.Switch
+              ? h('div', { className: 'dshImageHostSwitch' },
+                h(controls.Switch, { label: t('builtInEnabled'), checked: hostEnabled, disabled: hostBusy, onChange: toggleHost }), t('builtInEnabled'))
+              : h('label', null, h('input', { type: 'checkbox', role: 'switch', checked: hostEnabled, disabled: hostBusy, onChange: event => toggleHost(event.target.checked) }), t('builtInEnabled')),
             h('p', { className: 'dshImageHint' }, t('builtInHint')),
-            hostPending && h('button', { className: 'dshImageFetch', type: 'button', disabled: hostBusy, onClick: restartHost }, t('builtInRestart'))),
+            hostPending && h(Button, { className: controls?.Button ? undefined : 'dshImageFetch', type: 'button', disabled: hostBusy, onClick: restartHost }, t('builtInRestart'))),
           hostError && h('p', { className: 'dshImageStatus dshImageError', role: 'alert' }, t('builtInFailed')),
           loading ? h('p', { className: 'dshImageHint' }, t('loading')) : draft && h(React.Fragment, null,
             !loadFailed && h('p', { className: 'dshImageHint' }, t(draft.configured ? 'configuredHint' : 'setupHint')),
             h('fieldset', { className: 'dshImageFields', disabled: busy || fetching || !writable },
-              h(ImageSelect, { name: 'provider', label: t('provider'), value: provider, disabled: busy || fetching || !writable,
+              renderSelect({ name: 'provider', label: t('provider'), value: provider, disabled: busy || fetching || !writable,
                 options: [{ id: 'bytedance', label: t('bytedance') }, { id: 'openai', label: t('openai') }],
                 onChange: value => { setProvider(value); setStatus(''); setError('') } }),
               field('apiKey', 'apiKey', 'password', t(draft.configured ? 'savedKey' : 'keyPlaceholder')),
-              h(ImageSelect, { name: 'model', label: t('modelSelect'), value: customModels[provider] || !catalog.models.includes(draft.model) ? '__custom__' : draft.model, disabled: busy || fetching || !writable,
+              renderSelect({ name: 'model', label: t('modelSelect'), value: customModels[provider] || !catalog.models.includes(draft.model) ? '__custom__' : draft.model, disabled: busy || fetching || !writable,
                 options: [...catalog.models.map(model => ({ id: model, label: model })), { id: '__custom__', label: t('customModel') }],
                 onChange: value => { const custom = value === '__custom__'; setCustomModels(previous => ({ ...previous, [provider]: custom })); if (!custom) edit('model', value) } }),
               (customModels[provider] || !catalog.models.includes(draft.model)) && field('model', 'model'),
-              catalog.canFetch && h('button', { className: 'dshImageFetch', type: 'button', disabled: !(draft.apiKey || '').trim() && !draft.configured, onClick: fetchModels }, t(fetching ? 'fetchingModels' : 'fetchModels')),
+              catalog.canFetch && h(Button, { className: controls?.Button ? undefined : 'dshImageFetch', type: 'button', disabled: !(draft.apiKey || '').trim() && !draft.configured, onClick: fetchModels }, t(fetching ? 'fetchingModels' : 'fetchModels')),
               catalog.source === 'provider' && catalog.models.length === 0 && h('p', { className: 'dshImageHint', role: 'status' }, t('emptyModels')),
               h('details', { className: 'dshImageAdvanced' }, h('summary', null, t('advanced')), field('baseUrl', 'baseUrl'))),
             h('div', { className: 'dshImageActions' },
-              h('button', { className: 'dshImageSave', type: 'submit', disabled: busy || fetching || !writable || !(draft.model || '').trim() }, t(busy ? 'saving' : 'save')),
-              error === 'LOAD_FAILED' && h('button', { className: 'dshImageFetch', type: 'button', onClick: () => load(lifetime.current.signal) }, t('reload')),
+              h(Button, { ...(controls?.Button ? { variant: 'primary' } : { className: 'dshImageSave' }), type: 'submit', disabled: busy || fetching || !writable || !(draft.model || '').trim() }, t(busy ? 'saving' : 'save')),
+              error === 'LOAD_FAILED' && h(Button, { className: controls?.Button ? undefined : 'dshImageFetch', type: 'button', onClick: () => load(lifetime.current.signal) }, t('reload')),
               status && h('p', { className: 'dshImageStatus', role: 'status' }, t(status))),
             saved && !saved.writable && h('p', { className: 'dshImageHint' }, t('readOnly'))),
           error && h('p', { className: 'dshImageStatus dshImageError', role: 'alert' }, t(Object.hasOwn(en, error) ? error : 'UNAVAILABLE'))))

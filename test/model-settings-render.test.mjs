@@ -1,9 +1,40 @@
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import vm from 'node:vm'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 
-it.each(['DeepSeekModelsEditor', 'ModelListEditor'])('%s expands options and edits capacity without losing other capabilities', async (editorName) => {
+const mockContext = fallback => ({ Provider: ({ children }) => children, fallback })
+
+it.each([false, true])('retries a failed model directory load with BoardUI enabled=%s', async board => {
+  const require = createRequire(import.meta.url)
+  const path = require.resolve('@deepseek-ai/dsh-client-ui-settings-models/package.json').replace('package.json', 'lib/client.js')
+  const source = (await readFile(path, 'utf8')).replace('exports.apply = apply;', 'exports.ModelsSection = ModelsSection; exports.apply = apply;')
+  const jsx = (type, props) => typeof type === 'function' ? type(props) : { type, props }
+  const Button = props => ({ type: 'board-button', props })
+  const modules = {
+    react: { useState: initial => [initial, () => {}], useId: () => 'section', createContext: mockContext },
+    'react/jsx-runtime': { jsx, jsxs: jsx },
+    '@deepseek-ai/dsh-client-ui-primitives': {},
+    '@deepseek-ai/dsh-client-store': {}
+  }
+  let ModelsSection
+  vm.runInNewContext(source, { window: { __ModuleLoader__: { load({ factory }) {
+    ModelsSection = factory(id => modules[id]).ModelsSection
+  } } } })
+  const load = vi.fn()
+  const section = ModelsSection({
+    controller: { load }, operations: {}, schema: {},
+    useSnapshot: select => select({ status: 'error', error: 'Offline', rows: [] }), t: key => key,
+    controls: board ? { Button } : undefined
+  })
+  const retry = section.props.children[1]
+  expect(retry.type).toBe(board ? 'board-button' : 'button')
+  expect(retry.props.children).toBe('retry')
+  retry.props.onClick()
+  expect(load).toHaveBeenCalledOnce()
+})
+
+it.each(['DeepSeekModelsEditor', 'ModelListEditor'].flatMap(editor => [[editor, false], [editor, true]]))('%s preserves model options with Board UI enabled=%s', async (editorName, board) => {
   const require = createRequire(import.meta.url)
   const path = require.resolve('@deepseek-ai/dsh-client-ui-settings-models/package.json').replace('package.json', 'lib/client.js')
   const source = (await readFile(path, 'utf8')).replace('exports.apply = apply;', `exports.editor = ${editorName}; exports.apply = apply;`)
@@ -20,7 +51,11 @@ it.each(['DeepSeekModelsEditor', 'ModelListEditor'])('%s expands options and edi
       if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial
       return [states[index], value => { states[index] = typeof value === 'function' ? value(states[index]) : value }]
     },
-    useMemo: fn => fn(), useEffect() {}, useRef: value => ({ current: value })
+    useMemo: fn => fn(), useEffect() {}, useRef: value => ({ current: value }),
+    createContext: mockContext, useContext: context => board ? {
+      Button: props => ({ type: 'board-button', props }),
+      Switch: ({ label, ...props }) => ({ type: 'board-switch', props: { ...props, 'aria-label': label } })
+    } : context.fallback
   }
   const primitivesSource = await readFile(require.resolve('@deepseek-ai/dsh-client-ui-primitives'), 'utf8')
   const primitives = Object.fromEntries([...primitivesSource.matchAll(/const (Icon\w+) =/g)].map(match => [match[1], () => ({ type: 'svg', props: {} })]))
@@ -38,7 +73,9 @@ it.each(['DeepSeekModelsEditor', 'ModelListEditor'])('%s expands options and edi
   const tokensLabel = editorName === 'DeepSeekModelsEditor' ? 'maxTokens 1' : 'modelMaxTokens 1'
   let tree = render()
   expect(find(tree, contextLabel)).toBeUndefined()
-  find(tree, 'modelAdvanced 1').props.onClick()
+  const advanced = find(tree, 'modelAdvanced 1')
+  expect(advanced.type).toBe(board ? 'board-button' : 'button')
+  advanced.props.onClick()
   tree = render()
   expect(find(tree, contextLabel).props.value).toBe('128K')
   expect(find(tree, tokensLabel).props.value).toBe('8K')
@@ -48,7 +85,9 @@ it.each(['DeepSeekModelsEditor', 'ModelListEditor'])('%s expands options and edi
   tree = render()
   find(tree, contextLabel).props.onBlur?.()
   expect(find(render(), contextLabel).props.value).toBe('256K')
-  find(render(), 'modelImageInput 1').props.onChange({ target: { checked: false } })
+  const inputToggle = find(render(), 'modelImageInput 1')
+  expect(inputToggle.type).toBe(board ? 'board-switch' : 'input')
+  inputToggle.props.onChange(board ? false : { target: { checked: false } })
   const inputField = editorName === 'DeepSeekModelsEditor' ? 'inputModalities' : 'input'
   expect(models[0][inputField]).toEqual(['text'])
   if (editorName === 'DeepSeekModelsEditor') {
@@ -58,8 +97,12 @@ it.each(['DeepSeekModelsEditor', 'ModelListEditor'])('%s expands options and edi
     expect(models[0].imageMaxBytes).toBe(12345)
   }
   expect(models[0].contextWindow).toBe(256000)
-  find(render(), 'modelImageInput 1').props.onChange({ target: { checked: true } })
+  find(render(), 'modelImageInput 1').props.onChange(board ? true : { target: { checked: true } })
   expect(models[0][inputField]).toEqual(['text', 'image'])
+  const remove = find(render(), 'removeModel 1')
+  expect(remove.type).toBe(board ? 'board-button' : 'button')
+  remove.props.onClick()
+  expect(models).toEqual([])
 })
 
 it.each(['loading', 'missing-key', 'ready', 'error'])('onboarding handles %s without an undefined readiness state', async status => {
@@ -68,7 +111,7 @@ it.each(['loading', 'missing-key', 'ready', 'error'])('onboarding handles %s wit
   const source = (await readFile(path, 'utf8')).replace('exports.apply = apply;', 'exports.dialog = DeepSeekOnboardingDialog; exports.apply = apply;')
   let dialog
   const effects = []
-  const react = { useState: initial => [initial, () => {}], useEffect: fn => effects.push(fn) }
+  const react = { useState: initial => [initial, () => {}], useEffect: fn => effects.push(fn), createContext: mockContext }
   const jsx = (type, props) => ({ type, props })
   vm.runInNewContext(source, { window: { __ModuleLoader__: { load({ factory }) {
     dialog = factory(id => ({ react, 'react/jsx-runtime': { jsx, jsxs: jsx }, '@deepseek-ai/dsh-client-ui-primitives': {}, '@deepseek-ai/dsh-client-store': {} })[id]).dialog

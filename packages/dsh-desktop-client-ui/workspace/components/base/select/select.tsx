@@ -79,6 +79,7 @@ export interface SelectProps<T extends object>
   triggerClassName?: string;
   /** Classes for the open popover (e.g. constrain its width). */
   popoverClassName?: string;
+  portalContainer?: Element;
   /** `md` (default) or `sm` for compact/dense contexts (e.g. compact tables). */
   size?: SelectSize;
   /** The open menu's density: `compact` (default) or the roomier `comfortable`. */
@@ -96,6 +97,7 @@ function SelectView<T extends object>({
   className,
   triggerClassName,
   popoverClassName,
+  portalContainer,
   size = "md",
   variant = "compact",
   children,
@@ -115,6 +117,21 @@ function SelectView<T extends object>({
   const popoverRef = useRef<HTMLElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   useDismissOnOutsidePress(isOpen, () => setIsOpen(false), [triggerRef, popoverRef]);
+  useLayoutEffect(() => {
+    const dialog = portalContainer?.closest<HTMLElement>('[role="dialog"]');
+    if (!isOpen || !dialog) return;
+
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing ||
+          event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setIsOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
+    };
+    dialog.addEventListener("keydown", dismissOnEscape, true);
+    return () => dialog.removeEventListener("keydown", dismissOnEscape, true);
+  }, [isOpen, portalContainer]);
   // Pressing the trigger while open closes the popover instead of reopening
   const allowOpenChange = useTriggerToggle(isOpen, triggerRef);
   const compact = variant === "compact";
@@ -164,6 +181,7 @@ function SelectView<T extends object>({
           </AriaButton>
           <AriaPopover
             ref={popoverRef}
+            UNSTABLE_portalContainer={portalContainer}
             isNonModal
             offset={4}
             className={cx(

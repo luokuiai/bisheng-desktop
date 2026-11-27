@@ -1,5 +1,5 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.js
-index 9700d03..42df38e 100644
+index 9700d03..3783642 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.js
 @@ -93,6 +93,78 @@ window.__ModuleLoader__.load({
@@ -461,7 +461,77 @@ index 9700d03..42df38e 100644
  					referenceLabels.length > 0 && (0, react_jsx_runtime.jsx)("div", {
  						className: MessageItem_module_css_default.referenceSummary,
  						children: t("message.referenceSummary", { labels: referenceLabels.join(t("message.referenceSeparator")) })
-@@ -13050,11 +13270,13 @@ window.__ModuleLoader__.load({
+@@ -12768,7 +12988,7 @@ window.__ModuleLoader__.load({
+ 		* @param props - localized copy, selected value, choices, and mutation callback.
+ 		* @returns the settings row.
+ 		*/
+-		function PreferenceRow({ title, description, value, selectedLabel, options, onSelect }) {
++		function PreferenceRow({ title, description, value, selectedLabel, options, onSelect, controls }) {
+ 			const [open, setOpen] = (0, react.useState)(false);
+ 			const selectorRef = (0, react.useRef)(null);
+ 			const closeMenu = () => {
+@@ -12801,7 +13021,12 @@ window.__ModuleLoader__.load({
+ 						className: PreferenceRow_module_css_default.desc,
+ 						children: description
+ 					})]
+-				}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
++				}), controls?.Select ? (0, react_jsx_runtime.jsx)(controls.Select, {
++					label: title,
++					value,
++					options,
++					onChange: onSelect
++				}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
+ 					open,
+ 					onClose: closeMenu,
+ 					items: options,
+@@ -12830,10 +13055,11 @@ window.__ModuleLoader__.load({
+ 		* @param props - composed Settings slot props.
+ 		* @returns the preference row.
+ 		*/
+-		function TranscriptViewRow({ useTranscriptView, setTranscriptView, useCollapseTiming, setCollapseTiming, t }) {
++		function TranscriptViewRow({ useTranscriptView, setTranscriptView, useCollapseTiming, setCollapseTiming, t, controls }) {
+ 			const mode = useTranscriptView((value) => value);
+ 			const timing = useCollapseTiming((value) => value);
+ 			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)(PreferenceRow, {
++				controls,
+ 				title: t("settings.transcript.title"),
+ 				description: t("settings.transcript.description"),
+ 				value: mode,
+@@ -12846,6 +13072,7 @@ window.__ModuleLoader__.load({
+ 					setTranscriptView(value);
+ 				}
+ 			}), (0, react_jsx_runtime.jsx)(PreferenceRow, {
++				controls,
+ 				title: t("settings.collapse.title"),
+ 				description: t("settings.collapse.description"),
+ 				value: timing,
+@@ -12924,10 +13151,11 @@ window.__ModuleLoader__.load({
+ 		* @param props - Composed Settings slot props.
+ 		* @returns The preference row.
+ 		*/
+-		function LinkOpeningRow({ useLinkOpening, useBrowserAvailable, setLinkOpening, t }) {
++		function LinkOpeningRow({ useLinkOpening, useBrowserAvailable, setLinkOpening, t, controls }) {
+ 			const destination = useLinkOpening((value) => value);
+ 			if (!useBrowserAvailable((value) => value)) return null;
+ 			return (0, react_jsx_runtime.jsx)(PreferenceRow, {
++				controls,
+ 				title: t("settings.links.title"),
+ 				description: t("settings.links.description"),
+ 				value: destination,
+@@ -12958,10 +13186,11 @@ window.__ModuleLoader__.load({
+ 		* @param props - composed Settings slot props.
+ 		* @returns the preference row.
+ 		*/
+-		function PerformanceUsageRow({ usePerformanceUsage, setPerformanceUsage, t }) {
++		function PerformanceUsageRow({ usePerformanceUsage, setPerformanceUsage, t, controls }) {
+ 			const mode = usePerformanceUsage((value) => value);
+ 			const selectedLabel = mode === "detailed" ? "settings.performance.detailed" : "settings.performance.compact";
+ 			return (0, react_jsx_runtime.jsx)(PreferenceRow, {
++				controls,
+ 				title: t("settings.performance.title"),
+ 				description: t("settings.performance.description"),
+ 				value: mode,
+@@ -13050,11 +13279,13 @@ window.__ModuleLoader__.load({
  			"uiWorkspace",
  			"uiSession",
  			"uiConversation",
@@ -476,7 +546,7 @@ index 9700d03..42df38e 100644
  		];
  		/**
  		* Mount all Chat-owned contributions.
-@@ -13144,6 +13366,14 @@ window.__ModuleLoader__.load({
+@@ -13144,6 +13375,14 @@ window.__ModuleLoader__.load({
  				}, LinkOpeningRow));
  			});
  			const transcriptView = new TranscriptViewPolicy(chatSettings, "dshDesktop" in globalThis ? "standard" : DEFAULT_TRANSCRIPT_VIEW_MODE);
@@ -491,7 +561,7 @@ index 9700d03..42df38e 100644
  			const presentation = derivePresentationPolicy(transcriptView.mode, transcriptView.collapseTiming);
  			const performancePolicy = new PerformanceUsagePolicy(chatSettings);
  			ctx.effect(() => () => {
-@@ -13156,6 +13386,7 @@ window.__ModuleLoader__.load({
+@@ -13156,6 +13395,7 @@ window.__ModuleLoader__.load({
  				name: "conversation.chat.user.content",
  				scope: "session",
  				locale: NS,
@@ -499,7 +569,7 @@ index 9700d03..42df38e 100644
  				children: { "conversation.chat.user.images": {
  					kind: "single",
  					scope: "session"
-@@ -13208,7 +13439,7 @@ window.__ModuleLoader__.load({
+@@ -13208,7 +13448,7 @@ window.__ModuleLoader__.load({
  				name: "conversation.chat.flow",
  				locale: NS,
  				store: chatStore,
@@ -508,7 +578,7 @@ index 9700d03..42df38e 100644
  					kind: "keyed",
  					scope: "session",
  					inject: CHAT_NODE_INJECT
-@@ -13242,10 +13473,21 @@ window.__ModuleLoader__.load({
+@@ -13242,10 +13482,21 @@ window.__ModuleLoader__.load({
  							fileMentions: (owner) => ctx.get("chatFileMentions")?.forClosing(owner, sessionId),
  							openFile: async (path, options) => {
  								const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd;

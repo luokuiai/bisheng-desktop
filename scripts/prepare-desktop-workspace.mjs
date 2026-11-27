@@ -16,8 +16,13 @@ function adaptRootSelectors(sheet) {
   // Harness owns the document. Resets, dark palettes and themed images must
   // match at each scoped page or portal root when the document changes theme.
   sheet.walkRules(rule => {
-    rule.selector = rule.selector.replace(/:root\b|(?<![\w.#-])(?:html|body)(?=[\s.,:{\[>]|$)/gu, ':scope')
-    rule.selectors = rule.selectors.map(selector => selector.replace(/^(?::scope)?\.dark(?=\s|$)/u, ':scope:where(.dark, .dark *)'))
+    rule.selectors = rule.selectors.map(selector => {
+      const pageRoot = /^(?:html|body)(?=[\s.:[>]|$)/u.test(selector)
+      const scoped = selector
+        .replace(/:root\b|(?<![\w.#-])(?:html|body)(?=[\s.,:{\[>]|$)/gu, ':scope')
+        .replace(/^(?::scope)?\.dark(?=\s|$)/u, ':scope:where(.dark, .dark *)')
+      return pageRoot ? scoped.replace(/^:scope/u, ':scope:not(:where(.dshSettingsControl))') : scoped
+    })
   })
 }
 
@@ -30,7 +35,7 @@ async function buildWorkspace(outdir) {
   // bundle import the same objects as the surrounding slot (including portals).
   const hostModules = new Set(['react', 'react-dom', 'react/jsx-runtime'])
   await build({
-    entryPoints: [path.join(source, 'pages.tsx')], outdir, bundle: true,
+    entryPoints: ['pages.tsx', 'settings-controls.tsx'].map(file => path.join(source, file)), outdir, bundle: true,
     format: 'esm', platform: 'browser', target: 'chrome140', splitting: true,
     // Preserve the dsh-workspace filename prefix on CSS Module classes and
     // keyframes. Other independently built plugins share this document.
@@ -59,7 +64,7 @@ async function buildWorkspace(outdir) {
   const workspaceStyle = await readFile(path.join(styleDir, 'workspace.css'), 'utf8')
   sheet.append(postcss.parse(workspaceStyle))
   adaptRootSelectors(sheet)
-  const scoped = postcss.atRule({ name: 'scope', params: pageScopes })
+  const scoped = postcss.atRule({ name: 'scope', params: pageScopes.replace(/\)$/u, ', .dshSettingsControl)') })
   const css = postcss.root()
   // @property declarations must be globally registered for transform, gradient,
   // and shadow utilities. The names are Tailwind-prefixed.

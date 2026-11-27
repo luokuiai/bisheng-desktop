@@ -31,13 +31,19 @@ it('updates the authenticated model catalog when the official key is stored and 
       name: 'credential-catalog-test-profile', private: true, dependencies: {},
       dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } }
     }))
-    await writeFile(join(profile, 'cordis.patch.yml'), '[]\n')
+    const profilePatch = ['- id: session-log-deepseek', '  config:', '    enabled: true', ''].join('\n')
+    await writeFile(join(profile, 'cordis.patch.yml'), profilePatch)
     await runtime.start(home)
     expect(runtime.snapshot().phase, runtime.snapshot().logs.join('\n')).toBe('ready')
     const { url, authToken } = runtime.snapshot()
     if (!url || !authToken) throw new Error('Harness endpoint is required')
     const login = await fetch(`${url}/?token=${encodeURIComponent(authToken)}`, { redirect: 'manual' })
     const cookie = login.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+    const page = await fetch(url, { headers: { Cookie: cookie } })
+    expect(page.status).toBe(200)
+    const html = await page.text()
+    expect(html).toContain('@deepseek-ai/dsh-client-ui-settings-general')
+    expect(html).not.toContain('@deepseek-ai/dsh-client-ui-settings-session-log')
     let sequence = 0
     const invoke = async (method: string, args = {}) => {
       const response = await fetch(new URL(`/api/${method}`, url), {

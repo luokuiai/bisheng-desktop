@@ -1,0 +1,51 @@
+diff --git a/node_modules/@deepseek-ai/dsh-client-ui-settings-plugin-inventory/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-settings-plugin-inventory/lib/client.js
+index 459288b..4282f3a 100644
+--- a/node_modules/@deepseek-ai/dsh-client-ui-settings-plugin-inventory/lib/client.js
++++ b/node_modules/@deepseek-ai/dsh-client-ui-settings-plugin-inventory/lib/client.js
+@@ -280,7 +280,8 @@ window.__ModuleLoader__.load({
+ 			});
+ 		}
+ 		/** Render the read-only plugin inventory: agent presets first, then the global plane. */
+-		function PluginInventorySettingsTab({ list, presetName, resolveText, t, useClientSync, retryClient }) {
++		function PluginInventorySettingsTab({ list, presetName, resolveText, t, useClientSync, retryClient, controls }) {
++			const ActionButton = controls?.Button ?? "button";
+ 			const clientSync = useClientSync((snapshot) => snapshot);
+ 			const sectionId = (0, react.useId)();
+ 			const [request, setRequest] = (0, react.useState)(0);
+@@ -438,7 +439,7 @@ window.__ModuleLoader__.load({
+ 								": ",
+ 								failure.message
+ 							] }, failure.id)) }),
+-							(0, react_jsx_runtime.jsx)("button", {
++							(0, react_jsx_runtime.jsx)(ActionButton, {
+ 								type: "button",
+ 								disabled: clientSync.syncing,
+ 								onClick: retryClient,
+@@ -464,7 +465,7 @@ window.__ModuleLoader__.load({
+ 							className: PluginInventorySettingsTab_module_css_default.statusWithDot,
+ 							role: "alert",
+ 							children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: "error" }), t("error")]
+-						}), (0, react_jsx_runtime.jsx)("button", {
++						}), (0, react_jsx_runtime.jsx)(ActionButton, {
+ 							type: "button",
+ 							onClick: retry,
+ 							children: t("retry")
+@@ -580,9 +581,9 @@ window.__ModuleLoader__.load({
+ 											}) : null,
+ 											otherMatchCount > 0 ? (0, react_jsx_runtime.jsxs)("p", {
+ 												className: PluginInventorySettingsTab_module_css_default.hint,
+-												children: [t("matchesInOtherPresets", { count: String(otherMatchCount) }), otherPresetMatches.map((preset) => (0, react_jsx_runtime.jsx)("button", {
++												children: [t("matchesInOtherPresets", { count: String(otherMatchCount) }), otherPresetMatches.map((preset) => (0, react_jsx_runtime.jsx)(ActionButton, {
+ 													type: "button",
+-													className: PluginInventorySettingsTab_module_css_default.jumpLink,
++													...(controls?.Button ? { variant: "ghost", size: "xs" } : { className: PluginInventorySettingsTab_module_css_default.jumpLink }),
+ 													onClick: () => {
+ 														setChosenPreset(preset.id);
+ 													},
+@@ -771,4 +772,4 @@ window.__ModuleLoader__.load({
+ 	}
+ });
+ 
+-//# sourceMappingURL=client.js.map
+\ No newline at end of file
++//# sourceMappingURL=client.js.map

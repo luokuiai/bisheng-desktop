@@ -163,6 +163,22 @@ PR #357 展示了两种应区别处理的变化：
 
 这些是设计选择示例，不表示所提新扩展 API 已存在。本文是开发与评审约束；当前尚无自动 slot 契约门禁。
 
+### 桌面设置弹窗
+
+`dsh-client-ui-settings-general@0.2.1-rc.2` 的现有补丁为弹窗、遮罩、导航项和标题栏暴露样式标记，并用当前导航项文案显示常规标题。主页账号菜单中的设置和消息由 `dsh-desktop-settings` 应用共同的双栏样式和入场动画。`settings.general.layout` 给已有设置项分组，每项贡献只渲染一次。Harness 设置的焦点、关闭和快捷键继续由 Harness 管理。
+
+`settings.actions.layout` 按贡献 ID 隐藏「打开配置文件」`open-document`，其余标题栏操作仍按原顺序渲染。
+
+普通模式和安全模式的 Desktop 启动配置禁用 `session-log-deepseek` 与 `ui-settings-session-log`。因此旧 Profile 曾启用上传时，官方模型请求也会停止附带 Session Log。启动配置保留用户偏好文件、会话和手动导出能力。此规则在 Profile 组合阶段生效，验证见 `test/host-disabled-plugins.test.ts`。
+
+BoardUI 的设置原型、桌面设置与消息共用 `CloseButton`，用显式 `corner-shape: round` 覆盖 Harness 的全局超椭圆形状。Harness 内置 Modal 由预打包的前端共享模块提供，不开放独立的关闭按钮 slot。`scripts/prepare-reference-icons.mjs` 在固定版本的共享模块中给默认关闭按钮补 `data-dsh-modal-close`，由桌面 `host.css` 应用圆形样式。构建只增加样式标记，保留原有事件和焦点管理。回归见 `test/frontend-reference-icons.test.mjs`，上游提供稳定标记后移除这段投影。
+
+`settings.controls` 是可选的 single/root slot。设置外壳把组件传给当前分区、常规设置项和插件页签，每个功能仍持有选项、校验和写入动作。桌面通过同源 `/desktop-workspace/settings-controls.js` 加载 BoardUI 的下拉框、开关、输入框和按钮。下拉浮层留在设置弹框的焦点边界内，可以越过弹框边缘展开。导航和内容列各自保留圆角与滚动边界。企业账号、模型目录、企业插件市场、工作台设置和 Agent 预设工具栏按需消费同一组控件。Harness 侧接缝由 `0.2.1-rc.2` 版本补丁重放。组件资源随现有工作台资产构建并装入安装包，缺失时使用原控件。这里改的是客户端渲染，不改变普通 Profile 和 Safe Mode 的包解析规则。Harness 提供等价组件覆盖接口后移除对应补丁。回归见 `test/desktop-settings-view.test.mjs`、`test/enterprise-insecure-confirm-view.test.mjs`、`test/model-settings-render.test.mjs`、`test/enterprise-market-view.test.mjs`、`test/workbench-settings-locale.test.mjs` 和 `test/preset-toolbar.test.mjs`。
+
+插件页签、添加模型和 Agent 预设指南复用 BoardUI Tabs。页签容器保留已访问插件的状态和原有禁用条件。内置生图和插件安装管理使用同一组按钮及开关，生图保留原表单的保存行为，回归见 `test/image-generation-settings-ui.test.mjs`。
+
+设置与消息在进场和退场使用 BoardUI 的 300ms 缩放、淡入淡出与模糊曲线，遵循减少动态效果偏好。退场期间保留当前分区和焦点边界，停止弹窗内容交互并撤回原生视图，动画结束后才恢复背景。AI 接入和消息的原生视图在进场动画结束或取消后读取实际坐标。常规页隐藏 `current-version`，复用 Harness 外观卡片及其主题偏好，桌面通过常规项标记约束卡片的列宽和高度。回归见 `test/desktop-settings-view.test.mjs`。Harness 提供等价生命周期接缝后移除对应补丁。
+
 ### Agent preset configuration tooltips (Harness 0.2.1-rc.2, 2026-10-27)
 
 The preset configuration button renders the existing Harness `Tooltip` with `portal: true`, top placement and end alignment. The bubble belongs to the body overlay layer and uses the primitive's viewport fitting, theme tokens and hover/focus lifecycle. The previous absolutely positioned `data-tip` pseudo-element belonged to the card inside the settings scroll container, which clipped the English label at the right edge. Its attribute and CSS rules are removed together.
@@ -327,6 +343,8 @@ upstream V0.13.0 本身没有企业授权层，合并不会自动替代此接缝
 回归覆盖菜单插入、真实 ReferenceChip 渲染、草稿持久化、未知枚举拒绝、原 file/session/纯文字草稿兼容及资源序列化。使用局部真实运行时代码的组件验证与完整账号验收分别登记。
 
 实际加载补充：Harness web-frontend 把 primitives 预编译进共享模块，插件 require 与原生引用消费的是该共享模块。`scripts/prepare-reference-icons.mjs` 在安装、开发、构建和测试前从上述唯一图标定义生成对应分支；按公开 `ReferenceIconRegular` 导出定位实现，发现压缩符号并保留内置 session/file/folder 分支，生成区域可重复覆盖。版本或结构变化时构建失败，入口带内容摘要刷新缓存。生成内容留在依赖分发目录，Git 维护生成器和原定义。上游共享前端支持这些类型后一起移除生成步骤。
+
+`dsh-web-frontend@0.2.1-rc.2` 的加载页在语言插件初始化前显示。桌面使用同一构建步骤把启动字标和加载提示改为「LUOKUI-AI」与「正在加载插件…」。该投影只改宿主安装目录中共享入口的两条文案，沿用原脚本与加载顺序。普通 Profile 和 Safe Mode 共用此资源。版本或文案接缝不匹配时构建报告失败。上游提供启动字标和语言配置后移除投影。回归见 `test/frontend-reference-icons.test.mjs`。
 
 `test/frontend-reference-icons.test.mjs` 执行完整前端入口及 vendor 依赖，捕获传给 Harness loader 的真实 staticModules，并用其中的 React 与 ReferenceIconRegular 渲染五类图标，覆盖实际运行包与库文件不同步的回归。
 

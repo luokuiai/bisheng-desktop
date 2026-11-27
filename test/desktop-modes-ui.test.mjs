@@ -1773,6 +1773,33 @@ it('keeps native Chat behind nested host confirmations until their final removal
   expect(window.dshEnterpriseChat.present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true }))
 })
 
+it('shows the native notifications view inside its owning dialog and yields to other modals', async () => {
+  await mount(true)
+  const present = window.dshEnterpriseChat.present
+  const bounds = { x: 250, y: 100, width: 600, height: 420 }
+  let approvals
+  await act(async () => {
+    approvals = hostDialog('<div role="dialog" aria-modal="true"><div data-dsh-approvals-content></div></div>')
+    const element = approvals.querySelector('[data-dsh-approvals-content]')
+    window.dispatchEvent(new CustomEvent('dsh-desktop:approvals-visibility', { detail: { open: true } }))
+    window.dispatchEvent(new CustomEvent('dsh-desktop:settings-surface', { detail: { token: 'notifications', section: 'notifications', bounds, element } }))
+  })
+  expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, settings: 'notifications', bounds }))
+
+  let confirmation
+  await act(async () => { confirmation = hostDialog() })
+  expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false, settings: 'notifications' }))
+  await act(async () => confirmation.remove())
+  expect(present).toHaveBeenLastCalledWith(expect.objectContaining({ visible: true, settings: 'notifications', bounds }))
+
+  await act(async () => {
+    approvals.remove()
+    window.dispatchEvent(new CustomEvent('dsh-desktop:settings-surface', { detail: { token: 'notifications', close: true } }))
+    window.dispatchEvent(new CustomEvent('dsh-desktop:approvals-visibility', { detail: { open: false } }))
+  })
+  expect(present.mock.lastCall[0]).not.toHaveProperty('settings')
+})
+
 it('keeps native Chat hidden through the DS Bot picker and creation form until close', async () => {
   const view = await mount(true)
   await view.click('chat')

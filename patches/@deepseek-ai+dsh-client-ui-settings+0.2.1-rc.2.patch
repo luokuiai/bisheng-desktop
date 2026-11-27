@@ -1,8 +1,8 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-settings/lib/types/client/contract/slots.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-settings/lib/types/client/contract/slots.d.ts
-index 3253a36..db5b3be 100644
+index 3253a36..309ca3a 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-settings/lib/types/client/contract/slots.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-settings/lib/types/client/contract/slots.d.ts
-@@ -10,6 +10,14 @@
+@@ -10,6 +10,15 @@
   */
  declare module '@deepseek-ai/dsh-client-ui-slots' {
      interface SlotMap {
@@ -14,13 +14,66 @@ index 3253a36..db5b3be 100644
 +        'settings.general.layout': { kind: 'single'; scope: 'root'; owner: SettingsItemsLayoutOwnerProps };
 +        /** Layout for feature-owned header actions; unknown contributions stay available. */
 +        'settings.actions.layout': { kind: 'single'; scope: 'root'; owner: SettingsItemsLayoutOwnerProps };
++        'settings.controls': { kind: 'single'; scope: 'root'; owner: { open: boolean; render: (controls?: SettingsControls, exiting?: boolean) => import('react').ReactNode } };
          /** Optional sidebar account launcher; opens the shell-owned settings panel. */
          'settings.launcher': {
              kind: 'single';
-@@ -182,4 +190,13 @@ export interface SettingsLauncherOwnerProps {
+@@ -128,11 +137,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+ export interface SettingsGeneralItemOwnerProps {
+     /** Marker field: item owner props are intentionally empty. */
+     children?: never;
++    controls?: SettingsControls;
+ }
+-/** Owner share of a Plugins tab (the section supplies nothing). */
++/** Owner share of a Plugins tab. */
+ export interface SettingsPluginsTabOwnerProps {
+-    /** Marker field: tab owner props are intentionally empty. */
+-    children?: never;
++    controls?: SettingsControls;
+ }
+ /** Owner share of the trigger content seat: the sidebar column state. */
+ export interface SettingsTriggerOwnerProps {
+@@ -154,6 +163,34 @@ export interface SettingsHeaderOwnerProps {
+ export interface SettingsSectionOwnerProps {
+     /** Close the settings panel (the shell owns the open state). */
+     close: () => void;
++    controls?: SettingsControls;
++    exiting?: boolean;
++}
++export interface SettingsControls {
++    Select?: import('react').ComponentType<{ label: string; value?: string | null; placeholder?: string; options: readonly { id: string; label: string }[]; disabled?: boolean; onChange: (id: string) => void }>;
++    Switch?: import('react').ComponentType<{ label: string; checked: boolean; disabled?: boolean; title?: string; onChange: (value: boolean) => void }>;
++    Input?: import('react').ComponentType<Pick<import('react').InputHTMLAttributes<HTMLInputElement>, 'type' | 'placeholder' | 'autoComplete' | 'inputMode' | 'aria-label' | 'aria-describedby'> & { label?: string; value: string; onChange: (value: string) => void }>;
++    Button?: import('react').ComponentType<import('react').ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'medium' | 'small' | 'xs'; leadingIcon?: import('react').ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }> }>;
++    CloseButton?: import('react').ComponentType<import('react').ButtonHTMLAttributes<HTMLButtonElement>>;
++    Spinner?: import('react').ComponentType;
++    Tabs?: import('react').ComponentType<SettingsTabsProps>;
++}
++export interface SettingsTabsProps {
++    label: string;
++    value: string;
++    onChange: (id: string) => void;
++    fill?: boolean;
++    tabListClassName?: string;
++    items: readonly {
++        id: string;
++        label: string;
++        title?: string;
++        disabled?: boolean;
++        keepMounted?: boolean;
++        panelClassName?: string;
++        render: () => import('react').ReactNode;
++    }[];
++    children?: import('react').ReactNode;
+ }
+ /** Owner share of the currently active settings-backed onboarding step. */
+ export interface SettingsOnboardingOwnerProps {
+@@ -182,4 +219,13 @@ export interface SettingsLauncherOwnerProps {
      /** @param id - registered onboarding editor to open explicitly. */
      openOnboarding: (id: string) => void;
  }
+-//# sourceMappingURL=slots.d.ts.map
+\ No newline at end of file
 +export interface SettingsLayoutItem { id: string; render: () => import('react').ReactNode }
 +export interface SettingsItemsLayoutOwnerProps { items: readonly SettingsLayoutItem[] }
 +export interface SettingsNavigationRow { id: string; label: string; order?: number }
@@ -30,5 +83,4 @@ index 3253a36..db5b3be 100644
 +    /** The shell's native row; `overrides.icon` replaces the glyph the shell picks by id, nothing else. */
 +    renderEntry: (row: SettingsNavigationRow, overrides?: { icon?: import('react').ComponentType<{ className?: string; size?: number }> }) => import('react').ReactNode;
 +}
- //# sourceMappingURL=slots.d.ts.map
-\ No newline at end of file
++//# sourceMappingURL=slots.d.ts.map

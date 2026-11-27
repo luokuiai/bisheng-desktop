@@ -1,0 +1,27 @@
+diff --git a/node_modules/@deepseek-ai/dsh-client-locale/lib/client.js b/node_modules/@deepseek-ai/dsh-client-locale/lib/client.js
+index 88c929a..bdd51bf 100644
+--- a/node_modules/@deepseek-ai/dsh-client-locale/lib/client.js
++++ b/node_modules/@deepseek-ai/dsh-client-locale/lib/client.js
+@@ -1053,7 +1053,7 @@ window.__ModuleLoader__.load({
+ 		* @param props - composed slot props.
+ 		* @returns the row element tree.
+ 		*/
+-		function LanguageRow({ t, setLocale, useStore }) {
++		function LanguageRow({ t, setLocale, useStore, controls }) {
+ 			const active = useStore((s) => s.active);
+ 			const options = useStore((s) => s.options);
+ 			const [open, setOpen] = (0, react.useState)(false);
+@@ -1066,7 +1066,12 @@ window.__ModuleLoader__.load({
+ 						className: LanguageRow_module_css_default.title,
+ 						children: t("language.title")
+ 					})
+-				}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
++				}), controls?.Select ? (0, react_jsx_runtime.jsx)(controls.Select, {
++					label: t("language.title"),
++					value: active,
++					options,
++					onChange: setLocale
++				}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
+ 					open,
+ 					onClose: () => {
+ 						setOpen(false);

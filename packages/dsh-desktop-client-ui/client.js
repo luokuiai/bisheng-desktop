@@ -1039,11 +1039,11 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       const verticalOffsetProperty = '--dsh-sidebar-overlay-offset-y'
       const offsets = new Map()
       let bounds
-      let modalOpen = false
+      let modals = []
       let floatingRight = 0
       let disposed = false
       let scheduled = false
-      const readModal = () => [...document.querySelectorAll(dialogSelector)].some(dialog =>
+      const readModals = () => [...document.querySelectorAll(dialogSelector)].filter(dialog =>
         dialog.checkVisibility({ checkVisibilityCSS: true }) &&
         (dialog.getAttribute('aria-modal') === 'true' || dialog.matches(`:modal, ${botDialog}`)))
       const fit = () => {
@@ -1102,10 +1102,11 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       }
       const refresh = () => {
         if (disposed) return
-        const open = readModal()
+        const open = readModals()
         const right = fit()
-        if (open === modalOpen && right === floatingRight) return
-        modalOpen = open
+        const modalsChanged = open.length !== modals.length || open.some((dialog, index) => dialog !== modals[index])
+        if (!modalsChanged && right === floatingRight) return
+        modals = open
         floatingRight = right
         report()
       }
@@ -1126,9 +1127,12 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         attributeFilter: ['role', 'aria-modal', 'open', 'hidden', 'style', 'class']
       })
       document.addEventListener('visibilitychange', schedule)
-      modalOpen = readModal()
+      modals = readModals()
       return {
-        isModalOpen: () => modalOpen,
+        isModalOpen(surface) {
+          const owner = surface?.closest?.(dialogSelector)
+          return modals.some(dialog => dialog !== owner)
+        },
         fitBeside(nextBounds) {
           bounds = nextBounds
           floatingRight = fit()
@@ -1334,7 +1338,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           const y = rect.y
           const remote = surfaceOpen && state.settingsProtocolVersion === 1 && settingsSurface
           const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mode-page')
-          const hostOverlayOpen = overlays.isModalOpen() || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
+          const hostOverlayOpen = overlays.isModalOpen(remote?.element) || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
           const palette = hostPalette()
           const modesStyle = modes && typeof getComputedStyle === 'function' ? getComputedStyle(modes) : undefined
           // Keep the native view inside the skin card's inner corners.
@@ -3253,14 +3257,14 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
           [data-dsh-preset-actions] { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-left:auto; }
           [data-dsh-preset-actions] button { white-space:nowrap; }
           [data-dsh-preset-search] { margin-bottom:16px; }
-          [data-dsh-preset-search] input[type=search] {
+          [data-dsh-preset-search] input[type=search]:not(.dshSettingsControl *) {
             box-sizing:border-box; width:100%; min-width:0; height:36px;
             border:1px solid var(--dsw-alias-border-l2); border-radius:10px;
             background:var(--dsw-alias-bg-module-platform); color:var(--dsw-alias-label-primary);
             padding:0 12px; font:inherit; font-size:13px;
           }
-          [data-dsh-preset-search] input[type=search]::placeholder { color:var(--dsw-alias-label-caption); }
-          [data-dsh-preset-search] input[type=search]:focus-visible {
+          [data-dsh-preset-search] input[type=search]:not(.dshSettingsControl *)::placeholder { color:var(--dsw-alias-label-caption); }
+          [data-dsh-preset-search] input[type=search]:not(.dshSettingsControl *):focus-visible {
             outline:2px solid var(--dsw-alias-state-business-primary); outline-offset:2px;
             background:var(--dsw-alias-bg-base);
           }

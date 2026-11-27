@@ -15,6 +15,12 @@
 - id: ui-settings-account
   disabled: true
 
+- id: session-log-deepseek
+  disabled: true
+
+- id: ui-settings-session-log
+  disabled: true
+
 - insert:
     - id: dsh-desktop-client-ui
       name: dsh-desktop-client-ui

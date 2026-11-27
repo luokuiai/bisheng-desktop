@@ -14,6 +14,31 @@ const homes: string[] = []
 afterEach(async () => { await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true }))) })
 
 describe('disabled Profile packages in Desktop host patch', () => {
+  it.each(['dsh-desktop.patch.yml', 'dsh-desktop-safe.patch.yml'])(
+    '%s disables Session Log upload and its settings contribution, including previously enabled profiles',
+    (filename) => {
+      const base = loadOverlayPatches('test', join(projectRoot, 'node_modules/@deepseek-ai/dsh-base/cordis.patch.yml'))
+      const web = loadOverlayPatches('test', join(projectRoot, 'node_modules/@deepseek-ai/dsh-web-app/cordis.patch.yml'))
+      const profile = [
+        { id: 'session-log-deepseek', config: { enabled: true }, disabled: false },
+        { id: 'ui-settings-session-log', disabled: false }
+      ]
+      const desktop = loadOverlayPatches('test', join(projectRoot, 'build', filename))
+      const uploader = { id: 'session-log-deepseek', name: '@deepseek-ai/dsh-session-log-deepseek' }
+      const settings = { id: 'ui-settings-session-log', name: '@deepseek-ai/dsh-client-ui-settings-session-log' }
+      expect(composeEntries([base, web, profile])).toEqual(expect.arrayContaining([
+        expect.objectContaining({ ...uploader, disabled: false }),
+        expect.objectContaining({ ...settings, disabled: false })
+      ]))
+      const composed = composeEntries([base, web, profile, desktop])
+      expect(composed).toEqual(expect.arrayContaining([
+        expect.objectContaining({ ...uploader, disabled: true }),
+        expect.objectContaining({ ...settings, disabled: true })
+      ]))
+      expect(composed.some((entry) => !entry.disabled && entry.name === '@deepseek-ai/dsh-session-log-export')).toBe(true)
+    }
+  )
+
   it('drops a stale generated host disable when a Profile package is switched off', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-host-disable-'))
     homes.push(home)

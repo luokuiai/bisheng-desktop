@@ -8,7 +8,6 @@ import {
   RiBankCardLine,
   RiBookOpenLine,
   RiCheckboxCircleFill,
-  RiCloseLine,
   RiCodeBlock,
   RiDatabase2Line,
   RiGitMergeLine,
@@ -22,6 +21,7 @@ import {
   RiStore2Line,
 } from "@remixicon/react";
 import { cx } from "@/utils/cx";
+import { CloseButton } from "@/components/base/buttons/close-button";
 import { SettingsGeneral } from "./settings-general";
 import { SettingsProfile } from "./settings-profile";
 import { SettingsStorage } from "./settings-storage";
@@ -295,19 +295,7 @@ export function SettingsModal({
             )}
           >
             <h2 className="text-title-3-medium text-text-primary">{PAGE_TITLES[page]}</h2>
-            <button
-              type="button"
-              aria-label="关闭设置"
-              onClick={onClose}
-              className={cx(
-                "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full",
-                "bg-background-tertiary-default text-foreground-icon-secondary",
-                "transition-colors duration-150 ease hover:bg-background-tertiary-hover",
-                "outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-              )}
-            >
-              <RiCloseLine className="size-4" aria-hidden />
-            </button>
+            <CloseButton size="sm" aria-label="关闭设置" onClick={onClose} />
           </div>
           <div className="relative min-h-0 flex-1">
             <div

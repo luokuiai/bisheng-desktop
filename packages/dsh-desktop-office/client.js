@@ -256,7 +256,8 @@ window.__ModuleLoader__.load({ id: 'dsh-desktop-office', factory: require => {
 .dso-modal h2{margin:0;min-width:0;overflow-wrap:anywhere;font-size:16px;line-height:24px;font-weight:600}
 .dso-modal button{min-width:32px;min-height:32px;font:inherit;font-size:13px;border:1px solid var(--dsw-alias-border-l2-darkmode-thin);border-radius:7px;padding:0;background:var(--dsw-alias-bg-base);color:inherit;cursor:pointer}
 .dso-modal button:disabled{cursor:default;opacity:.35}
-.dso-modal .dso-close{display:grid;place-items:center;flex:none;width:32px;height:32px;font-size:18px}
+.dso-modal .dso-close{display:grid;place-items:center;flex:none;width:24px;height:24px;min-width:24px;min-height:24px;border:0;border-radius:50%;corner-shape:round;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:18px}
+.dso-modal .dso-close:hover:enabled{background:var(--dsw-alias-interactive-bg-active)}
 .dso-modal button:hover:enabled{background:var(--dsw-alias-interactive-bg-hover)}
 .dso-page{display:flex;justify-content:center;align-items:center;flex:1;min-height:0;min-width:0;overflow:auto;background:var(--dsw-alias-interactive-bg-hover);border-radius:8px;position:relative}
 .dso-page>img{width:100%;height:100%;object-fit:contain;min-height:0;display:block;margin:0 auto}

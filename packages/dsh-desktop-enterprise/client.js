@@ -283,6 +283,9 @@ window.__ModuleLoader__.load({
           margin: 16px 0 8px;
           color: var(--dsw-alias-state-error-primary);
         }
+        .dshEnterpriseBoardLogout {
+          margin: 16px 0 8px;
+        }
         .dshEnterprise .dshEnterpriseLogout:hover:not(:disabled),
         .dshEnterprise .dshEnterpriseLogout:focus-visible:not(:disabled) {
           background: var(--dsw-alias-interactive-bg-hover-danger);
@@ -489,13 +492,20 @@ window.__ModuleLoader__.load({
         .dshEnterpriseMarket{color:var(--dsw-alias-label-primary);display:grid;gap:18px;min-width:0;container-type:inline-size}
         .dshEnterpriseMarketHead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.dshEnterpriseMarketHead strong{font-size:15px;overflow-wrap:anywhere}.dshEnterpriseMarket p{margin:0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1.6}.dshEnterpriseMarketHead p{margin-top:5px}.dshEnterpriseMarketHead button{flex-shrink:0}
         .dshEnterpriseMarketList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}.dshEnterpriseMarketCard{box-sizing:border-box;min-width:0;min-height:180px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:16px;background:var(--dsw-alias-bg-layer-3);display:flex;flex-direction:column;gap:12px}.dshEnterpriseMarketCardHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.dshEnterpriseMarketCardTitle{min-width:0;flex:1}.dshEnterpriseMarketCard h3{margin:2px 0 4px;font-size:15px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dshEnterpriseMarketPublisher{font-size:12px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dshEnterpriseMarketCardControls{display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;gap:6px}.dshEnterpriseMarketCardControls>.primary{min-width:62px;text-align:center}.dshEnterpriseMarketDescription{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;min-height:42px}.dshEnterpriseMarketCardFooter{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto}.dshEnterpriseMarketVersion{font-size:11px;color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l2);border-radius:4px;padding:2px 6px}.dshEnterpriseMarketInstalled{font-size:12px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
-        .dshEnterpriseMarketActions{display:flex;align-items:center;gap:6px}.dshEnterpriseMarket button{font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;padding:7px 12px;background:transparent;color:inherit}.dshEnterpriseMarket button.primary{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground);border-color:transparent}.dshEnterpriseMarket button:disabled{opacity:.5;cursor:default}.dshEnterpriseMarket button:focus-visible{outline:2px solid var(--dsw-alias-border-l3);outline-offset:2px}.dshEnterpriseMarket .dshEnterpriseMarketError{color:var(--dsw-alias-state-error-primary);font-size:12px;overflow-wrap:anywhere}.dshEnterpriseMarketActions button{padding:4px 8px;white-space:nowrap}
+        .dshEnterpriseMarketActions{display:flex;align-items:center;gap:6px}
+        .dshEnterpriseMarket button:not(.dshSettingsControl *){font:inherit;font-size:12px;cursor:pointer;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;padding:7px 12px;background:transparent;color:inherit}
+        .dshEnterpriseMarket button.primary{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground);border-color:transparent}
+        .dshEnterpriseMarket button:not(.dshSettingsControl *):disabled{opacity:.5;cursor:default}
+        .dshEnterpriseMarket button:not(.dshSettingsControl *):focus-visible{outline:2px solid var(--dsw-alias-border-l3);outline-offset:2px}
+        .dshEnterpriseMarket .dshEnterpriseMarketError{color:var(--dsw-alias-state-error-primary);font-size:12px;overflow-wrap:anywhere}
+        .dshEnterpriseMarketActions button:not(.dshSettingsControl *){padding:4px 8px;white-space:nowrap}
         @container(max-width:480px){.dshEnterpriseMarketList{grid-template-columns:minmax(0,1fr)}}
       `
       document.head.appendChild(style)
     }
 
-    function EnterpriseMarketTab({ account }) {
+    function EnterpriseMarketTab({ account, controls }) {
+      const Button = controls?.Button ?? 'button'
       const marketCopy = marketLabels()
       const [catalog, setCatalog] = useState(null)
       const [loading, setLoading] = useState(true)
@@ -580,7 +590,7 @@ window.__ModuleLoader__.load({
       return h('section', { className: 'dshEnterpriseMarket' },
         h('div', { className: 'dshEnterpriseMarketHead' },
           h('div', null, h('strong', null, catalog?.tenant?.name || account.tenant.name), showEmpty ? null : h('p', null, marketCopy.intro)),
-          h('button', { type: 'button', disabled: loading, onClick: refresh }, marketCopy.refresh)),
+          h(Button, { type: 'button', disabled: loading, onClick: refresh }, marketCopy.refresh)),
         loading ? h('p', { role: 'status' }, marketCopy.loading) : null,
         error ? h('div', { role: 'alert', className: 'dshEnterpriseMarketError' }, error) : null,
         catalog && !catalog.installReady && !showEmpty ? h('p', null, marketCopy.setup) : null,
@@ -600,10 +610,10 @@ window.__ModuleLoader__.load({
                 h('h3', { title: plugin.display_name }, plugin.display_name),
                 metadata?.publisher ? h('div', { className: 'dshEnterpriseMarketPublisher', title: metadata.publisher }, metadata.publisher) : null),
               h('div', { className: 'dshEnterpriseMarketCardControls' },
-                (!local || update) && current ? h('button', { type: 'button', className: 'primary', title: supported ? undefined : marketCopy.incompatible, disabled: busy || !supported || !catalog.installReady, 'aria-busy': activeAction === 'install', onClick: () => operate('install', plugin, current) }, activeAction === 'install' ? (update ? marketCopy.updating : marketCopy.installing) : supported ? (update ? marketCopy.update : marketCopy.install) : marketCopy.unsupported) : null,
+                (!local || update) && current ? h(Button, { type: 'button', ...(controls?.Button ? { variant: 'primary' } : { className: 'primary' }), title: supported ? undefined : marketCopy.incompatible, disabled: busy || !supported || !catalog.installReady, 'aria-busy': activeAction === 'install', onClick: () => operate('install', plugin, current) }, activeAction === 'install' ? (update ? marketCopy.updating : marketCopy.installing) : supported ? (update ? marketCopy.update : marketCopy.install) : marketCopy.unsupported) : null,
                 local ? h('div', { className: 'dshEnterpriseMarketActions' },
-                  h('button', { type: 'button', disabled: busy || (!local.enabled && !catalog.installReady), 'aria-busy': activeAction === 'enable' || activeAction === 'disable', onClick: () => operate(local.enabled ? 'disable' : 'enable', plugin) }, activeAction === 'enable' ? marketCopy.enabling : activeAction === 'disable' ? marketCopy.disabling : local.enabled ? marketCopy.disable : marketCopy.enable),
-                  h('button', { type: 'button', disabled: busy, 'aria-busy': activeAction === 'uninstall', onClick: () => operate('uninstall', plugin) }, activeAction === 'uninstall' ? marketCopy.uninstalling : marketCopy.uninstall)) : null)),
+                  h(Button, { type: 'button', disabled: busy || (!local.enabled && !catalog.installReady), 'aria-busy': activeAction === 'enable' || activeAction === 'disable', onClick: () => operate(local.enabled ? 'disable' : 'enable', plugin) }, activeAction === 'enable' ? marketCopy.enabling : activeAction === 'disable' ? marketCopy.disabling : local.enabled ? marketCopy.disable : marketCopy.enable),
+                  h(Button, { type: 'button', variant: controls?.Button ? 'danger' : undefined, disabled: busy, 'aria-busy': activeAction === 'uninstall', onClick: () => operate('uninstall', plugin) }, activeAction === 'uninstall' ? marketCopy.uninstalling : marketCopy.uninstall)) : null)),
             h('p', { className: 'dshEnterpriseMarketDescription', title: plugin.description }, plugin.description),
             (operation?.error || local?.error) ? h('p', { role: 'alert', className: 'dshEnterpriseMarketError' }, operation?.error || local.error) : null,
             h('div', { className: 'dshEnterpriseMarketCardFooter' },
@@ -630,7 +640,7 @@ window.__ModuleLoader__.load({
           disposeTab?.(); disposeTab = undefined; identity = next
           if (next) disposeTab = ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
             name: 'settings.plugins.tab', id: 'enterprise-market', order: 20, label: () => marketLabels().tab
-          }, () => h(EnterpriseMarketTab, { key: next, account: currentAccount })))
+          }, ({ controls } = {}) => h(EnterpriseMarketTab, { key: next, account: currentAccount, controls })))
         } catch {
           if (!disposed && currentRevision === revision) { disposeTab?.(); disposeTab = undefined; identity = null }
         }
@@ -857,7 +867,15 @@ window.__ModuleLoader__.load({
             vision) : null))
     }
 
-    function EnterpriseSection({ t, renderSlot }) {
+    function EnterpriseInput({ label, onChange, ...props }) {
+      return h('label', { className: 'dshEnterpriseLabel' }, label,
+        h('input', { ...props, className: 'dshEnterpriseInput', onChange: event => onChange(event.target.value) }))
+    }
+
+    function EnterpriseSection({ t, renderSlot, controls }) {
+      const Button = controls?.Button ?? 'button'
+      const Input = controls?.Input ?? EnterpriseInput
+      const buttonStyle = (variant, className) => controls?.Button ? { variant } : { className }
       const [state, setState] = useState(null)
       const [base, setBase] = useState(readLastBase)
       const [ticket, setTicket] = useState('')
@@ -967,9 +985,10 @@ window.__ModuleLoader__.load({
       const models = Array.isArray(state?.models) ? state.models : []
       const language = readUiLanguage()
 
-      const logoutButton = connected && h(require('@deepseek-ai/dsh-client-ui-primitives').Button, {
-        variant: 'ghost', size: 'md',
-        className: 'dshEnterpriseLogout', disabled: busy,
+      const logoutButton = connected && h(controls?.Button ?? require('@deepseek-ai/dsh-client-ui-primitives').Button, {
+        variant: controls?.Button ? 'danger' : 'ghost', size: controls?.Button ? 'small' : 'md',
+        className: controls?.Button ? 'dshEnterpriseBoardLogout' : 'dshEnterpriseLogout',
+        disabled: busy,
         onClick: () => run(async () => {
           const next = await api('/api/enterprise.logout', {})
           setConfirmation(null)
@@ -980,8 +999,8 @@ window.__ModuleLoader__.load({
         ? h(React.Fragment, null,
           h('div', { className: 'dshEnterpriseSectionHeader' },
             h('h3', null, t('managedModels')),
-            h('button', {
-              className: 'dshEnterpriseIconButton',
+            h(Button, {
+              ...buttonStyle('ghost', 'dshEnterpriseIconButton'),
               type: 'button',
               title: t('refresh'),
               'aria-label': t('refresh'),
@@ -993,19 +1012,18 @@ window.__ModuleLoader__.load({
               ...models.map((model) => renderModelRow(model, state, language, t)))
             : h('p', { className: 'dshEnterpriseHint' }, t('noModels')))
         : h(React.Fragment, null,
-          h('label', { className: 'dshEnterpriseLabel', style: { marginTop: 16 } },
-            t('platform'),
-            h('input', {
-              className: 'dshEnterpriseInput',
+          h('div', { style: { marginTop: 16 } },
+            h(Input, {
+              label: t('platform'),
               type: 'url',
               inputMode: 'url',
               autoComplete: 'url',
               'aria-describedby': 'dsh-enterprise-platform-help',
               placeholder: 'https://platform.example.com',
               value: base,
-              onChange: (event) => {
-                setBase(event.target.value)
-                rememberBase(event.target.value)
+              onChange: value => {
+                setBase(value)
+                rememberBase(value)
               }
             })),
           h('p', { id: 'dsh-enterprise-platform-help', className: 'dshEnterpriseLoginHelp' }, t('platformHelp')),
@@ -1020,8 +1038,8 @@ window.__ModuleLoader__.load({
                   h('span', { className: 'dshEnterprisePendingSpinner', 'aria-hidden': 'true' }, '↻'))
                 : h('p', { className: 'dshEnterpriseLoginHelp' }, t('browserHelp')),
               h('div', { className: 'dshEnterpriseActions' },
-                h('button', {
-                  className: 'dshEnterpriseButton login',
+                h(Button, {
+                  ...buttonStyle('primary', 'dshEnterpriseButton login'),
                   disabled: busy || !base.trim(),
                   onClick: () => run(async () => {
                     rememberBase(base)
@@ -1039,18 +1057,16 @@ window.__ModuleLoader__.load({
       const manualFallback = !connected && manualFallbackReady
         ? h('div', { className: 'dshEnterpriseManual' },
           h('p', { className: 'dshEnterpriseLoginHelp' }, t('manualHelp')),
-          h('label', { className: 'dshEnterpriseLabel' },
-            t('ticket'),
-            h('input', {
-              className: 'dshEnterpriseInput',
-              type: 'text',
-              autoComplete: 'one-time-code',
-              value: ticket,
-              onChange: (event) => setTicket(event.target.value)
-            })),
+          h(Input, {
+            label: t('ticket'),
+            type: 'text',
+            autoComplete: 'one-time-code',
+            value: ticket,
+            onChange: setTicket
+          }),
           h('div', { className: 'dshEnterpriseActions' },
-            h('button', {
-              className: 'dshEnterpriseButton',
+            h(Button, {
+              ...buttonStyle('secondary', 'dshEnterpriseButton'),
               type: 'button',
               disabled: busy || !ticket.trim(),
               onClick: () => run(async () => {
@@ -1073,8 +1089,8 @@ window.__ModuleLoader__.load({
           h('p', { className: 'dshEnterpriseHint' }, confirmation.insecurePrivateHttp ? t('insecureLead') : t('confirmLead')),
           h('strong', null, confirmation.base),
           h('div', { className: 'dshEnterpriseActions' },
-            h('button', {
-              className: 'dshEnterpriseButton primary',
+            h(Button, {
+              ...buttonStyle('primary', 'dshEnterpriseButton primary'),
               disabled: busy,
               onClick: () => run(async () => {
                 const path = confirmation.fromDeepLink
@@ -1091,8 +1107,8 @@ window.__ModuleLoader__.load({
                 await refreshState()
               })
             }, confirmation.insecurePrivateHttp ? t('insecureConfirm') : t('confirm')),
-            h('button', {
-              className: 'dshEnterpriseButton',
+            h(Button, {
+              ...buttonStyle('secondary', 'dshEnterpriseButton'),
               disabled: busy,
               onClick: () => setConfirmation(null)
             }, t('cancel'))))
@@ -1104,6 +1120,7 @@ window.__ModuleLoader__.load({
         connected ? null : h('p', { className: 'dshEnterpriseLoginIntro' }, t('signInIntro')),
         connected && renderSlot?.('desktop.account.usage', {
           identity: state.user,
+          controls,
           models: h('section', { className: 'dshEnterpriseManagedModels' }, accountContent)
         }, { fallback: h(React.Fragment, null,
           h('section', { className: 'dshEnterpriseManagedModels' }, accountContent)) }),

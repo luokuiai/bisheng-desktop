@@ -1145,14 +1145,15 @@ const aboutStyles = `
     color: var(--dsw-alias-label-primary, #202124);
   }
   .about-close {
-    width: 26px;
-    height: 26px;
-    margin: -4px -6px 0 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
     flex: none;
     color: var(--dsw-alias-label-secondary, #73777f);
-    background: transparent;
+    background: var(--dsw-alias-interactive-bg-hover, #ececee);
     border: 0;
-    border-radius: 7px;
+    border-radius: 50%;
+    corner-shape: round;
     font-size: 20px;
     line-height: 20px;
     cursor: pointer;
@@ -1161,8 +1162,7 @@ const aboutStyles = `
     justify-content: center;
   }
   .about-close:hover {
-    color: var(--dsw-alias-label-primary, #202124);
-    background: rgba(127, 127, 127, 0.12);
+    background: var(--dsw-alias-interactive-bg-active, #e2e2e5);
   }
   .about-body {
     font-size: 13px;
@@ -1215,7 +1215,8 @@ const aboutStyles = `
     }
     .about-title, .about-body { color: var(--dsw-alias-label-primary, #f3f4f6); }
     .about-hint, .about-close { color: var(--dsw-alias-label-secondary, #a9adb5); }
-    .about-close:hover { color: var(--dsw-alias-label-primary, #f3f4f6); background: rgba(255, 255, 255, 0.1); }
+    .about-close { background: var(--dsw-alias-interactive-bg-hover, #303136); }
+    .about-close:hover { background: var(--dsw-alias-interactive-bg-active, #3c3d43); }
     .btn-action {
       color: var(--dsw-alias-label-primary, #f3f4f6);
       background: rgba(255, 255, 255, 0.08);

@@ -13,7 +13,7 @@ const localeSource = await readFile(new URL('../node_modules/@deepseek-ai/dsh-cl
 let cleanup
 afterEach(async () => { await cleanup?.(); vi.unstubAllGlobals() })
 
-async function mountMarket({ action, update = false, holdRefresh = false, plugins, installReady = true, catalogFailure } = {}) {
+async function mountMarket({ action, update = false, holdRefresh = false, plugins, installReady = true, catalogFailure, controls } = {}) {
   const dom = new JSDOM('<html lang="zh-CN"><div id="root"></div></html>', { url: 'http://localhost/' })
   vi.stubGlobal('window', dom.window)
   vi.stubGlobal('document', dom.window.document)
@@ -62,7 +62,7 @@ async function mountMarket({ action, update = false, holdRefresh = false, plugin
   await act(async () => {
     extension.apply({ locale, effect: callback => { const dispose = callback(); if (dispose) disposers.push(dispose) }, slots: {
       inject: (_slot, callback) => callback(),
-      register: (config, component) => { if (config.id === 'enterprise-market') root.render(component()); return () => {} }
+      register: (config, component) => { if (config.id === 'enterprise-market') root.render(component({ controls })); return () => {} }
     } })
   })
   const text = () => dom.window.document.getElementById('root').textContent
@@ -82,8 +82,11 @@ async function mountMarket({ action, update = false, holdRefresh = false, plugin
   }
 }
 
-it('shows current catalog identity and refreshes renamed companies while keeping install actions usable', async () => {
-  const { text, click, requests, plugin, rename } = await mountMarket()
+it.each([false, true])('refreshes the catalog and installs plugins with BoardUI enabled=%s', async board => {
+  const controls = board ? {
+    Button: ({ variant, ...props }) => React.createElement('button', { ...props, 'data-board-button': variant ?? 'secondary' })
+  } : undefined
+  const { text, click, requests, plugin, rename } = await mountMarket({ controls })
   expect(text()).toContain('Current company')
   expect(text()).toContain('安装企业提供的插件，供当前企业账号使用。')
   expect(text()).not.toContain('企业市场暂未就绪，可联系管理员完成配置。')
@@ -93,6 +96,7 @@ it('shows current catalog identity and refreshes renamed companies while keeping
   await click('刷新')
   expect(text()).toContain('Renamed company')
   expect(text()).not.toContain('Current company')
+  expect(Boolean(document.querySelector('button[data-board-button="primary"]'))).toBe(board)
   await click('安装')
   expect(requests.find(item => item.path === '/api/enterprise.market.action').body).toEqual({ action: 'install', plugin_id: plugin.id, version_id: plugin.current_version_id })
   expect(text()).toContain('已安装')

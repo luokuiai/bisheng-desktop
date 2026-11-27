@@ -11,8 +11,10 @@ function visit(node) {
 }
 visit(ast)
 
-it.each(['en', 'zh'])('keeps preset actions beside the heading with working search/import/browse (%s)', lang => {
+it.each([['en', false], ['zh', false], ['en', true], ['zh', true]])('keeps preset search/import/browse working in %s with BoardUI enabled=%s', (lang, board) => {
   const Button = () => {}
+  const BoardButton = () => {}
+  const Input = () => {}
   const open = vi.fn()
   const setSearch = vi.fn()
   let stateIndex = 0
@@ -21,7 +23,8 @@ it.each(['en', 'zh'])('keeps preset actions beside the heading with working sear
     { useState: initial => [initial, stateIndex++ === 0 ? setSearch : () => {}], useRef: current => ({ current }), useEffect() {}, useLayoutEffect() {} },
     { jsx, jsxs: jsx }, { Button, Modal: () => {} }, {}, { documentElement: { lang } }, { open }
   )
-  const tree = render({ useAgentPresetSection: fn => fn({ rows: [], view: null, error: null }), useDeveloperTools: fn => fn(false), t: key => key })
+  const tree = render({ useAgentPresetSection: fn => fn({ rows: [], view: null, error: null }), useDeveloperTools: fn => fn(false), t: key => key,
+    controls: board ? { Button: BoardButton, Input } : undefined })
   const nodes = []
   function walk(node) {
     if (Array.isArray(node)) return node.forEach(walk)
@@ -31,11 +34,13 @@ it.each(['en', 'zh'])('keeps preset actions beside the heading with working sear
   walk(tree)
   const heading = nodes.find(n => n.props?.['data-dsh-preset-heading'] === '')
   const actions = heading.props.children[1].props.children
-  expect(actions.every(n => n.type === Button && n.props.variant === 'outline')).toBe(true)
+  expect(actions.every(node => node.type === (board ? BoardButton : Button) && node.props.variant === (board ? 'secondary' : 'outline'))).toBe(true)
   const input = nodes.find(n => n.props?.type === 'file')
   const click = vi.fn(); input.props.ref.current = { click }
   actions[0].props.onClick(); expect(click).toHaveBeenCalledOnce()
   actions[1].props.onClick(); expect(open).toHaveBeenCalledWith('https://www.dshdesktop.com/preset/', '_blank', 'noopener,noreferrer')
-  nodes.find(n => n.props?.type === 'search').props.onChange({ target: { value: 'test' } })
+  const search = nodes.find(node => node.props?.type === 'search')
+  expect(search.type).toBe(board ? Input : 'input')
+  search.props.onChange(board ? 'test' : { target: { value: 'test' } })
   expect(setSearch).toHaveBeenCalledWith('test')
 })

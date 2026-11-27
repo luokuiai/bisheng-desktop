@@ -1,0 +1,30 @@
+diff --git a/node_modules/@deepseek-ai/dsh-client-ui-theme/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-theme/lib/client.js
+index a2a2dee..0294d34 100644
+--- a/node_modules/@deepseek-ai/dsh-client-ui-theme/lib/client.js
++++ b/node_modules/@deepseek-ai/dsh-client-ui-theme/lib/client.js
+@@ -1229,7 +1229,7 @@ window.__ModuleLoader__.load({
+ 		* @param props - composed slot props.
+ 		* @returns the row element tree.
+ 		*/
+-		function FontSizeRow({ t, role, setFontSize, useStore, expander }) {
++		function FontSizeRow({ t, role, setFontSize, useStore, expander, controls }) {
+ 			const fontSize = useStore((s) => s.fontSizes[role]);
+ 			const { min, max } = FONT_SIZE_SPECS[role];
+ 			return (0, react_jsx_runtime.jsxs)("div", {
+@@ -1246,7 +1246,15 @@ window.__ModuleLoader__.load({
+ 				}), (0, react_jsx_runtime.jsxs)("div", {
+ 					className: FontSizeRow_module_css_default.control,
+ 					children: [
+-						(0, react_jsx_runtime.jsxs)("div", {
++						controls?.Select ? (0, react_jsx_runtime.jsx)(controls.Select, {
++							label: t(`fontSize.${role}.title`),
++							value: String(fontSize),
++							options: Array.from({ length: max - min + 1 }, (_, index) => {
++								const value = String(min + index);
++								return { id: value, label: value };
++							}),
++							onChange: (value) => setFontSize(Number(value))
++						}) : (0, react_jsx_runtime.jsxs)("div", {
+ 							className: FontSizeRow_module_css_default.stepper,
+ 							children: [(0, react_jsx_runtime.jsx)("span", {
+ 								className: FontSizeRow_module_css_default.value,

@@ -1,17 +1,53 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-settings-plugins/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-settings-plugins/lib/client.js
-index 631b760..1ab44a8 100644
+index 631b760..7fd95f8 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-settings-plugins/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-settings-plugins/lib/client.js
+@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
+ 		//#region lib/types/client/PluginsSettingsSection.js
+ 		/** Plugins settings section: localized tabs around feature-owned pages. */
+ 		/** Render one Plugins page whose contents arrive from feature-owned tabs; one contribution shows as the page itself. */
+-		function PluginsSettingsSection({ t, renderSlot, useTabs }) {
++		function PluginsSettingsSection({ t, renderSlot, useTabs, controls }) {
+ 			const tabsId = (0, react.useId)();
+ 			const tabRefs = (0, react.useRef)([]);
+ 			const rows = useTabs((value) => value);
 @@ -49,7 +49,7 @@ window.__ModuleLoader__.load({
  					return new Set([...previous, active]);
  				});
  			}, [active]);
 -			return (0, react_jsx_runtime.jsxs)("div", {
-+			return renderSlot("settings.plugins.layout", { items: rows.map((row) => ({ ...row, render: () => renderSlot("settings.plugins.tab", {}, { only: row.id }) })) }, { fallback: (0, react_jsx_runtime.jsxs)("div", {
++			return renderSlot("settings.plugins.layout", { items: rows.map((row) => ({ ...row, render: () => renderSlot("settings.plugins.tab", { controls }, { only: row.id }) })) }, { fallback: (0, react_jsx_runtime.jsxs)("div", {
  				className: PluginsSettingsSection_module_css_default.section,
  				children: [
  					(0, react_jsx_runtime.jsx)("h2", {
-@@ -125,7 +125,7 @@ window.__ModuleLoader__.load({
+@@ -65,9 +65,19 @@ window.__ModuleLoader__.load({
+ 						children: t("empty")
+ 					}) : single !== void 0 ? (0, react_jsx_runtime.jsx)("div", {
+ 						className: PluginsSettingsSection_module_css_default.panel,
+-						children: renderSlot("settings.plugins.tab", {}, { only: single.id })
++						children: renderSlot("settings.plugins.tab", { controls }, { only: single.id })
+-					}) : (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)("div", {
++					}) : controls?.Tabs ? (0, react_jsx_runtime.jsx)(controls.Tabs, {
++						label: t("tabs"),
++						value: active,
++						onChange: setActiveId,
++						items: rows.map((row) => ({
++							...row,
++							keepMounted: visitedIds.has(row.id),
++							panelClassName: PluginsSettingsSection_module_css_default.panel,
++							render: () => renderSlot("settings.plugins.tab", { controls }, { only: row.id })
++						}))
++					}) : (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)("div", {
+ 						className: PluginsSettingsSection_module_css_default.tabs,
+ 						role: "tablist",
+ 						"aria-label": t("tabs"),
+ 						children: rows.map((row, index) => {
+@@ -121,11 +131,11 @@ window.__ModuleLoader__.load({
+ 							role: "tabpanel",
+ 							"aria-labelledby": `${tabsId}-tab-${row.id}`,
+ 							hidden: !selected,
+-							children: renderSlot("settings.plugins.tab", {}, { only: row.id })
++							children: renderSlot("settings.plugins.tab", { controls }, { only: row.id })
  						}, row.id);
  					})] })
  				]
@@ -20,7 +56,7 @@ index 631b760..1ab44a8 100644
  		}
  		//#endregion
  		//#region lib/types/client/locales.js
-@@ -205,7 +205,7 @@ window.__ModuleLoader__.load({
+@@ -205,7 +215,7 @@ window.__ModuleLoader__.load({
  				label: () => t("nav"),
  				locale: NS,
  				inject: sectionInjected,
@@ -30,15 +66,24 @@ index 631b760..1ab44a8 100644
  					scope: "root"
  				} }
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-settings-plugins/lib/types/client/PluginsSettingsSection.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-settings-plugins/lib/types/client/PluginsSettingsSection.d.ts
-index 24bc0a6..206564d 100644
+index 24bc0a6..93a07b3 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-settings-plugins/lib/types/client/PluginsSettingsSection.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-settings-plugins/lib/types/client/PluginsSettingsSection.d.ts
-@@ -15,7 +15,7 @@ export interface PluginsSettingsSectionInjected {
+@@ -15,13 +15,13 @@ export interface PluginsSettingsSectionInjected {
      };
  }
  /** Props the renderer binds for the section. */
 -export type PluginsSettingsSectionProps = PropsRuntime<'settings.section'> & PropsLocale<'settings.plugins'> & PropsRenderSlots<'settings.plugins.tab'> & InjectFace<PluginsSettingsSectionInjected>;
 +export type PluginsSettingsSectionProps = PropsRuntime<'settings.section'> & PropsLocale<'settings.plugins'> & PropsRenderSlots<'settings.plugins.tab' | 'settings.plugins.layout'> & InjectFace<PluginsSettingsSectionInjected>;
  /** Render one Plugins page whose contents arrive from feature-owned tabs; one contribution shows as the page itself. */
- export declare function PluginsSettingsSection({ t, renderSlot, useTabs }: PluginsSettingsSectionProps): import("react").JSX.Element;
+-export declare function PluginsSettingsSection({ t, renderSlot, useTabs }: PluginsSettingsSectionProps): import("react").JSX.Element;
++export declare function PluginsSettingsSection({ t, renderSlot, useTabs, controls }: PluginsSettingsSectionProps): import("react").JSX.Element;
  declare module '@deepseek-ai/dsh-client-ui-slots' {
+     interface LocaleNamespaceMap {
+         /** Built-in plugins section and plugin configuration page copy. */
+         'settings.plugins': PluginsSettingsLocaleKey;
+     }
+ }
+-//# sourceMappingURL=PluginsSettingsSection.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=PluginsSettingsSection.d.ts.map

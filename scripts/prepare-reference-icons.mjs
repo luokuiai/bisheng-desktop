@@ -111,6 +111,36 @@ export function prepareMenuPresence(bundle) {
   return edits.sort(([start], [next]) => next - start).reduce((text, [start, end, replacement]) => text.slice(0, start) + replacement + text.slice(end), bundle)
 }
 
+export function prepareModalClose(bundle) {
+  const ast = parse(bundle)
+  const assignment = one(find(ast, node => ts.isPropertyAssignment(node) && node.name.getText(ast) === 'Modal' && ts.isIdentifier(node.initializer)), 'public Modal export')
+  const modal = one(ast.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === assignment.initializer.text), 'Modal renderer')
+  const binding = modal.parameters[0].name
+  if (!ts.isObjectBindingPattern(binding)) throw new Error('Expected shared Modal props')
+  const label = one(binding.elements.filter(item => (item.propertyName ?? item.name).getText(ast) === 'closeLabel'), 'Modal close label').name.getText(ast)
+  const button = one(find(modal, node => ts.isCallExpression(node) && ts.isStringLiteral(node.arguments[0] ?? node) &&
+    node.arguments[0].text === 'button' && node.arguments[1] && ts.isObjectLiteralExpression(node.arguments[1]) &&
+    node.arguments[1].properties.some(prop => ts.isPropertyAssignment(prop) && ts.isStringLiteral(prop.name) &&
+      prop.name.text === 'aria-label' && prop.initializer.getText(ast) === label)), 'Modal close button')
+  const props = button.arguments[1]
+  if (props.properties.some(prop => prop.name && ts.isStringLiteral(prop.name) && prop.name.text === 'data-dsh-modal-close')) return bundle
+  const offset = props.getStart(ast) + 1
+  return bundle.slice(0, offset) + '"data-dsh-modal-close":"",' + bundle.slice(offset)
+}
+
+export function prepareBootCopy(bundle) {
+  const copy = [
+    { pattern: /\.wordmark,"(?:HARNESS|LUOKUI-AI)"\)/g, replacement: '.wordmark,"LUOKUI-AI")', label: 'wordmark' },
+    { pattern: /\.hint,"(?:Loading plugins…|正在加载插件…)"\)/g, replacement: '.hint,"正在加载插件…")', label: 'loading status' }
+  ]
+  for (const { pattern, replacement, label } of copy) {
+    const matches = [...bundle.matchAll(pattern)]
+    if (matches.length !== 1) throw new Error(`Review frontend boot copy projection: expected one ${label}, found ${matches.length}`)
+    bundle = bundle.replace(pattern, replacement)
+  }
+  return bundle
+}
+
 export function installReferenceIcons(root) {
   const modules = path.join(root, 'node_modules/@deepseek-ai')
   for (const name of ['dsh-web-frontend', 'dsh-client-ui-primitives']) {
@@ -123,7 +153,7 @@ export function installReferenceIcons(root) {
   const entry = one([...html.matchAll(/<script\b[^>]*src="\.\/(assets\/[^"?]+\.js)(?:\?[^" ]*)?"/g)], 'frontend entry')[1]
   const target = path.join(dist, entry)
   const primitives = readFileSync(path.join(modules, 'dsh-client-ui-primitives/lib/index.js'), 'utf8')
-  const result = prepareMenuPresence(prepareReferenceIcons(readFileSync(target, 'utf8'), primitives))
+  const result = prepareBootCopy(prepareModalClose(prepareMenuPresence(prepareReferenceIcons(readFileSync(target, 'utf8'), primitives))))
   writeFileSync(target, result)
   const revision = createHash('sha256').update(result).digest('hex').slice(0, 16)
   writeFileSync(htmlPath, html.replace(/(<script\b[^>]*src="\.\/assets\/[^"?]+\.js)(?:\?[^" ]*)?"/, `$1?bisheng-reference-icons=${revision}"`))
