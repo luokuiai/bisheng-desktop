@@ -76,6 +76,10 @@ window.__ModuleLoader__.load({
       return present ? render(controls, exiting) : null
     }
 
+    function PluginControlsLayout({ render }) {
+      return render(useBoardControls())
+    }
+
     /** The approvals rail is a vertical list, so it answers the up/down keys the settings nav uses. */
     function navigateSections(event, ids, active, select, refs) {
       if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key) || !ids.length) return
@@ -1086,6 +1090,7 @@ window.__ModuleLoader__.load({
       const register = (name, id, Component, extra = {}) => ctx.slots.inject(name, () => ctx.slots.register({ name, id, locale: NS, ...extra, inject: () => ({ t }) }, Component))
       register('desktop.account.usage', 'desktop-usage', Usage)
       ctx.slots.inject('settings.controls', () => ctx.slots.register({ name: 'settings.controls', id: 'desktop-settings-controls' }, SettingsControlsLayout))
+      ctx.slots.inject('plugins.controls', () => ctx.slots.register({ name: 'plugins.controls', id: 'desktop-plugin-controls' }, PluginControlsLayout))
       register('settings.general.layout', 'desktop-general-cards', GeneralLayout)
       ctx.slots.inject('settings.actions.layout', () => ctx.slots.register({ name: 'settings.actions.layout', id: 'desktop-settings-actions' }, SettingsActionsLayout))
       register('settings.section', 'desktop-about', About, { order: 90, label: () => t('about') })

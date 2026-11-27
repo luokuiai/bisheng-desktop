@@ -179,8 +179,7 @@ export function ComposerLoader({
           filter={blur > 0 ? `url(#${gradientId}-b${String(blur).replace(".", "_")})` : undefined}
           style={{
             opacity: opacity / copies,
-            animation: `bui-composer-loader-dash ${speed}s linear ${(phase * speed) / 100}s infinite ${direction}`,
-            animationPlayState: active ? "running" : "paused",
+            animation: `bui-composer-loader-dash ${speed}s linear ${(phase * speed) / 100}s infinite ${direction} ${active ? "running" : "paused"}`,
           }}
         />
       );

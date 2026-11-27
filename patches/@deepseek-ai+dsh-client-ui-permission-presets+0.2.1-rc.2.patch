@@ -1,8 +1,20 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-permission-presets/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-permission-presets/lib/client.js
-index a0b3825..df42278 100644
+index a0b3825..b935227 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-permission-presets/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-permission-presets/lib/client.js
-@@ -461,7 +461,7 @@ window.__ModuleLoader__.load({
+@@ -387,9 +387,10 @@ window.__ModuleLoader__.load({
+ 				},
+ 				side: "top",
+ 				portal: true,
++				listClassName: "dshWorkPicker",
+ 				anchor: (0, react_jsx_runtime.jsxs)("button", {
+ 					type: "button",
+-					className: PermissionSelect_module_css_default.trigger,
++					className: clsx(PermissionSelect_module_css_default.trigger, "dshWorkPickerTrigger"),
+ 					"aria-label": t("mode", { name: currentLabel }),
+ 					title: current === void 0 ? void 0 : optionDescription(current, t),
+ 					disabled: locked || busy,
+@@ -461,7 +462,7 @@ window.__ModuleLoader__.load({
  		* @param props - composed slot props.
  		* @returns the row, or null when the host does not expose permission settings.
  		*/
@@ -11,7 +23,7 @@ index a0b3825..df42278 100644
  			const state = usePermission((snapshot) => snapshot);
  			const [open, setOpen] = (0, react.useState)(false);
  			const [confirmingFullAccess, setConfirmingFullAccess] = (0, react.useState)(false);
-@@ -481,6 +481,18 @@ window.__ModuleLoader__.load({
+@@ -481,6 +482,18 @@ window.__ModuleLoader__.load({
  			const optionLabel = (option) => displayPermissionPreset(option.id, option.label, t);
  			const label = selected !== void 0 ? optionLabel(selected) : busy ? t("loading") : t("unavailable");
  			const description = state.error ?? t("description");
@@ -30,7 +42,7 @@ index a0b3825..df42278 100644
  			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsxs)("div", {
  				className: PermissionRow_module_css_default.row,
  				children: [(0, react_jsx_runtime.jsxs)("div", {
-@@ -493,26 +505,21 @@ window.__ModuleLoader__.load({
+@@ -493,26 +506,21 @@ window.__ModuleLoader__.load({
  						role: state.error === null ? void 0 : "alert",
  						children: description
  					})]
@@ -67,7 +79,7 @@ index a0b3825..df42278 100644
  					align: "end",
  					portal: true,
  					anchor: (0, react_jsx_runtime.jsxs)("button", {
-@@ -520,7 +527,7 @@ window.__ModuleLoader__.load({
+@@ -520,7 +528,7 @@ window.__ModuleLoader__.load({
  						className: PermissionRow_module_css_default.selector,
  						"aria-haspopup": "menu",
  						"aria-expanded": open,
@@ -76,3 +88,10 @@ index a0b3825..df42278 100644
  						onClick: () => {
  							setOpen((value) => !value);
  						},
+@@ -829,4 +837,4 @@ window.__ModuleLoader__.load({
+ 	}
+ });
+
+-//# sourceMappingURL=client.js.map
+\ No newline at end of file
++//# sourceMappingURL=client.js.map

@@ -71,23 +71,6 @@ export function buildDestinations({ entries = [], hasPanel } = {}) {
   return destinations
 }
 
-/** The flat list as sidebar rows for the `/chat` scene. */
-export function sidebarDestinations(React, destinations, t) {
-  return destinations.map(destination => ({
-    key: destination.id,
-    label: destination.label || t(destination.labelKey || pageKey(destination.route)),
-    icon: sidebarIcon(React, destination.icon),
-    href: destination.route
-  }))
-}
-
-function sidebarIcon(React, name) {
-  return function SidebarGlyph({ className, 'aria-hidden': hidden }) {
-    return React.createElement('svg', { className, viewBox: '0 0 24 24', 'aria-hidden': hidden ?? true },
-      React.createElement('use', { href: iconFile + '#' + name }))
-  }
-}
-
 // Some template sidebars sit inside their own padded flex item. Animate its
 // occupied width, preserving the authored panel width and any focused editor.
 function preparePageMotion() {
@@ -124,7 +107,7 @@ function preparePageMotion() {
   }
 }
 
-export function createWorkspaceChrome(React, loadPages) {
+export function createWorkspaceChrome(React) {
   const h = React.createElement
 
   function Icon({ name }) {
@@ -139,7 +122,7 @@ export function createWorkspaceChrome(React, loadPages) {
     catch { return false }
   }
 
-  function RouteButton({ destination, active, t, navigate, openRemote, compact = false }) {
+  function RouteButton({ destination, active, t, navigate, openRemote, compact = false, branded = false }) {
     const label = destination.label || t(destination.labelKey || pageKey(destination.route))
     const dest = destination.route
     const open = () => destination.kind === 'remote'
@@ -150,7 +133,9 @@ export function createWorkspaceChrome(React, loadPages) {
       'data-workspace-kind': destination.kind,
       title: compact ? label : undefined, 'aria-label': label, 'aria-current': active ? 'page' : undefined,
       onClick: open
-    }, h(Icon, { name: destination.icon }), !compact && h('span', null, label))
+    }, branded
+      ? h(React.Fragment, null, h('img', { src: mark, alt: '' }), h('strong', null, 'LUOKUI-AI'))
+      : h(React.Fragment, null, h(Icon, { name: destination.icon }), !compact && h('span', null, label)))
   }
 
   // The Harness host and template builds can use different React majors.
@@ -168,31 +153,12 @@ export function createWorkspaceChrome(React, loadPages) {
       title: t('home'), 'aria-label': t('home'), onClick: () => navigate('/') }, h('img', { src: mark, alt: '' })),
     h('nav', { 'aria-label': compact ? t('quickNavigation') : t('navigation') },
       destinations.map(destination => h(RouteButton, {
-        key: destination.id, destination, active: destination.id === activeId, t, navigate, openRemote, compact
+        key: destination.id, destination, active: destination.id === activeId, t, navigate, openRemote, compact,
+        branded: !compact && destination.route === '/'
       }))))
   }
 
-  function ChatNav({ navigation, destinations, activeId, t, compact, navRef }) {
-    const [Sidebar, setSidebar] = React.useState(null)
-    React.useEffect(() => {
-      let mounted = true
-      loadPages().then(mod => {
-        if (mounted) setSidebar(() => mod.ChatSidebar)
-      }, error => {
-        // Keep directory navigation and the live conversation usable if a
-        // template chunk fails. Leaving and reopening the chat retries it.
-        console.warn('[desktop-workspace] Loading chat navigation failed', error)
-      })
-      return () => { mounted = false }
-    }, [])
-    const items = sidebarDestinations(React, destinations, t)
-    return h('div', { ref: navigationRef(navRef, compact), className: 'dshWorkspaceChatNav', 'aria-hidden': compact || undefined },
-      Sidebar ? h(Sidebar, { path: '/chat', navigate: navigation.navigate, host: navigation.host, items, selected: activeId })
-        : h(DirectoryNav, { destinations, activeId, t, navigate: navigation.navigate,
-          openRemote: moduleId => navigation.openRemoteModule?.(moduleId), inactive: compact }))
-  }
-
-  return function WorkspaceChrome({ path, native = false, navigation, theme, shortcuts, expandBotSidebar, t }) {
+  return function WorkspaceChrome({ path, native = false, navigation, theme, shortcuts, expandBotSidebar, t, modePicker }) {
     const [compact, setCompact] = React.useState(readCompact)
     const dark = React.useSyncExternalStore(theme.subscribe, theme.snapshot) === 'dark'
     const state = React.useSyncExternalStore(navigation.subscribe ?? EMPTY_SUBSCRIBE, navigation.snapshot ?? EMPTY_SNAPSHOT)
@@ -212,10 +178,13 @@ export function createWorkspaceChrome(React, loadPages) {
     // shared directory instead of falling back to a page-owned sidebar.
     const scene = native ? 'workspace' : workspaceScene(path)
     const surface = native ? nativeSurfaces.get(path) : undefined
-    const accountPlacement = compact ? 'compact' : scene === 'workspace' ? 'expanded' : undefined
+    const sessionToolbar = scene === 'chat' && state.mode === 'work' && state.nativeWork && !state.panelOpen
+    const accountPlacement = scene === 'chat' ? undefined : compact ? 'compact' : scene === 'workspace' ? 'expanded' : undefined
     const toggle = () => {
       const active = document.activeElement
-      const inPageSidebar = active?.closest('[data-titlebar-sidebar]') || (surface === 'agents' && active?.closest('.bt-leftcol'))
+      const inPageSidebar = active?.closest('[data-titlebar-sidebar]') ||
+        (scene === 'chat' && active?.closest('[data-dsh-sidebar-root]')) ||
+        (surface === 'agents' && active?.closest('.bt-leftcol'))
       if ((compact ? railRef.current : navRef.current)?.contains(active) || inPageSidebar) {
         toggleRef.current?.focus({ preventScroll: true })
       }
@@ -263,7 +232,7 @@ export function createWorkspaceChrome(React, loadPages) {
       const signal = () => document.dispatchEvent(new Event('luokui:workspace-right-sidebar-slot-ready'))
       signal()
       return () => queueMicrotask(signal)
-    }, [])
+    }, [sessionToolbar])
     React.useLayoutEffect(() => {
       const signal = () => document.dispatchEvent(new Event('luokui:workspace-account-slot-ready'))
       signal()
@@ -284,42 +253,30 @@ export function createWorkspaceChrome(React, loadPages) {
     }, [compact, shortcuts, scene, surface])
     const navigate = navigation.navigate
     const openRemote = moduleId => navigation.openRemoteModule?.(moduleId)
-    const labelKey = pageKey(path)
-    const title = destinations.find(destination => destination.id === activeId)?.label || t(labelKey)
     const tool = (icon, label, activate, extra = {}) => h('button', {
       type: 'button', className: 'dshWorkspaceTool', 'aria-label': label, title: label, onClick: activate, ...extra
     }, h(Icon, { name: icon }))
     return h(React.Fragment, null,
       h('header', { className: 'dshWorkspaceToolbar', 'aria-label': t('toolbar') },
-        tool('sidebar', t(compact ? 'expand' : 'collapse'), toggle, {
-          ref: toggleRef, 'aria-expanded': !compact, 'data-workspace-sidebar-toggle': '',
-          onMouseDown: event => {
-            if (event.button === 0 && document.activeElement?.matches('textarea,input,[contenteditable="true"]')) event.preventDefault()
-          }
-        }),
-        compact ? h('nav', { className: 'dshWorkspaceTabs', 'aria-label': t('views') },
-          destinations.filter(destination => destination.route === '/' || destination.route === '/chat')
-            .map(destination => h(RouteButton, { key: destination.id, destination, active: destination.id === activeId,
-              navigate, openRemote, t })),
-          path !== '/' && path !== '/chat' && h('span', { className: 'dshWorkspaceCurrentTab' }, title))
-        : h('div', { className: 'dshWorkspaceBreadcrumb' },
-          h('button', { type: 'button', className: 'dshWorkspaceBrand', 'aria-label': t('home'), onClick: () => navigate('/') },
-            h('img', { src: mark, alt: '' }), h('strong', null, 'LUOKUI-AI')),
-          h('span', { className: 'dshWorkspaceDivider', 'aria-hidden': true }),
-          path.startsWith('/templates/')
-            ? h(React.Fragment, null,
-              h('button', { type: 'button', className: 'dshWorkspaceParent dshWorkspaceParentLink', onClick: () => navigate('/templates') }, t('templates')),
-              h('span', { className: 'dshWorkspaceParent', 'aria-hidden': true }, '   /   '))
-            : h('span', { className: 'dshWorkspaceParent' }, t('workspace') + '   /   '),
-          h('strong', { className: 'dshWorkspaceTitle' }, title)),
-        h('div', { className: 'dshWorkspaceTools' },
-          h('span', { 'data-workspace-actions-slot': '', className: 'dshWorkspacePortal dshWorkspaceActions' }),
-          tool('settings', t('settings'), () => navigate('/settings')),
-          tool(dark ? 'sun' : 'moon', t(dark ? 'light' : 'dark'), () => theme.set(dark ? 'light' : 'dark')),
-          h('span', { 'data-workspace-right-sidebar-slot': '' }))),
-      h(DirectoryNav, { compact: true, destinations, activeId, t, navigate, openRemote, navRef: railRef, inactive: !compact }),
+        h('div', { className: 'dshWorkspaceToolbarStart' },
+          tool('sidebar', t(compact ? 'expand' : 'collapse'), toggle, {
+            ref: toggleRef, 'aria-expanded': !compact, 'data-workspace-sidebar-toggle': '',
+            onMouseDown: event => {
+              if (event.button === 0 && document.activeElement?.matches('textarea,input,[contenteditable="true"]')) event.preventDefault()
+            }
+          }),
+          tool('home', t('home'), () => navigate('/')),
+          path.startsWith('/templates/') && tool('templates', t('templates'), () => navigate('/templates'))),
+        scene === 'chat' && modePicker && h('div', { className: 'dshWorkspaceModePicker' }, modePicker),
+        h('div', { className: 'dshWorkspaceToolbarEnd' },
+          sessionToolbar && h('div', { 'data-workspace-session-toolbar': '' }),
+          h('div', { className: 'dshWorkspaceTools' },
+            h('span', { 'data-workspace-actions-slot': '', className: 'dshWorkspacePortal dshWorkspaceActions' }),
+            tool('settings', t('settings'), () => navigate('/settings')),
+            tool(dark ? 'sun' : 'moon', t(dark ? 'light' : 'dark'), () => theme.set(dark ? 'light' : 'dark')),
+            h('span', { 'data-workspace-right-sidebar-slot': '' })))),
+      scene !== 'chat' && h(DirectoryNav, { compact: true, destinations, activeId, t, navigate, openRemote, navRef: railRef, inactive: !compact }),
       scene === 'workspace' && h(DirectoryNav, { destinations, activeId, t, navigate, openRemote, navRef, inactive: compact }),
-      scene === 'chat' && h(ChatNav, { navigation, destinations, activeId, compact, t, navRef }),
       accountPlacement && h('div', { className: 'dshWorkspaceAccount', 'data-workspace-account-slot': accountPlacement }))
   }
 }

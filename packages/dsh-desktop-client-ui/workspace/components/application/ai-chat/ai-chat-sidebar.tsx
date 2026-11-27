@@ -350,6 +350,7 @@ export function AiChatSidebar({
   return localize((
     <aside
       data-titlebar-sidebar={desktopNavigation ? "desktop" : undefined}
+      data-dsh-workspace-sidebar=""
       data-nav-collapsed={collapsed || undefined}
       className={cx(
         !flat && [styles.codeNav, navMotion.timing],
@@ -362,8 +363,8 @@ export function AiChatSidebar({
     >
       <div className="flex min-h-0 w-full flex-col gap-3">
         {/* Workspace switcher + panel toggle */}
-        <div className={cx(!flat && styles.codeNavHeader, "flex w-full flex-row items-center justify-between")}>
-          <div className={!flat ? styles.codeNavDetail : undefined} {...inertWhen(collapsed)}>
+        <div data-dsh-workspace-sidebar-top="" className={cx(!flat && styles.codeNavHeader, "flex w-full flex-row items-center justify-between")}>
+          <div data-dsh-workspace-sidebar-identity="" className={!flat ? styles.codeNavDetail : undefined} {...inertWhen(collapsed)}>
             <DashboardUserMenu
               avatarClassName={
                 flat ? "bg-background-tertiary-default dark:bg-background-secondary-default" : undefined

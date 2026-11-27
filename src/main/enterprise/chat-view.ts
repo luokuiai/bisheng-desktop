@@ -15,6 +15,7 @@ import type { EnterpriseWebSession } from './web-session'
 
 /** Remote Chat gets its own in-memory browser session and a presentation-only preload. */
 const DOCUMENT_LOAD_TIMEOUT_MS = 45_000
+const CHAT_ROUTE = /^\/workspace(?:\/(?:c|chat|linsight)(?:\/|$)|\/?$)/u
 const SETTINGS_SPA_READY_TIMEOUT_MS = 3_000
 const INITIAL_BACKOFF_MS = [2_000, 5_000, 10_000]
 const RENEWAL_BACKOFF_MS = [2_000, 5_000, 10_000, 30_000]
@@ -483,13 +484,17 @@ export class EnterpriseChatView {
         this.note('[enterprise-chat] dialog_viewport_failed')
       })
     }
-    // Module routes paint the host surface, so the view backs them with the same color and shows no
-    // foreign flash; Chat routes keep their own deployed theme and its original backing.
-    const surface = new RegExp(MODULE_ROUTE_PATTERN, 'u').test(new URL(this.view.webContents.getURL() || 'about:blank').pathname)
+    const pathname = new URL(this.view.webContents.getURL() || 'about:blank').pathname
+    const surface = new RegExp(MODULE_ROUTE_PATTERN, 'u').test(pathname)
       ? this.presentation.palette?.surface
-      : undefined
+      : this.workspaceChatSurface(pathname)
     this.view.setBackgroundColor(windowDialog || crop ? '#00000000' : surface ? `#${surface.map((channel) => channel.toString(16).padStart(2, '0')).join('')}` : theme === 'dark' ? '#141416' : '#ffffff')
     if (this.state.phase === 'ready') this.applyTheme()
+  }
+
+  private workspaceChatSurface(pathname: string) {
+    const presentation = this.presentation
+    if (presentation?.workspaceCard && !presentation.settings && CHAT_ROUTE.test(pathname)) return presentation.palette?.surface
   }
 
   /** Theme reaches the document on every presentation, load and in-page route change. */
@@ -497,7 +502,9 @@ export class EnterpriseChatView {
     const theme = this.presentation?.theme
     if (!this.view || !theme) return
     const palette = this.presentation?.palette
-    void this.view.webContents.executeJavaScript(moduleThemeScript(theme, palette)).then((result: unknown) => {
+    const pathname = new URL(this.view.webContents.getURL() || 'about:blank').pathname
+    const surface = this.workspaceChatSurface(pathname)
+    void this.view.webContents.executeJavaScript(moduleThemeScript(theme, palette, surface)).then((result: unknown) => {
       const summary = `theme=${theme} palette=${palette ? palette.surface.join(' ') : 'absent'} ${typeof result === 'string' ? result : 'unreported'}`
       if (summary === this.appearance) return
       this.appearance = summary

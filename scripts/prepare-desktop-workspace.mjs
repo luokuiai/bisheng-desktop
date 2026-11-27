@@ -35,7 +35,7 @@ async function buildWorkspace(outdir) {
   // bundle import the same objects as the surrounding slot (including portals).
   const hostModules = new Set(['react', 'react-dom', 'react/jsx-runtime'])
   await build({
-    entryPoints: ['pages.tsx', 'settings-controls.tsx'].map(file => path.join(source, file)), outdir, bundle: true,
+    entryPoints: ['pages.tsx', 'settings-controls.tsx', 'chat-controls.tsx'].map(file => path.join(source, file)), outdir, bundle: true,
     format: 'esm', platform: 'browser', target: 'chrome140', splitting: true,
     // Preserve the dsh-workspace filename prefix on CSS Module classes and
     // keyframes. Other independently built plugins share this document.
@@ -69,14 +69,14 @@ async function buildWorkspace(outdir) {
   // @property declarations must be globally registered for transform, gradient,
   // and shadow utilities. The names are Tailwind-prefixed.
   sheet.walkAtRules('property', rule => { css.append(rule.clone()); rule.remove() })
-  // Native conversation nodes use Harness layout and controls. Carry only the
-  // prototype's neutral surface tokens across that boundary, without its resets.
+  // Native conversation nodes use Harness layout and controls. Carry the Board
+  // UI surface and secondary button tokens across that boundary without resets.
   const chatSurfaces = postcss.atRule({ name: 'scope', params: '(body[data-dsh-workspace-scene=chat] #dsh-panel-work)' })
   sheet.walkRules(rule => {
     if (![':scope', ':scope, :host', ':scope:where(.dark, .dark *)'].includes(rule.selector)) return
     const tokens = postcss.rule({ selector: rule.selector.replace(', :host', '') })
     for (const decl of rule.nodes) {
-      if (decl.type === 'decl' && /^--color-(?:white|neutral-[0-9]+|background-(?:full|primary-default|secondary-default))$/u.test(decl.prop) &&
+      if (decl.type === 'decl' && /^--color-(?:white|neutral-[0-9]+|background-(?:full|primary-(?:default|hover|active|disabled)|secondary-default)|border-button-(?:default|hover|active)|text-(?:primary|secondary|tertiary))$/u.test(decl.prop) &&
         decl.value !== `var(${decl.prop})`) tokens.append(decl.clone())
     }
     if (tokens.nodes.length) chatSurfaces.append(tokens)

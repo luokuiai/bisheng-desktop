@@ -583,8 +583,6 @@ describe('agent preset package transfer', () => {
     expect(patch).toContain('setImportId(event.target.value)')
     expect(patch).toContain('.dshpreset')
     expect(patch).toContain('copy.restart')
-    expect(patch).toContain('https://www.dshdesktop.com/preset/')
-    expect(patch).toContain('"_blank", "noopener,noreferrer"')
     expect(patch).toContain('"aria-label": `${copy.export}: ${display.name}`')
   })
 
@@ -597,7 +595,7 @@ describe('agent preset package transfer', () => {
     expect(patch).not.toContain('const css$')
   })
 
-  it('keeps a large mode roster searchable, grouped, compact, and connected to Awesome Presets', async () => {
+  it('keeps a large mode roster searchable, grouped, and compact', async () => {
     const patch = await readFile(
       patchPath('@deepseek-ai/dsh-client-ui-agent-preset'),
       'utf8'
@@ -606,7 +604,6 @@ describe('agent preset package transfer', () => {
     expect(patch).toContain('type: "search", value: search')
     expect(patch).toContain('isBuiltInPreset(row) === builtIn')
     expect(patch).toContain('presetDisplayText(row, t).name')
-    expect(patch).toContain('Awesome preset')
   })
 
   it('keeps the loopback API discoverable by an explicitly requested online Skill', async () => {

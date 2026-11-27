@@ -41,6 +41,11 @@ it('opens directory links, switches to the persistent rail and transfers focus o
   expect(container.querySelector('.dshWorkspaceDirectory').hasAttribute('inert')).toBe(true)
   expect(container.querySelector('.dshWorkspaceRail').hasAttribute('inert')).toBe(false)
   expect(container.querySelector('[data-workspace-account-slot="compact"]')).toBe(account)
+  const toolbarStart = container.querySelector('.dshWorkspaceToolbarStart')
+  expect([...toolbarStart.children].map(button => button.getAttribute('aria-label'))).toEqual(['expand', 'home'])
+  expect(toolbarStart.textContent).toBe('')
+  container.querySelector('.dshWorkspaceRail [data-workspace-route="/chat"]').click()
+  expect(navigation.navigate).toHaveBeenLastCalledWith('/chat')
   await act(async () => root.unmount())
   expect(document.body.hasAttribute('data-dsh-workspace-scene')).toBe(false)
   expect(account.isConnected).toBe(false)
@@ -68,24 +73,56 @@ it('shows one flat list of workbench and native panel entries in the expanded si
       .toEqual(['/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
         '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'])
   }
+  const first = container.querySelector('.dshWorkspaceDirectory nav').firstElementChild
+  expect(first.dataset.workspaceRoute).toBe('/')
+  expect(first.textContent).toBe('LUOKUI-AI')
+  expect(first.querySelector('img').getAttribute('src')).toBe('/desktop-workspace/luokui-ai-logo.png')
+  expect(first.getAttribute('aria-label')).toBe('home')
+  expect(first.getAttribute('aria-current')).toBe('page')
+  expect(container.querySelector('.dshWorkspaceToolbar img')).toBeNull()
+  first.click()
+  expect(navigate).toHaveBeenCalledWith('/')
   expect(container.querySelector('.dshWorkspaceNavGroup')).toBeNull()
   container.querySelector('.dshWorkspaceToolbar [title="settings"]').click()
   expect(navigate).toHaveBeenCalledWith('/settings')
 })
 
-it('keeps a page-owned sidebar out of the expanded directory and preserves template breadcrumbs', async () => {
+it('leaves AI Chat navigation to the native sidebar and keeps a route back to Overview', async () => {
+  const Chrome = createWorkspaceChrome(React)
+  const navigate = vi.fn()
+  await act(async () => root.render(React.createElement(Chrome, {
+    path: '/chat', navigation: { navigate }, theme, t: key => key
+  })))
+  expect(document.body.dataset.dshWorkspaceScene).toBe('chat')
+  expect(container.querySelector('aside')).toBeNull()
+  expect(container.querySelector('[data-workspace-account-slot]')).toBeNull()
+  const home = container.querySelector('.dshWorkspaceToolbar button[aria-label="home"]')
+  expect(home.querySelector('use').getAttribute('href')).toBe('/desktop-workspace/workspace-icons.svg#home')
+  expect(home.textContent).toBe('')
+  home.click()
+  expect(navigate).toHaveBeenCalledWith('/')
+  await act(async () => container.querySelector('[data-workspace-sidebar-toggle]').click())
+  expect(document.body.dataset.dshWorkspaceDensity).toBe('compact')
+  expect(container.querySelector('aside')).toBeNull()
+  expect(container.querySelector('.dshWorkspaceToolbar button[aria-label="home"]')).toBe(home)
+  expect(home.textContent).toBe('')
+  home.click()
+  expect(navigate).toHaveBeenLastCalledWith('/')
+})
+
+it('removes redundant toolbar titles and keeps template parent navigation', async () => {
   const Chrome = createWorkspaceChrome(React, vi.fn())
   const navigate = vi.fn()
   const mount = path => act(async () => root.render(React.createElement(Chrome, { path,
     navigation: { navigate }, theme, t: key => key })))
   await mount('/templates/finance')
   expect(container.querySelector('.dshWorkspaceDirectory')).toBeNull()
-  container.querySelector('.dshWorkspaceParentLink').click()
+  container.querySelector('.dshWorkspaceToolbar [aria-label="templates"]').click()
   expect(navigate).toHaveBeenCalledWith('/templates')
   expect(container.querySelector('.dshWorkspaceRail [aria-current]')).toBeNull()
   await mount('/admin/models')
   expect(container.querySelector('.dshWorkspaceDirectory [aria-current]')).toBeNull()
-  expect(container.querySelector('.dshWorkspaceTitle').textContent).toBe('admin')
+  expect(container.querySelector('.dshWorkspaceToolbar').textContent).not.toContain('admin')
   expect(workspaceScene('/chat')).toBe('chat')
 })
 
@@ -115,6 +152,54 @@ it('removes the underlying Harness navigation from the tab order only while a wo
   } finally {
     sheet.remove()
     frame.remove()
+  }
+})
+
+it('hides the header identity on desktop workspace pages while leaving the footer and template previews available', async () => {
+  const sheet = document.head.appendChild(document.createElement('style'))
+  try {
+    sheet.textContent = await readFile('packages/dsh-desktop-client-ui/workspace/static/workspace-chrome.css', 'utf8')
+    const Chrome = createWorkspaceChrome(React)
+    const navigation = { navigate: vi.fn() }
+    const render = path => act(async () => root.render(React.createElement(React.Fragment, null,
+      React.createElement(Chrome, { path, navigation, theme, t: key => key }),
+      React.createElement('div', { 'data-desktop-workspace-path': path },
+        React.createElement('aside', { 'data-dsh-workspace-sidebar': '' },
+          React.createElement('div', { 'data-dsh-workspace-sidebar-top': '' },
+            React.createElement('div', { 'data-dsh-workspace-sidebar-identity': '', 'data-account': 'top' })),
+          React.createElement('button', { 'data-account': 'footer' }, 'Account'))))))
+    await render('/')
+    expect(getComputedStyle(container.querySelector('[data-account=top]')).display).toBe('none')
+    expect(getComputedStyle(container.querySelector('[data-account=footer]')).display).not.toBe('none')
+    await render('/templates/finance')
+    expect(getComputedStyle(container.querySelector('[data-account=top]')).display).not.toBe('none')
+  } finally {
+    sheet.remove()
+  }
+})
+
+it('reserves the toolbar end for the native right sidebar button only while it is present', async () => {
+  const sheet = document.head.appendChild(document.createElement('style'))
+  try {
+    sheet.textContent = await readFile('packages/dsh-desktop-client-ui/workspace/static/workspace-chrome.css', 'utf8')
+    container.innerHTML = `
+      <header class="dshWorkspaceToolbar">
+        <div class="dshWorkspaceToolbarEnd">
+          <div data-workspace-session-toolbar>
+            <div data-conversation-header-corner><button data-sidebar-right-expand></button></div>
+          </div>
+          <div class="dshWorkspaceTools"></div>
+        </div>
+      </header>`
+    const corner = container.querySelector('[data-conversation-header-corner]')
+    const tools = container.querySelector('.dshWorkspaceTools')
+    expect(getComputedStyle(corner).position).toBe('absolute')
+    expect(getComputedStyle(tools).marginInlineEnd).toBe('36px')
+    corner.firstElementChild.remove()
+    expect(getComputedStyle(corner).position).not.toBe('absolute')
+    expect(getComputedStyle(tools).marginInlineEnd).not.toBe('36px')
+  } finally {
+    sheet.remove()
   }
 })
 

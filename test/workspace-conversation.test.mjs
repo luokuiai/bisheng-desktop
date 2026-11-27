@@ -2,12 +2,79 @@
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createPortal } from 'react-dom'
+import * as jsx from 'react/jsx-runtime'
+import { readFile } from 'node:fs/promises'
+import { runInNewContext } from 'node:vm'
 import { afterEach, expect, it, vi } from 'vitest'
 import { readTranscript, recentRows, submitSuggestion, WorkHistory, WorkSpeech } from '../packages/dsh-desktop-client-ui/workspace/static/work-conversation.js'
 
 function store(value) {
   return { getSnapshot: () => value, subscribe: () => () => {} }
 }
+
+it('hides the Work conversation only during right sidebar fullscreen and restores the same editor', async () => {
+  const style = document.createElement('style')
+  style.textContent = await readFile('packages/dsh-desktop-client-ui/workspace/static/work-conversation.css', 'utf8')
+  document.head.append(style)
+  document.body.dataset.dshWorkspaceScene = 'chat'
+  document.body.innerHTML = `
+    <div class="pI_x6G_frame">
+      <section id="dsh-panel-work">
+        <div class="pI_x6G_centerCol"><textarea>Unsaved draft</textarea></div>
+        <div data-rightbar-col><div data-sidebar-right-panel="push" data-sidebar-right-open></div></div>
+      </section>
+    </div>`
+  try {
+    const frame = document.querySelector('.pI_x6G_frame')
+    const center = frame.querySelector('.pI_x6G_centerCol')
+    const editor = center.querySelector('textarea')
+    const panel = frame.querySelector('[data-sidebar-right-panel]')
+    expect(getComputedStyle(center).getPropertyValue('content-visibility')).not.toBe('hidden')
+    panel.dataset.sidebarRightPanel = 'fullscreen'
+    frame.setAttribute('data-rightbar-fullscreen', '')
+    expect(getComputedStyle(center).getPropertyValue('content-visibility')).toBe('hidden')
+    panel.dataset.sidebarRightPanel = 'push'
+    frame.removeAttribute('data-rightbar-fullscreen')
+    expect(getComputedStyle(center).getPropertyValue('content-visibility')).not.toBe('hidden')
+    expect(center.querySelector('textarea')).toBe(editor)
+    expect(editor.value).toBe('Unsaved draft')
+  } finally {
+    style.remove()
+    delete document.body.dataset.dshWorkspaceScene
+    document.body.replaceChildren()
+  }
+})
+
+it('centers the blank Work composer using the scroll container without stretching the composer seat', async () => {
+  const style = document.createElement('style')
+  style.textContent = await readFile('packages/dsh-desktop-client-ui/workspace/static/work-conversation.css', 'utf8')
+  document.head.append(style)
+  document.body.dataset.dshWorkspaceScene = 'chat'
+  document.body.innerHTML = `
+    <section id="dsh-panel-work">
+      <div data-phase="hero" data-content-phase="hero">
+        <div class="wSkVaW_scrollBody" data-conversation-scroll>
+          <div class="wSkVaW_composerSeat" data-composer-seat>
+            <div data-slot="conversation.composer">
+              <div class="wSkVaW_composerHero"><div class="pXSMma_root"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>`
+  try {
+    const scroll = document.querySelector('[data-conversation-scroll]')
+    expect(getComputedStyle(scroll).justifyContent).toBe('safe center')
+    for (const element of scroll.querySelectorAll('div')) {
+      expect(getComputedStyle(element).flexGrow).not.toBe('1')
+    }
+    scroll.parentElement.dataset.contentPhase = 'active'
+    expect(getComputedStyle(scroll).justifyContent).not.toBe('safe center')
+  } finally {
+    style.remove()
+    delete document.body.dataset.dshWorkspaceScene
+  }
+})
 
 const row = { id: 'session-one', title: 'First conversation', displayTitle: 'First conversation', retainedBy: { mainView: 1 }, updatedAt: 1000 }
 
@@ -69,6 +136,93 @@ afterEach(async () => {
   document.body.replaceChildren()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  vi.useRealTimers()
+})
+
+it('passes turn elapsed time to the running-status slot while announcing the running state only once', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-11-27T12:00:00Z'))
+  const source = await readFile('node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.js', 'utf8')
+  const start = source.indexOf('//#region lib/types/client/chat/RunningStatus.js')
+  const end = source.indexOf('//#endregion', start)
+  const RunningStatus = runInNewContext(`${source.slice(start, end)}\nRunningStatus`, {
+    react: React,
+    react_jsx_runtime: jsx,
+    Date,
+    setInterval,
+    clearInterval,
+    LIVE_RUN_CLOCK_INTERVAL_MS: 1000,
+    formatRunDuration: elapsed => [{ text: `${elapsed / 1000} s` }],
+    ChatView_module_css_default: {},
+    accessibility_module_css_default: {},
+    RunningWhaleTail: () => null,
+    _deepseek_ai_dsh_client_ui_primitives: { TextShimmer: ({ children }) => children }
+  })
+  const host = document.body.appendChild(document.createElement('div'))
+  root = createRoot(host)
+  const renderSlot = vi.fn((name, owner) => React.createElement('span', { 'data-elapsed': name }, owner.elapsedLabel))
+  const startTime = Date.now() - 2000
+  const render = time => act(async () => root.render(React.createElement(RunningStatus, {
+    startTime: time, renderSlot, t: key => key
+  })))
+  await render(undefined)
+  expect(host.querySelector('[data-elapsed]').textContent).toBe('')
+  await render(startTime)
+  expect(host.querySelector('[data-elapsed]').textContent).toBe('2 s')
+  await act(async () => vi.advanceTimersByTime(1000))
+  expect(host.querySelector('[data-elapsed]').textContent).toBe('3 s')
+  expect(host.querySelectorAll('[role=status]')).toHaveLength(1)
+  expect(renderSlot).toHaveBeenLastCalledWith('conversation.chat.runningStatus',
+    expect.objectContaining({ elapsedLabel: '3 s', fallback: expect.anything() }),
+    expect.objectContaining({ fallback: expect.anything() }))
+  await act(async () => root.render(null))
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('retains projected tasks for the collapse transition and hides them from assistive technology', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  const source = await readFile('node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js', 'utf8')
+  const start = source.indexOf('//#region lib/types/client/skeleton/TodoPanel.js')
+  const end = source.indexOf('//#endregion', start)
+  const Icon = ({ state }) => React.createElement('span', { 'data-state': state })
+  const TodoDock = runInNewContext(`${source.slice(start, end)}\nTodoDock`, {
+    react: React,
+    react_jsx_runtime: jsx,
+    TodoPanel_module_css_default: {},
+    _deepseek_ai_dsh_client_ui_primitives: {
+      StateDot: Icon, IconChecklistOutlineRegular: Icon,
+      IconChevronDownOutlineRegular: Icon, IconChevronUpOutlineRegular: Icon
+    }
+  })
+  const host = document.body.appendChild(document.createElement('div'))
+  root = createRoot(host)
+  const render = todos => act(async () => root.render(React.createElement(TodoDock, {
+    useProjection(key) {
+      expect(key).toBe('todos')
+      return todos
+    },
+    t: key => key
+  })))
+  await render([{ content: 'First step', status: 'in_progress' }])
+  const toggle = host.querySelector('button')
+  const list = document.getElementById(toggle.getAttribute('aria-controls'))
+  const disclosure = list.parentElement
+  expect(disclosure.hidden).toBe(true)
+  expect(disclosure.getAttribute('aria-hidden')).toBe('true')
+  await act(async () => toggle.click())
+  expect(toggle.getAttribute('aria-expanded')).toBe('true')
+  expect(disclosure.hidden).toBe(false)
+  expect(list.querySelector('li').dataset.status).toBe('in_progress')
+  await render([{ content: 'First step', status: 'completed' }])
+  expect(list.querySelector('li').dataset.status).toBe('completed')
+  await act(async () => toggle.click())
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  expect(disclosure.hidden).toBe(true)
+  expect(disclosure.getAttribute('aria-hidden')).toBe('true')
+  expect(list.isConnected).toBe(true)
+  await render([])
+  expect(list.isConnected).toBe(false)
 })
 
 it('docks history by available width, restores the chosen dock state, and navigates from the narrow drawer', async () => {

@@ -316,6 +316,7 @@ export function DashboardSidebar({
   return localize((
     <aside
       data-titlebar-sidebar={mobile ? undefined : "desktop"}
+      data-dsh-workspace-sidebar=""
       ref={sidebarRef}
       className={cx(
         "flex h-full shrink-0 flex-col justify-between overflow-hidden",
@@ -344,6 +345,7 @@ export function DashboardSidebar({
       >
         {/* Workspace switcher / collapse control */}
         <div
+          data-dsh-workspace-sidebar-top=""
           className={cx(
             navMotion.timing, "flex w-full transition-[gap]",
             collapsed
@@ -357,6 +359,7 @@ export function DashboardSidebar({
               pill's 8px reach and pull it back with a negative margin, so the
               widths below are 16px larger than the footprint they produce. */}
           <div
+            data-dsh-workspace-sidebar-identity=""
             {...inertWhen(mobile && flat && searchActive)}
             className={cx(
               "-m-2 min-w-0 overflow-hidden p-2 transition-[max-width,opacity,transform] duration-300 ease-in-out",

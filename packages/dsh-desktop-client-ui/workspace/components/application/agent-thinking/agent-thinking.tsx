@@ -34,6 +34,8 @@ export interface AgentThinkingProps {
   shimmer?: boolean;
   /** Elapsed seconds since mount, rendered after the label. */
   showTimer?: boolean;
+  elapsedLabel?: string;
+  announce?: boolean;
   className?: string;
 }
 
@@ -251,6 +253,8 @@ export function AgentThinking({
   tone,
   shimmer = true,
   showTimer = true,
+  elapsedLabel,
+  announce = true,
   className,
 }: AgentThinkingProps) {
   const localize = useTemplateCopy();
@@ -258,7 +262,8 @@ export function AgentThinking({
 
   return localize((
     <div
-      role="status"
+      role={announce ? "status" : undefined}
+      aria-hidden={!announce || undefined}
       className={cx("flex items-center gap-2.5", className)}
       style={{ color, "--bui-agent-thinking-tone": color } as CSSProperties}
     >
@@ -271,7 +276,9 @@ export function AgentThinking({
       >
         {label}
       </span>
-      {showTimer && <ElapsedTimer />}
+      {elapsedLabel !== undefined
+        ? <span className="text-caption-1-regular tabular-nums">{elapsedLabel}</span>
+        : showTimer && <ElapsedTimer />}
     </div>
   ));
 }

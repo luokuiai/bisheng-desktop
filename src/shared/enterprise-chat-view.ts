@@ -16,6 +16,7 @@ export interface EnterpriseChatPresentation {
   settings?: EnterpriseSettingsSection
   /** Corner radius of the host card the native view fills; 0 keeps square corners. */
   radius?: number
+  workspaceCard?: boolean
   /** Host surfaces and ink resolved from the active Harness theme; absent when they cannot be sampled. */
   palette?: EnterprisePalette
 }
@@ -111,6 +112,8 @@ export function parseChatPresentation(value: unknown): EnterpriseChatPresentatio
   }
   const settings = input.settings === undefined ? undefined : parseEnterpriseSettingsSection(input.settings)
   const palette = parseEnterprisePalette(input.palette)
+  const workspaceCard = input.workspaceCard
+  if (workspaceCard !== undefined && typeof workspaceCard !== 'boolean') throw new Error('Invalid Chat workspace card.')
   const radius = input.radius
   if (radius !== undefined && (typeof radius !== 'number' || !Number.isInteger(radius) || radius < 0 || radius > 64)) {
     throw new Error('Invalid Chat radius.')
@@ -127,6 +130,7 @@ export function parseChatPresentation(value: unknown): EnterpriseChatPresentatio
     locale: input.locale,
     settings,
     ...(radius === undefined ? {} : { radius }),
+    ...(workspaceCard === true ? { workspaceCard } : {}),
     ...(palette ? { palette } : {}),
     ...(hostedAppBounds ? { hostedAppBounds } : {}),
     ...(coveredLeft ? { coveredLeft } : {}),

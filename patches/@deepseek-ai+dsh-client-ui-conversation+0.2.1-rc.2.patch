@@ -1,5 +1,5 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js
-index 4bfdd13..66c6daa 100644
+index 4bfdd13..4c73583 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js
 @@ -4338,7 +4338,9 @@ window.__ModuleLoader__.load({
@@ -220,7 +220,26 @@ index 4bfdd13..66c6daa 100644
  		}
  		//#endregion
  		//#region lib/types/client/skeleton/ConversationHeader.js
-@@ -18700,13 +18744,16 @@ window.__ModuleLoader__.load({
+@@ -17989,7 +18033,7 @@ window.__ModuleLoader__.load({
+ 			const active = resolveActiveView(tabs, useStore((s) => s.view));
+ 			const ancestry = useSessions((s) => deriveAncestry(s, sessionId), equalBreadcrumbs);
+ 			const showTabs = !hideChrome && tabs.length > 1;
+-			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsxs)("div", {
++			const row = (0, react_jsx_runtime.jsxs)("div", {
+ 				className: ConversationRoot_module_css_default.titleRow,
+ 				children: [!hideChrome && (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsxs)("div", {
+ 					className: ConversationRoot_module_css_default.titleCluster,
+@@ -18040,7 +18084,8 @@ window.__ModuleLoader__.load({
+ 					"data-conversation-header-corner": "",
+ 					children: renderSlot("conversation.session.header.corner", {})
+ 				})]
+-			}), showTabs && (0, react_jsx_runtime.jsx)("div", {
++			});
++			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [renderSlot("conversation.session.header.toolbar", { row }, { fallback: row }), showTabs && (0, react_jsx_runtime.jsx)("div", {
+ 				className: ConversationRoot_module_css_default.tabs,
+ 				role: "tablist",
+ 				"data-conversation-tabs": "",
+@@ -18700,13 +18745,16 @@ window.__ModuleLoader__.load({
  		}
  		//#endregion
  		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/InputBar.module.css.mjs
@@ -239,7 +258,7 @@ index 4bfdd13..66c6daa 100644
  			document.head.appendChild(tag);
  		}
  		var InputBar_module_css_default = {
-@@ -18728,6 +18775,7 @@ window.__ModuleLoader__.load({
+@@ -18728,6 +18776,7 @@ window.__ModuleLoader__.load({
  			"pending": "uV2eYG_pending",
  			"placeholder": "uV2eYG_placeholder",
  			"primary": "uV2eYG_primary",
@@ -247,7 +266,7 @@ index 4bfdd13..66c6daa 100644
  			"retry": "uV2eYG_retry",
  			"root": "uV2eYG_root",
  			"row": "uV2eYG_row",
-@@ -18754,7 +18802,7 @@ window.__ModuleLoader__.load({
+@@ -18754,7 +18803,7 @@ window.__ModuleLoader__.load({
  		* The no-session state renders the SAME div inert as the Workspace-picker
  		* trigger instead of a parallel tree.
  		*/
@@ -256,7 +275,7 @@ index 4bfdd13..66c6daa 100644
  			const input = useInput((s) => s);
  			const notice = useNotices((s) => s);
  			const busyEnter = useBusyEnter((s) => s);
-@@ -18999,10 +19047,6 @@ window.__ModuleLoader__.load({
+@@ -18999,10 +19048,6 @@ window.__ModuleLoader__.load({
  								"data-composer-overlay": true,
  								children: renderSlot("conversation.input.overlay", {})
  							}),
@@ -267,7 +286,7 @@ index 4bfdd13..66c6daa 100644
  							renderSlot("conversation.input.attachments", {
  								attachments,
  								canAcceptDrop,
-@@ -19014,25 +19058,35 @@ window.__ModuleLoader__.load({
+@@ -19014,25 +19059,36 @@ window.__ModuleLoader__.load({
  								onRetryFile: (id) => {
  									retryFileUpload?.(id);
  								},
@@ -294,6 +313,7 @@ index 4bfdd13..66c6daa 100644
 +							(0, react_jsx_runtime.jsxs)("div", {
 +								className: InputBar_module_css_default.promptRow,
 +								children: [
++									sessionId === void 0 ? null : renderSlot("conversation.input.decoration", { running }),
 +									(0, react_jsx_runtime.jsx)("div", {
 +										className: InputBar_module_css_default.accessory,
 +										children: accessory ?? (sessionId === void 0 ? null : renderSlot("conversation.input.accessory", extensionZone))
@@ -317,7 +337,7 @@ index 4bfdd13..66c6daa 100644
  							}),
  							(0, react_jsx_runtime.jsxs)("div", {
  								ref: rowRef,
-@@ -19160,8 +19214,7 @@ window.__ModuleLoader__.load({
+@@ -19160,8 +19216,7 @@ window.__ModuleLoader__.load({
  					}),
  					(0, react_jsx_runtime.jsxs)("div", {
  						className: InputBar_module_css_default.dock,
@@ -327,7 +347,66 @@ index 4bfdd13..66c6daa 100644
  							useProjection,
  							t
  						})]
-@@ -19438,6 +19491,8 @@ window.__ModuleLoader__.load({
+@@ -19233,6 +19288,7 @@ window.__ModuleLoader__.load({
+ 		}
+ 		function TodoPanel({ todos, t }) {
+ 			const [collapsed, setCollapsed] = (0, react.useState)(true);
++			const listId = (0, react.useId)();
+ 			if (todos.length === 0) return null;
+ 			return (0, react_jsx_runtime.jsx)("section", {
+ 				className: TodoPanel_module_css_default.root,
+@@ -19244,6 +19300,7 @@ window.__ModuleLoader__.load({
+ 						type: "button",
+ 						className: TodoPanel_module_css_default.header,
+ 						"aria-expanded": !collapsed,
++						"aria-controls": listId,
+ 						onClick: () => {
+ 							setCollapsed((v) => !v);
+ 						},
+@@ -19267,21 +19324,27 @@ window.__ModuleLoader__.load({
+ 								children: collapsed ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronUpOutlineRegular, {}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutlineRegular, {})
+ 							})
+ 						]
+-					}), !collapsed && (0, react_jsx_runtime.jsx)("ul", {
+-						className: TodoPanel_module_css_default.list,
+-						children: todos.map((item) => (0, react_jsx_runtime.jsxs)("li", {
+-							className: TodoPanel_module_css_default.item,
+-							"data-status": item.status,
+-							children: [(0, react_jsx_runtime.jsx)("span", {
+-								className: TodoPanel_module_css_default.glyph,
+-								role: "img",
+-								"aria-label": statusLabel(item.status, t),
+-								children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: statusDotState(item.status) })
+-							}), (0, react_jsx_runtime.jsx)("span", {
+-								className: TodoPanel_module_css_default.content,
+-								children: item.content
+-							})]
+-						}, item.content))
++					}), (0, react_jsx_runtime.jsx)("div", {
++						"data-dsh-todo-disclosure": "",
++						hidden: collapsed,
++						"aria-hidden": collapsed || void 0,
++						children: (0, react_jsx_runtime.jsx)("ul", {
++							id: listId,
++							className: TodoPanel_module_css_default.list,
++							children: todos.map((item) => (0, react_jsx_runtime.jsxs)("li", {
++								className: TodoPanel_module_css_default.item,
++								"data-status": item.status,
++								children: [(0, react_jsx_runtime.jsx)("span", {
++									className: TodoPanel_module_css_default.glyph,
++									role: "img",
++									"aria-label": statusLabel(item.status, t),
++									children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: statusDotState(item.status) })
++								}), (0, react_jsx_runtime.jsx)("span", {
++									className: TodoPanel_module_css_default.content,
++									children: item.content
++								})]
++							}, item.content))
++						})
+ 					})]
+ 				})
+ 			});
+@@ -19438,6 +19501,8 @@ window.__ModuleLoader__.load({
  		const inject = [
  			"slots",
  			"sessions",
@@ -336,7 +415,7 @@ index 4bfdd13..66c6daa 100644
  			"fileUpload",
  			"uiSession",
  			"uiWorkspace",
-@@ -19751,6 +19806,7 @@ window.__ModuleLoader__.load({
+@@ -19751,6 +19816,7 @@ window.__ModuleLoader__.load({
  						kind: "list",
  						scope: "session"
  					},
@@ -344,7 +423,7 @@ index 4bfdd13..66c6daa 100644
  					"conversation.hero.brand.mark": {
  						kind: "single",
  						scope: "root"
-@@ -19766,6 +19822,14 @@ window.__ModuleLoader__.load({
+@@ -19766,6 +19832,14 @@ window.__ModuleLoader__.load({
  					"conversation.hero.options": {
  						kind: "list",
  						scope: "session"
@@ -359,10 +438,14 @@ index 4bfdd13..66c6daa 100644
  					}
  				},
  				slots: {
-@@ -19889,6 +19953,10 @@ window.__ModuleLoader__.load({
+@@ -19889,6 +19963,14 @@ window.__ModuleLoader__.load({
  						kind: "list",
  						scope: "session"
  					},
++					"conversation.input.decoration": {
++						kind: "single",
++						scope: "session"
++					},
 +					"conversation.input.accessory": {
 +						kind: "list",
 +						scope: "session"
@@ -370,7 +453,15 @@ index 4bfdd13..66c6daa 100644
  					"conversation.input.permission": {
  						kind: "single",
  						scope: "session"
-@@ -19925,6 +19993,7 @@ window.__ModuleLoader__.load({
+@@ -19840,6 +19922,7 @@ window.__ModuleLoader__.load({
+ 				name: "conversation.session.header",
+ 				locale: NS,
+ 				children: {
++					"conversation.session.header.toolbar": { kind: "single", scope: "session" },
+ 					"conversation.session.header.lineage": {
+ 						kind: "single",
+ 						scope: "session"
+@@ -19925,6 +20008,7 @@ window.__ModuleLoader__.load({
  						removeAttachment: void 0,
  						resolveDraftAttachments: void 0,
  						retryFileUpload: void 0,
@@ -378,7 +469,7 @@ index 4bfdd13..66c6daa 100644
  						toggleCommandMenu: void 0,
  						stop: void 0,
  						hooks: {
-@@ -19991,6 +20060,11 @@ window.__ModuleLoader__.load({
+@@ -19991,6 +20075,11 @@ window.__ModuleLoader__.load({
  						retryFileUpload: (id) => {
  							if (sessions.binding(sessionId) !== void 0) conversation.retryFileUpload(sessionId, id);
  						},
@@ -390,7 +481,7 @@ index 4bfdd13..66c6daa 100644
  						toggleCommandMenu: inputTriggers === void 0 ? void 0 : (selection) => {
  							shell.dismissPopup();
  							const snapshot = shell.snapshot;
-@@ -20023,10 +20097,7 @@ window.__ModuleLoader__.load({
+@@ -20023,10 +20112,7 @@ window.__ModuleLoader__.load({
  				yield slots.register({
  					name: "main",
  					key: "conversation",
@@ -402,6 +493,13 @@ index 4bfdd13..66c6daa 100644
  				}, ConversationPanel);
  				yield registerConversationRoot();
  				yield registerConversationContent();
+@@ -20062,4 +20148,4 @@ window.__ModuleLoader__.load({
+ 	}
+ });
+
+-//# sourceMappingURL=client.js.map
+\ No newline at end of file
++//# sourceMappingURL=client.js.map
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/contract/draft-editor.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/contract/draft-editor.d.ts
 index bc64d0f..84027d5 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/contract/draft-editor.d.ts
@@ -429,7 +527,7 @@ index 15f2869..2907a2f 100644
           * Claim a command token for the scoped input machine.
           * @param request - command claim and span.
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/contract/slots.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/contract/slots.d.ts
-index 14e942f..00de8fa 100644
+index 14e942f..f6952c8 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/contract/slots.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/contract/slots.d.ts
 @@ -194,6 +194,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -445,7 +543,19 @@ index 14e942f..00de8fa 100644
          /** Conversation shell beneath its root-scoped main-panel entry. */
          'main.conversation': {
              kind: 'single';
-@@ -274,6 +280,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -220,6 +226,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+                 hideChrome: boolean;
+             };
+         };
++        'conversation.session.header.toolbar': {
++            kind: 'single';
++            scope: 'session';
++            owner: { row: ReactNode };
++        };
+         /** Optional replacement for one Session breadcrumb title. */
+         'conversation.session.header.lineage': {
+             kind: 'single';
+@@ -274,6 +285,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
              scope: 'root';
              owner: EmptyWorkspaceOwnerProps;
          };
@@ -454,7 +564,7 @@ index 14e942f..00de8fa 100644
          /** Brand mark shown before the blank-session headline. */
          'conversation.hero.brand.mark': {
              kind: 'single';
-@@ -291,6 +299,18 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -291,6 +304,18 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
              kind: 'list';
              scope: 'session';
          };
@@ -473,10 +583,15 @@ index 14e942f..00de8fa 100644
          /** Full-width entries above the composer card. */
          'conversation.input.dock': {
              kind: 'list';
-@@ -302,10 +322,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -302,10 +327,22 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
              kind: 'list';
              scope: 'session';
          };
++        'conversation.input.decoration': {
++            kind: 'single';
++            scope: 'session';
++            owner: { running: boolean };
++        };
 +        /** Compact template and reference material rendered before the editable prompt. */
 +        'conversation.input.accessory': {
 +            kind: 'list';
@@ -491,7 +606,7 @@ index 14e942f..00de8fa 100644
          };
          /** Compact controls at the left of the composer tool row. */
          'conversation.input.left': {
-@@ -380,6 +407,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -380,6 +417,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
                      kind: 'list';
                      scope: 'session';
                  };
@@ -499,7 +614,7 @@ index 14e942f..00de8fa 100644
                  'conversation.hero.brand.mark': {
                      kind: 'single';
                      scope: 'root';
-@@ -525,8 +553,10 @@ export interface ComposerBarOwnerProps {
+@@ -525,8 +563,10 @@ export interface ComposerBarOwnerProps {
      /** Open the Workspace picker from the inert composer surface. */
      onRequestWorkspace?: () => void;
      placeholder?: string;
@@ -511,15 +626,31 @@ index 14e942f..00de8fa 100644
  }
  /** Package-private operations injected into the resident composer bar. */
  export interface ComposerBarInjected {
-@@ -571,7 +601,7 @@ export interface InputActivityOwnerProps extends InputControlOwnerProps {
+@@ -571,7 +611,7 @@ export interface InputActivityOwnerProps extends InputControlOwnerProps {
      onActiveChange: (active: boolean) => void;
  }
  /** Full props of the resident composer bar. */
 -export type ComposerBarProps = PropsRuntime<'conversation.composer.bar'> & PropsRenderSlots<'conversation.input.attachments' | 'conversation.input.overlay' | 'conversation.input.permission' | 'conversation.input.left' | 'conversation.input.plan' | 'conversation.input.right' | 'conversation.input.model' | 'conversation.input.activity' | 'conversation.composer.dock'> & InjectFace<ComposerBarInjected> & PropsLocale<'conversation'>;
-+export type ComposerBarProps = PropsRuntime<'conversation.composer.bar'> & PropsRenderSlots<'conversation.input.attachments' | 'conversation.input.overlay' | 'conversation.input.accessory' | 'conversation.input.permission' | 'conversation.input.left' | 'conversation.input.plan' | 'conversation.input.right' | 'conversation.input.model' | 'conversation.input.activity' | 'conversation.composer.dock'> & InjectFace<ComposerBarInjected> & PropsLocale<'conversation'>;
++export type ComposerBarProps = PropsRuntime<'conversation.composer.bar'> & PropsRenderSlots<'conversation.input.attachments' | 'conversation.input.overlay' | 'conversation.input.decoration' | 'conversation.input.accessory' | 'conversation.input.permission' | 'conversation.input.left' | 'conversation.input.plan' | 'conversation.input.right' | 'conversation.input.model' | 'conversation.input.activity' | 'conversation.composer.dock'> & InjectFace<ComposerBarInjected> & PropsLocale<'conversation'>;
  /** Owner values used to elect a composer takeover. */
  export interface ComposerChainProps {
      /** Current Session identity used by temporary business-owned entries. */
+@@ -618,7 +658,7 @@ export type ConversationHeaderProps = PropsRuntime<'conversation.header'> & PropsRenderSlots<'conversation.header.leading' | 'conversation.session.header'>;
+ /** Full props of the strict Session header. */
+-export type ConversationSessionHeaderSlotProps = PropsRuntime<'conversation.session.header'> & PropsRenderSlots<'conversation.session.header.lineage' | 'conversation.session.header.actions' | 'conversation.session.header.utilities' | 'conversation.session.header.corner'> & PropsStore<ConversationStore> & InjectFace<ConversationSessionHeaderInjected> & PropsLocale<'conversation'>;
++export type ConversationSessionHeaderSlotProps = PropsRuntime<'conversation.session.header'> & PropsRenderSlots<'conversation.session.header.toolbar' | 'conversation.session.header.lineage' | 'conversation.session.header.actions' | 'conversation.session.header.utilities' | 'conversation.session.header.corner'> & PropsStore<ConversationStore> & InjectFace<ConversationSessionHeaderInjected> & PropsLocale<'conversation'>;
+ /** Full props of the draft-attachment renderer. */
+ export type ComposerAttachmentsProps = PropsRuntime<'conversation.input.attachments'> & PropsLocale<'conversation'>;
+ /** Owner share common to blank-session Workspace pickers. */
+ export interface EmptyWorkspaceOwnerProps {
+     open: boolean;
+@@ -628,4 +668,4 @@ export interface EmptyWorkspaceOwnerProps {
+     onPick: (workspaceId: WorkspaceId) => void;
+     onClose: () => void;
+ }
+-//# sourceMappingURL=slots.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=slots.d.ts.map
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/input/facade.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/input/facade.d.ts
 index 5d2a38c..645c2b3 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/types/client/input/facade.d.ts

@@ -15,10 +15,13 @@ function region(name) {
   return source.slice(start, end)
 }
 
-const { menuReduce, MenuView } = vm.runInNewContext(`(() => {
+const { menuReduce, MenuView, InputTriggerController } = vm.runInNewContext(`(() => {
+  ${region('../../context/file-reference/src/grammar.ts')}
+  ${region('lib/types/core/detect.js')}
   ${region('lib/types/core/menu.js')}
+  ${region('lib/types/client/controller.js')}
   ${region('lib/types/client/MenuView.js')}
-  return { menuReduce, MenuView }
+  return { menuReduce, MenuView, InputTriggerController }
 })()`, {
   react: React,
   react_jsx_runtime: jsx,
@@ -30,11 +33,42 @@ const { menuReduce, MenuView } = vm.runInNewContext(`(() => {
     disconnect() {}
   },
   Node,
+  AbortController,
   clsx: (...values) => values.filter(Boolean).join(' '),
   MenuView_module_css_default: new Proxy({}, { get: (_, key) => String(key) }),
+  _deepseek_ai_dsh_client_store: {
+    createSnapshotStore(initial) {
+      let snapshot = initial
+      return { getSnapshot: () => snapshot, set: value => { snapshot = value } }
+    }
+  },
   _deepseek_ai_dsh_client_ui_primitives: {
     MenuSurface: React.forwardRef((props, ref) => React.createElement('div', { ...props, ref })),
     useAnchoredMaxHeight: (_, cap) => cap
+  }
+})
+
+it('preserves a manually opened menu across editor refocus and dismisses on toggle or draft change', async () => {
+  const command = { name: 'command', candidates: async () => [{ name: 'file' }] }
+  const controller = new InputTriggerController({
+    sessionId: 'fixture',
+    roster: { all: () => [command], sources: () => [command] }
+  })
+  const hit = { trigger: '/', query: '', quoted: false, position: 'leading', span: { start: 0, end: 0, draftRev: 1 } }
+  try {
+    controller.toggleSource('command', hit)
+    await Promise.resolve()
+    controller.track('', 0, { tier: 'plain' }, 1)
+    expect(controller.launcher.getSnapshot()).toBe('command')
+    expect(controller.menu.getSnapshot().open).toBe(true)
+    controller.toggleSource('command', hit)
+    expect(controller.menu.getSnapshot().open).toBe(false)
+    controller.toggleSource('command', hit)
+    controller.track('a', 1, { tier: 'plain' }, 2)
+    expect(controller.launcher.getSnapshot()).toBeNull()
+    expect(controller.menu.getSnapshot().open).toBe(false)
+  } finally {
+    controller.dispose()
   }
 })
 
@@ -49,7 +83,7 @@ describe('input trigger menu scroll ownership', () => {
     root = createRoot(host)
     listeners = new Set()
     state = {
-      open: true, hit: null, generation: 1,
+      open: true, hit: { trigger: '/' }, generation: 1,
       groups: [{
         source: 'command', status: 'ready',
         items: Array.from({ length: 10 }, (_, i) => ({ name: `command-${i}`, section: i < 4 ? '添加' : '指令' }))
@@ -130,5 +164,58 @@ describe('input trigger menu scroll ownership', () => {
     await act(async () => dispatch({ type: 'move', dir: 1 }))
     expect(list.scrollTop).toBe(25)
     expect(state.highlight.origin).toBe('keyboard')
+  })
+
+  it('reveals the first row when the animated list has a fractional layout height', async () => {
+    const list = host.querySelector('[role=listbox]')
+    const first = list.querySelector('[role=option]')
+    await act(async () => dispatch({ type: 'move', dir: -1 }))
+    list.style.height = '391.5px'
+    list.scrollTop = 300
+    Object.defineProperty(list, 'offsetHeight', { value: 392 })
+    Object.defineProperty(list, 'getBoundingClientRect', {
+      value: () => ({ top: 100, bottom: 471.925, height: 371.925 })
+    })
+    Object.defineProperty(first, 'getBoundingClientRect', {
+      value: () => ({
+        top: 100 + (23 - list.scrollTop) * 0.95,
+        bottom: 100 + (57 - list.scrollTop) * 0.95,
+        height: 34 * 0.95
+      })
+    })
+    await act(async () => dispatch({ type: 'move', dir: 1 }))
+    expect(list.scrollTop).toBeCloseTo(23, 6)
+  })
+
+  it('retains inert options only during the exit animation and cancels removal on reopen', async () => {
+    const surface = host.querySelector('[data-trigger-menu="/"]')
+    const opened = state
+    const setOpen = open => act(async () => {
+      state = open ? opened : { ...opened, open: false, groups: [], highlight: null }
+      listeners.forEach(fn => fn())
+    })
+    let finish
+    surface.getAnimations = () => [{
+      playState: 'running',
+      finished: new Promise(resolve => { finish = resolve })
+    }]
+    await setOpen(false)
+    expect(surface.hasAttribute('data-exiting')).toBe(true)
+    expect(surface.getAttribute('aria-hidden')).toBe('true')
+    expect(surface.inert).toBe(true)
+    expect(surface.querySelectorAll('[role=option]')).toHaveLength(10)
+    await setOpen(true)
+    await act(async () => finish())
+    expect(host.querySelector('[data-trigger-menu="/"]')).toBe(surface)
+    expect(surface.inert).toBe(false)
+    expect(surface.hasAttribute('data-exiting')).toBe(false)
+    await setOpen(false)
+    await act(async () => finish())
+    expect(host.querySelector('[data-trigger-menu]')).toBeNull()
+  })
+
+  it('removes the menu immediately when there is no exit animation', async () => {
+    await act(async () => dispatch({ type: 'close' }))
+    expect(host.querySelector('[data-trigger-menu]')).toBeNull()
   })
 })

@@ -11,7 +11,7 @@ function visit(node) {
 }
 visit(ast)
 
-it.each([['en', false], ['zh', false], ['en', true], ['zh', true]])('keeps preset search/import/browse working in %s with BoardUI enabled=%s', (lang, board) => {
+it.each([['en', false], ['zh', false], ['en', true], ['zh', true]])('offers preset search and local import without an external action in %s with BoardUI enabled=%s', (lang, board) => {
   const Button = () => {}
   const BoardButton = () => {}
   const Input = () => {}
@@ -33,12 +33,17 @@ it.each([['en', false], ['zh', false], ['en', true], ['zh', true]])('keeps prese
   }
   walk(tree)
   const heading = nodes.find(n => n.props?.['data-dsh-preset-heading'] === '')
-  const actions = heading.props.children[1].props.children
-  expect(actions.every(node => node.type === (board ? BoardButton : Button) && node.props.variant === (board ? 'secondary' : 'outline'))).toBe(true)
+  const actions = nodes.find(node => node.props?.['data-dsh-preset-actions'] === '')
+  expect(heading.props.children).toEqual([expect.objectContaining({ type: 'h2' }), actions])
+  const importButton = actions.props.children
+  expect(importButton.type).toBe(board ? BoardButton : Button)
+  expect(importButton.props.variant).toBe(board ? 'secondary' : 'outline')
+  expect(importButton.props.children).toBe('desktopImport')
   const input = nodes.find(n => n.props?.type === 'file')
   const click = vi.fn(); input.props.ref.current = { click }
-  actions[0].props.onClick(); expect(click).toHaveBeenCalledOnce()
-  actions[1].props.onClick(); expect(open).toHaveBeenCalledWith('https://www.dshdesktop.com/preset/', '_blank', 'noopener,noreferrer')
+  importButton.props.onClick()
+  expect(click).toHaveBeenCalledOnce()
+  expect(open).not.toHaveBeenCalled()
   const search = nodes.find(node => node.props?.type === 'search')
   expect(search.type).toBe(board ? Input : 'input')
   search.props.onChange(board ? 'test' : { target: { value: 'test' } })

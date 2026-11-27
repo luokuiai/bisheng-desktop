@@ -1,7 +1,8 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
+index b5ff487..0c8db8c 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
-@@ -944,7 +944,7 @@
+@@ -944,7 +944,7 @@ window.__ModuleLoader__.load({
  					if (hl && next.source === hl.source && next.index === hl.index) return state;
  					return {
  						...state,
@@ -10,7 +11,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
  					};
  				}
  				case "hover": {
-@@ -958,7 +958,7 @@
+@@ -958,7 +958,7 @@ window.__ModuleLoader__.load({
  					if (hl && hl.source === target.source && hl.index === target.index) return state;
  					return {
  						...state,
@@ -19,7 +20,20 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
  					};
  				}
  				case "close": return closed(state);
-@@ -1625,7 +1625,7 @@
+@@ -1038,10 +1038,10 @@ window.__ModuleLoader__.load({
+ 			track(draft, caret, guard, draftRev) {
+ 				if (this.disposed) return;
+ 				const launched = this.launcher.getSnapshot() !== null;
+-				this.clearLauncher();
+ 				const raw = detectTrigger(draft, caret, guard);
++				if (raw === null && launched && guard.tier !== "frozen" && this.hit?.span.draftRev === draftRev) return;
++				this.clearLauncher();
+ 				if (raw === null) {
+-					if (launched) return;
+ 					this.hit = null;
+ 					if (guard.tier !== "frozen") this.dismissed = null;
+ 					this.stopFetch();
+@@ -1625,7 +1625,7 @@ window.__ModuleLoader__.load({
  		}
  		//#endregion
  		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-input-trigger/src/client/MenuView.module.css.mjs
@@ -28,7 +42,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
  		const tagId = "@deepseek-ai/dsh-client-ui-input-trigger/MenuView.module.css";
  		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
  			const tag = document.createElement("style");
-@@ -1673,14 +1673,60 @@
+@@ -1673,14 +1673,94 @@ window.__ModuleLoader__.load({
  		* (a localized title), then the description right-aligned. A source publishing crumbs gets a breadcrumb
  		* header pinned above the scrolling list.
  		*/
@@ -46,14 +60,14 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
 +			const [layout, setLayout] = (0, react.useState)({ maxHeight: MAX_HEIGHT });
 +			(0, react.useLayoutEffect)(() => {
 +				const menu = ref.current;
-+				if (menu === null) return;
++				if (!state || menu === null) return;
 +				const ancestors = [];
 +				for (let parent = menu.parentElement; parent; parent = parent.parentElement) ancestors.push(parent);
 +				const fit = () => {
-+					const bounds = menu.getBoundingClientRect();
-+					const scale = menu.offsetWidth > 0 ? bounds.width / menu.offsetWidth : 1;
 +					const anchor = menu.offsetParent ?? menu.parentElement;
-+					const anchorBottom = anchor.getBoundingClientRect().top + anchor.clientTop * scale - 4 * scale;
++					const bounds = anchor.getBoundingClientRect();
++					const scale = anchor.offsetWidth > 0 ? bounds.width / anchor.offsetWidth : 1;
++					const anchorBottom = bounds.top + anchor.clientTop * scale - 4 * scale;
 +					let top = window.visualViewport?.offsetTop ?? 0;
 +					let bottom = top + (window.visualViewport?.height ?? window.innerHeight);
 +					for (const parent of ancestors) {
@@ -69,8 +83,8 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
 +					const cap = MAX_HEIGHT * (Number.isFinite(lineHeight) ? lineHeight / 20 : 1);
 +					// In a short/zoomed pane, keep two rows accessible by letting the menu
 +					// occupy the pane above the composer. Its scrollport owns all overflow.
-+					const rowHeight = row ? row.getBoundingClientRect().height / scale : 34;
-+					const crumbsHeight = [...menu.querySelectorAll("nav")].reduce((sum, nav) => sum + nav.getBoundingClientRect().height / scale, 0);
++					const rowHeight = row ? row.offsetHeight || row.getBoundingClientRect().height / scale : 34;
++					const crumbsHeight = [...menu.querySelectorAll("nav")].reduce((sum, nav) => sum + nav.offsetHeight, 0);
 +					const minimum = Math.min(cap, rowHeight * 2 + crumbsHeight + 40);
 +					const fittedBottom = Math.min(bottom - 8 * scale, Math.max(anchorBottom, top + (minimum + 8) * scale));
 +					const maxHeight = Math.floor(Math.min(cap, Math.max(0, (fittedBottom - top) / scale - 8)) * 64) / 64;
@@ -93,19 +107,54 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
 +			}, [ref, state]);
 +			return layout;
 +		}
++		function useMenuPresence(open, snapshot, headers, ref) {
++			const previous = (0, react.useRef)(null);
++			const [present, setPresent] = (0, react.useState)(false);
++			const exiting = present && !open;
++			(0, react.useLayoutEffect)(() => {
++				if (open) {
++					previous.current = { snapshot, headers };
++					if (!present) setPresent(true);
++				}
++			}, [open, snapshot, headers, present]);
++			(0, react.useLayoutEffect)(() => {
++				if (!exiting) return;
++				const surface = ref.current;
++				if (surface) surface.inert = true;
++				const animations = surface?.getAnimations?.().filter(animation => animation.playState === "running");
++				const finish = () => {
++					previous.current = null;
++					setPresent(false);
++				};
++				if (!animations?.length) {
++					finish();
++					return;
++				}
++				let current = true;
++				void Promise.allSettled(animations.map(animation => animation.finished)).then(() => {
++					if (current) finish();
++				});
++				return () => {
++					current = false;
++					surface.inert = false;
++				};
++			}, [exiting, ref]);
++			return { exiting, snapshot: open ? snapshot : previous.current?.snapshot, headers: open ? headers : previous.current?.headers };
++		}
  		/** DOM id of one option row (the aria-activedescendant target). */
  		function optionId(source, index) {
  			return `dsh-slash-option-${source}-${index}`;
-@@ -1696,7 +1742,7 @@
+@@ -1696,7 +1776,8 @@ window.__ModuleLoader__.load({
  			const listRef = (0, react.useRef)(null);
  			const viewportRef = (0, react.useRef)(null);
  			const [hasOverflowBelow, setHasOverflowBelow] = (0, react.useState)(false);
 -			const maxHeight = (0, _deepseek_ai_dsh_client_ui_primitives.useAnchoredMaxHeight)(listRef, MAX_HEIGHT, state, TOP_MARGIN);
-+			const layout = useMenuLayout(listRef, state);
++			const presence = useMenuPresence(state.open, state, crumbs, listRef);
++			const layout = useMenuLayout(listRef, state.open ? state : null);
  			const updateOverflowHint = (0, react.useCallback)(() => {
  				const viewport = viewportRef.current;
  				setHasOverflowBelow(viewport !== null && viewport.scrollTop + viewport.clientHeight < viewport.scrollHeight - 1);
-@@ -1705,13 +1751,20 @@
+@@ -1705,13 +1786,22 @@ window.__ModuleLoader__.load({
  				updateOverflowHint();
  			}, [
  				state,
@@ -123,25 +172,75 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/client.js
 +				if (viewport === null || option === null || !viewport.contains(option)) return;
 +				const bounds = viewport.getBoundingClientRect();
 +				const row = option.getBoundingClientRect();
++				const height = Number.parseFloat(getComputedStyle(viewport).height);
++				const scale = height > 0 && bounds.height > 0 ? bounds.height / height : 1;
 +				// Keyboard navigation reveals the row within this list; the composer stays anchored.
-+				if (row.top < bounds.top) viewport.scrollTop += row.top - bounds.top;
-+				else if (row.bottom > bounds.bottom) viewport.scrollTop += row.bottom - bounds.bottom;
++				if (row.top < bounds.top) viewport.scrollTop += (row.top - bounds.top) / scale;
++				else if (row.bottom > bounds.bottom) viewport.scrollTop += (row.bottom - bounds.bottom) / scale;
  			}, [highlight]);
  			(0, react.useEffect)(() => {
  				if (!state.open) return;
-@@ -1730,7 +1783,7 @@
+@@ -1726,15 +1816,18 @@ window.__ModuleLoader__.load({
+ 					document.removeEventListener("pointerdown", onPointerDown, true);
+ 				};
+ 			}, [state.open, onDismiss]);
+-			if (!state.open) return null;
++			if (presence.snapshot === void 0) return null;
  			return (0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.MenuSurface, {
  				ref: listRef,
  				className: MenuView_module_css_default.menu,
 -				style: { maxHeight },
+-				"data-trigger-menu": "",
 +				style: layout,
- 				"data-trigger-menu": "",
++				"data-trigger-menu": presence.snapshot.hit?.trigger ?? "",
++				"data-entering": state.open ? "" : void 0,
++				"data-exiting": presence.exiting ? "" : void 0,
++				"aria-hidden": presence.exiting || void 0,
  				"data-overflow-below": hasOverflowBelow || void 0,
- 				children: [state.groups.map((group) => {
+-				children: [state.groups.map((group) => {
+-					const trail = crumbs.get(group.source);
++				children: [presence.snapshot.groups.map((group) => {
++					const trail = presence.headers.get(group.source);
+ 					return trail === void 0 ? null : (0, react_jsx_runtime.jsx)("nav", {
+ 						className: MenuView_module_css_default.crumbs,
+ 						"aria-label": t("crumbs.aria"),
+@@ -1761,7 +1854,7 @@ window.__ModuleLoader__.load({
+ 					"aria-label": t("suggestions.aria"),
+ 					"aria-activedescendant": highlight !== null ? optionId(highlight.source, highlight.index) : void 0,
+ 					onScroll: updateOverflowHint,
+-					children: state.groups.map((group) => group.status === "ready" && group.items.length === 0 ? null : (0, react_jsx_runtime.jsxs)(react.Fragment, { children: [group.showGroupTitle === false || group.items.some((item) => item.section !== void 0) ? null : (0, react_jsx_runtime.jsx)("div", {
++					children: presence.snapshot.groups.map((group) => group.status === "ready" && group.items.length === 0 ? null : (0, react_jsx_runtime.jsxs)(react.Fragment, { children: [group.showGroupTitle === false || group.items.some((item) => item.section !== void 0) ? null : (0, react_jsx_runtime.jsx)("div", {
+ 						className: MenuView_module_css_default.groupTitle,
+ 						role: "presentation",
+ 						"data-source": group.source,
+@@ -1784,7 +1877,8 @@ window.__ModuleLoader__.load({
+ 							})
+ 						})]
+ 					}) : group.items.map((item, index) => {
+-						const active = highlight !== null && highlight.source === group.source && highlight.index === index;
++						const rowHighlight = presence.snapshot.highlight;
++						const active = rowHighlight !== null && rowHighlight.source === group.source && rowHighlight.index === index;
+ 						return (0, react_jsx_runtime.jsxs)(react.Fragment, { children: [item.section !== void 0 && item.section !== group.items[index - 1]?.section ? (0, react_jsx_runtime.jsx)("div", {
+ 							className: MenuView_module_css_default.sectionTitle,
+ 							role: "presentation",
+@@ -1817,10 +1911,12 @@ window.__ModuleLoader__.load({
+ 								}),
+ 								item.label !== void 0 && item.label.toLowerCase() !== item.name.toLowerCase() && (0, react_jsx_runtime.jsx)("span", {
+ 									className: MenuView_module_css_default.itemAlias,
++									"data-trigger-detail": "alias",
+ 									children: item.name
+ 								}),
+ 								item.description !== void 0 && (0, react_jsx_runtime.jsx)("span", {
+ 									className: MenuView_module_css_default.itemDescription,
++									"data-trigger-detail": "description",
+ 									children: item.description
+ 								}),
+ 								item.drill === true && (0, react_jsx_runtime.jsxs)("span", {
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/types/core/contract.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/types/core/contract.d.ts
+index 783482c..23e3aee 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/types/core/contract.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-input-trigger/lib/types/core/contract.d.ts
-@@ -42,6 +42,8 @@
+@@ -42,6 +42,8 @@ export interface MenuState {
      readonly highlight: {
          readonly source: string;
          readonly index: number;

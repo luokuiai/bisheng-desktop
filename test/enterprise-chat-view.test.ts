@@ -391,6 +391,7 @@ describe('enterprise Chat host boundary', () => {
     }
     expect(parseChatPresentation({ ...presentation, radius: 23 }).radius).toBe(23)
     expect(parseChatPresentation(presentation).radius).toBeUndefined()
+    expect(() => parseChatPresentation({ ...presentation, workspaceCard: 'true' })).toThrow('workspace card')
   })
 
   it('rounds the native view to the host card radius and leaves plain layouts square', async () => {
@@ -910,6 +911,41 @@ it.each(['/workspace/c/new', '/workspace/capabilities', '/workspace/skills', '/w
     report(wc.mainFrame, true)
     wc.emit('did-navigate-in-page', {}, 'https://enterprise.example/workspace/c/other', true)
     expect(view.setBounds).toHaveBeenLastCalledWith(region)
+  } finally { f.host.dispose() }
+})
+
+it.each(['light', 'dark'] as const)('uses the workspace surface on %s Chat routes and restores it after a modal', async theme => {
+  const f = fixture()
+  try {
+    const palette = {
+      surface: [44, 45, 46], raised: [53, 54, 56], strong: [97, 102, 107],
+      labelPrimary: [249, 250, 251], labelSecondary: [207, 211, 214], labelTertiary: [173, 178, 184],
+      borderBase: [71, 71, 73], borderDeep: [85, 85, 87]
+    }
+    const card = { ...presentation, theme, palette, radius: 24, workspaceCard: true }
+    f.host.present(f.owner, card)
+    await flush()
+    const view = fake.views[0]
+    const contents = view.webContents
+    const chatStyle = '.dsh-web-chat{--bg-page:44 45 46;background-color:rgb(var(--bg-page))}'
+    const lastThemeScript = () => contents.executeJavaScript.mock.calls.findLast(([script]: [string]) => script.includes('dsh-host-palette'))?.[0]
+    await contents.loadURL('https://enterprise.example/workspace/c/new')
+    expect(view.setBorderRadius).toHaveBeenLastCalledWith(24)
+    expect(view.setBackgroundColor).toHaveBeenLastCalledWith('#2c2d2e')
+    expect(lastThemeScript()).toContain(chatStyle)
+    const modal = (open: boolean) => contents.emit('ipc-message', { senderFrame: contents.mainFrame }, 'enterprise-chat:modal', { open, path: '/workspace/c/new' })
+    modal(true)
+    expect(view.setBackgroundColor).toHaveBeenLastCalledWith('#00000000')
+    expect(view.setBorderRadius).toHaveBeenLastCalledWith(0)
+    modal(false)
+    expect(view.setBackgroundColor).toHaveBeenLastCalledWith('#2c2d2e')
+    expect(view.setBorderRadius).toHaveBeenLastCalledWith(24)
+    contents.navigateInPage('https://enterprise.example/workspace/knowledge')
+    expect(lastThemeScript()).not.toContain(chatStyle)
+    contents.navigateInPage('https://enterprise.example/workspace/c/new')
+    f.host.present(f.owner, { ...card, workspaceCard: false })
+    expect(lastThemeScript()).not.toContain(chatStyle)
+    expect(view.setBackgroundColor).toHaveBeenLastCalledWith(theme === 'dark' ? '#141416' : '#ffffff')
   } finally { f.host.dispose() }
 })
 

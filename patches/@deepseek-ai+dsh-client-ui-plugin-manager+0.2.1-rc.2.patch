@@ -1,8 +1,32 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js
-index 329f011..14e50b2 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js
-@@ -295,7 +295,10 @@ window.__ModuleLoader__.load({
+@@ -7,9 +7,23 @@ window.__ModuleLoader__.load({
+ 		let react_jsx_runtime = require("react/jsx-runtime");
+ 		let react = require("react");
+ 		let react_dom = require("react-dom");
+-		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
++		const primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+ 		let _deepseek_ai_dsh_client_ui_slots = require("@deepseek-ai/dsh-client-ui-slots");
+ 		let _deepseek_ai_dsh_client_store = require("@deepseek-ai/dsh-client-store");
++		const PluginControls = (0, react.createContext)(void 0);
++		const PluginButton = (0, react.forwardRef)(function PluginButton({ iconOnly, danger, ...props }, ref) {
++			const Button = (0, react.useContext)(PluginControls)?.PluginButton;
++			return Button ? (0, react_jsx_runtime.jsx)(Button, { ...props, ref, iconOnly, danger }) : (0, react_jsx_runtime.jsx)(primitives.Button, { ...props, ref });
++		});
++		const PluginIconButton = (0, react.forwardRef)(function PluginIconButton({ className, ...props }, ref) {
++			const Button = (0, react.useContext)(PluginControls)?.PluginButton;
++			return Button ? (0, react_jsx_runtime.jsx)(Button, { ...props, ref, variant: "ghost", size: "sm", iconOnly: true }) : (0, react_jsx_runtime.jsx)("button", { ...props, ref, className });
++		});
++		function PluginSwitch(props) {
++			const Switch = (0, react.useContext)(PluginControls)?.Switch ?? primitives.Switch;
++			return (0, react_jsx_runtime.jsx)(Switch, { ...props });
++		}
++		const _deepseek_ai_dsh_client_ui_primitives = { ...primitives, Button: PluginButton, Switch: PluginSwitch };
+ 		//#region lib/types/client/config-ledger.js
+ 		/**
+ 		* Which plugins bring their own configuration to the Plugins page, read from
+@@ -295,7 +309,10 @@ window.__ModuleLoader__.load({
  			reasonIncompatibleVersionUnnamed: "这个插件与当前 DSH 版本不兼容，运行它可能导致崩溃或数据丢失。",
  			reasonIncompatibleInstall: "请安装与当前 DSH 兼容的插件版本。",
  			reasonIncompatibleInstalled: "请卸载后重新安装与当前 DSH 兼容的版本。",
@@ -14,7 +38,7 @@ index 329f011..14e50b2 100644
  		};
  		/** English dictionary checked against the Chinese key set. */
  		const en = {
-@@ -519,7 +522,10 @@ window.__ModuleLoader__.load({
+@@ -519,7 +536,10 @@ window.__ModuleLoader__.load({
  			reasonIncompatibleVersionUnnamed: "This plugin is incompatible with the running DSH version; running it may cause crashes or data loss.",
  			reasonIncompatibleInstall: "Install a plugin version compatible with this DSH.",
  			reasonIncompatibleInstalled: "Uninstall it and install a version compatible with this DSH.",
@@ -26,7 +50,7 @@ index 329f011..14e50b2 100644
  		};
  		//#endregion
  		//#region lib/types/client/sanitize-install-input.js
-@@ -629,6 +635,23 @@ window.__ModuleLoader__.load({
+@@ -629,6 +649,23 @@ window.__ModuleLoader__.load({
  			rowDisable: "failedRowDisable"
  		};
  		/**
@@ -50,7 +74,7 @@ index 329f011..14e50b2 100644
  		* What a management error reads as: the code's sentence; for an incompatibility, one sentence per
  		* package it names, then the remedy for an install or for an installed plugin; or, for an operation error, the Host's diagnostic as it is.
  		* @param error - the Host's code, its diagnostic, and the packages an incompatibility names.
-@@ -645,7 +668,7 @@ window.__ModuleLoader__.load({
+@@ -645,7 +682,7 @@ window.__ModuleLoader__.load({
  				})), t(error.installing ? "reasonIncompatibleInstall" : "reasonIncompatibleInstalled")].join(t("sentenceSeparator"));
  			}
  			if (error.code !== "operation-error") return t(CODE_KEYS[error.code]);
@@ -59,7 +83,23 @@ index 329f011..14e50b2 100644
  		}
  		/**
  		* Compact a package name to what a person calls it.
-@@ -3059,7 +3082,7 @@ window.__ModuleLoader__.load({
+@@ -2128,6 +2165,7 @@ window.__ModuleLoader__.load({
+ 					anchor: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+ 						variant: "primary",
+ 						size: "sm",
++						iconOnly: true,
+ 						className: PluginManagerPage_module_css_default.addMore,
+ 						disabled,
+ 						"aria-label": t("chooseAddMethod"),
+@@ -2865,6 +2903,7 @@ window.__ModuleLoader__.load({
+ 								pkg.installed || pkg.removable ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+ 									variant: "outline",
+ 									size: "sm",
++									danger: true,
+ 									className: PluginManagerPage_module_css_default.danger,
+ 									icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutlineRegular, { size: 13 }),
+ 									"aria-label": t("uninstallLabel", { name: title }),
+@@ -3059,7 +3098,7 @@ window.__ModuleLoader__.load({
  		/** A check no registry answered names every registry asked; any other refusal reads by its problem. */
  		function inputProblemSentence(problem, t, resolved) {
  			const asked = problem.registries ?? [];
@@ -68,3 +108,120 @@ index 329f011..14e50b2 100644
  		}
  		/** The registries asked, by name, in the dictionary's list form. */
  		function registryList(registries, t, resolved) {
+@@ -3599,7 +3638,7 @@ window.__ModuleLoader__.load({
+ 							disabled: !stoppable,
+ 							onClick: onCancel,
+ 							children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronLeftOutlineMedium, { "aria-hidden": "true" }), (0, react_jsx_runtime.jsx)("span", { children: t(install.confirmed !== void 0 ? "cancel" : pending ? "installCancelAndEdit" : "installEdit") })]
+-						}), (0, react_jsx_runtime.jsx)("button", {
++						}), (0, react_jsx_runtime.jsx)(PluginIconButton, {
+ 							type: "button",
+ 							className: PluginManagerPage_module_css_default.wizardClose,
+ 							"aria-label": t(cancellable ? "installCloseCancels" : "close"),
+@@ -3820,6 +3859,7 @@ window.__ModuleLoader__.load({
+ 					children: t("cancel")
+ 				}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+ 					variant: "primary",
++					danger: true,
+ 					className: PluginManagerPage_module_css_default.dangerButton,
+ 					onClick: onConfirm,
+ 					children: t("confirmUninstall")
+@@ -4001,6 +4041,7 @@ window.__ModuleLoader__.load({
+ 									children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+ 										variant: "ghost",
+ 										size: "sm",
++										iconOnly: true,
+ 										className: PluginManagerPage_module_css_default.infoButton,
+ 										"aria-label": t("infoLabel"),
+ 										children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconInfoOutlineRegular, {
+@@ -4020,7 +4061,7 @@ window.__ModuleLoader__.load({
+ 								side: "bottom",
+ 								portal: true,
+ 								disabled: !loaded || refreshing,
+-								children: (0, react_jsx_runtime.jsx)("button", {
++								children: (0, react_jsx_runtime.jsx)(PluginIconButton, {
+ 									type: "button",
+ 									className: PluginManagerPage_module_css_default.iconButton,
+ 									"aria-label": t("refresh"),
+@@ -4095,6 +4136,7 @@ window.__ModuleLoader__.load({
+ 						"data-window-drag": true,
+ 						children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+ 							size: "sm",
++							iconOnly: true,
+ 							className: PluginManagerPage_module_css_default.moreBack,
+ 							"aria-label": t("backToList"),
+ 							onClick: () => {
+@@ -4263,6 +4305,13 @@ window.__ModuleLoader__.load({
+ 				]
+ 			});
+ 		}
++		function PluginManagerWithControls(props) {
++			const render = (controls) => (0, react_jsx_runtime.jsx)(PluginControls.Provider, {
++				value: controls,
++				children: (0, react_jsx_runtime.jsx)(PluginManagerPage, props)
++			});
++			return props.renderSlot("plugins.controls", { render }, { fallback: render() });
++		}
+ 		//#endregion
+ 		//#region lib/types/client/PluginRefreshToast.js
+ 		/**
+@@ -4421,6 +4470,10 @@ window.__ModuleLoader__.load({
+ 					store,
+ 					inject: () => face,
+ 					children: {
++						"plugins.controls": {
++							kind: "single",
++							scope: "root"
++						},
+ 						"plugins.add.actions": {
+ 							kind: "list",
+ 							scope: "root"
+@@ -4458,7 +4511,7 @@ window.__ModuleLoader__.load({
+ 							scope: "root"
+ 						}
+ 					}
+-				}, PluginManagerPage);
++				}, PluginManagerWithControls);
+ 				yield ctx.layout.panelInfo.subscribe(() => {
+ 					if (ctx.layout.panelInfo.getSnapshot().activePanelId !== "plugins") instance.actions.setView({ kind: "list" });
+ 				});
+diff --git a/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/types/client/PluginManagerPage.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/types/client/PluginManagerPage.d.ts
+--- a/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/types/client/PluginManagerPage.d.ts
++++ b/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/types/client/PluginManagerPage.d.ts
+@@ -12,7 +12,7 @@ import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStor
+ import type { createNavigationStore } from './navigation-store.ts';
+ import { type PluginManagerFace } from './manager-store.ts';
+ /** Full component props assembled by the main slot renderer. */
+-export type PluginManagerPageProps = PropsRuntime<'main'> & PropsLocale<'pluginManager'> & PropsRenderSlots<'plugins.item' | 'plugins.bundle.config' | 'plugins.row.config' | 'plugins.bundle.activation' | 'plugins.add.actions' | 'plugins.tab' | 'plugins.detail.actions' | 'plugins.detail.badge' | 'plugins.detail.section'> & InjectFace<PluginManagerFace> & PropsStore<ReturnType<typeof createNavigationStore>>;
++export type PluginManagerPageProps = PropsRuntime<'main'> & PropsLocale<'pluginManager'> & PropsRenderSlots<'plugins.controls' | 'plugins.item' | 'plugins.bundle.config' | 'plugins.row.config' | 'plugins.bundle.activation' | 'plugins.add.actions' | 'plugins.tab' | 'plugins.detail.actions' | 'plugins.detail.badge' | 'plugins.detail.section'> & InjectFace<PluginManagerFace> & PropsStore<ReturnType<typeof createNavigationStore>>;
+ /** Render the plugin manager: the official plugins and installed bundles, their pages, the install dialog, and the confirmation. */
+ export declare function PluginManagerPage(props: PluginManagerPageProps): ReactNode;
+ //# sourceMappingURL=PluginManagerPage.d.ts.map
+\ No newline at end of file
+diff --git a/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/types/client/slot-contract.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/types/client/slot-contract.d.ts
+--- a/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/types/client/slot-contract.d.ts
++++ b/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/types/client/slot-contract.d.ts
+@@ -19,6 +19,12 @@
+  */
+ import type { BundleInfo } from '@deepseek-ai/dsh-api-remotes/client';
+ import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client';
++import type { Button, Switch } from '@deepseek-ai/dsh-client-ui-primitives';
++import type { ComponentProps, ComponentType, ReactNode } from 'react';
++interface PluginControls {
++    readonly PluginButton: ComponentType<ComponentProps<typeof Button> & { iconOnly?: boolean; danger?: boolean }>;
++    readonly Switch: ComponentType<ComponentProps<typeof Switch>>;
++}
+ /** The view the page asks a configuration entry for. */
+ export interface PluginConfigViewProps {
+     /** `summary` renders the one-liner alone, as text or inline nodes; `page` renders the form with its save control. */
+@@ -109,6 +115,11 @@ export interface PluginAddActionsProps {
+ }
+ declare module '@deepseek-ai/dsh-client-ui-slots' {
+     interface SlotMap {
++        'plugins.controls': {
++            kind: 'single';
++            scope: 'root';
++            owner: { render: (controls?: PluginControls) => ReactNode };
++        };
+         /** Additional MenuItemButton rows after installation: 72px high, with a title and a description capped at two lines. */
+         'plugins.add.actions': {
+             kind: 'list';

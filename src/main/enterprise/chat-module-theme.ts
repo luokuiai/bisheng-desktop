@@ -17,12 +17,16 @@ export const MODULE_ROUTE_PATTERN = '^/workspace/(capabilities|knowledge|channel
  * (utility overrides apply there too, Chat included); `dsh-module-dark` is the module-only
  * scope where the host owns `html.dark`.
  */
-export function moduleThemeScript(theme: EnterpriseChatPresentation['theme'], palette?: EnterprisePalette): string {
+export function moduleThemeScript(theme: EnterpriseChatPresentation['theme'], palette?: EnterprisePalette, chatSurface?: EnterprisePalette['surface']): string {
+  const paletteCss = palette ? moduleThemePaletteCss(palette) : ''
+  const chatCss = chatSurface
+    ? `html[data-dsh-host-theme] body .dsh-web-chat{--bg-page:${chatSurface.join(' ')};background-color:rgb(var(--bg-page))}`
+    : ''
   return `(() => {
     const root = document.documentElement;
     root.dataset.dshHostTheme = '${theme}';
     // The palette follows the host theme, so it is rewritten on every delivery rather than once.
-    const paletteCss = ${JSON.stringify(palette ? moduleThemePaletteCss(palette) : '')};
+    const paletteCss = ${JSON.stringify(`${paletteCss}\n${chatCss}`.trim())};
     const paletteStyle = document.getElementById('dsh-host-palette');
     if (paletteCss) {
       const style = paletteStyle || document.createElement('style');

@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
+import * as workspaceChrome from '../packages/dsh-desktop-client-ui/workspace/static/workspace-chrome.js'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root, container
@@ -12,6 +13,7 @@ const disposers = []
 beforeEach(() => {
   vi.stubGlobal('localStorage', globalThis.jsdom.window.localStorage)
   window.localStorage.removeItem('dsh-desktop-navigation-order')
+  window.localStorage.removeItem('dsh-desktop:workspace:compact')
   // jsdom supplies DOM state; the Electron fixture verifies native visibility/layout.
   const original = Element.prototype.checkVisibility
   Element.prototype.checkVisibility = function () {
@@ -138,7 +140,18 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
       throw new Error(name)
     })
   } }
-  new Function(await readFile(process.env.DSH_TEST_HOST_DIALOG_CLIENT_SOURCE || 'packages/dsh-desktop-client-ui/client.js', 'utf8'))()
+  const source = await readFile(process.env.DSH_TEST_HOST_DIALOG_CLIENT_SOURCE || 'packages/dsh-desktop-client-ui/client.js', 'utf8')
+  const client = source.replace("import('/desktop-workspace/workspace-chrome.js')", 'loadWorkspaceChrome()')
+    .replace("import('/desktop-workspace/chat-controls.js')", 'loadChatControls()')
+  new Function('loadWorkspaceChrome', 'loadChatControls', client)(
+    async () => workspaceChrome,
+    async () => navigationOptions.chatControls ?? null
+  )
+  const uiWorkspaceStart = navigationOptions.startSession ?? (() => {
+    if (navigate('new')) return
+    setSessions({ phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } })
+    setPanel(null)
+  })
   plugin.apply({
     theme: { getTheme: () => ({ active: { colorScheme: 'light' } }) },
     on: () => () => {},
@@ -149,17 +162,17 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
         if (workbenchSnapshot) attachWorkbench()
       }
     },
-    uiWorkspace: { openWorkspace: navigationOptions.openWorkspace, openSession: navigationOptions.openSession, registerNavigationHandler: (fn) => { navigate = fn; return () => {} }, startSession: navigationOptions.startSession ?? (() => { navigate('new'); setSessions({ phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }); setPanel(null) }) },
+    uiWorkspace: { openWorkspace: navigationOptions.openWorkspace, openSession: navigationOptions.openSession, registerNavigationHandler: (fn) => { navigate = fn; return () => {} }, startSession: uiWorkspaceStart },
     sessions: { binding: id => id === 'draft' ? { session: liveSession } : undefined, list: { getSnapshot: () => sessionList, subscribe: fn => { sessionListeners.add(fn); return () => sessionListeners.delete(fn) } } },
     layout: { selectPanel: setPanel, panelInfo: { getSnapshot: () => panelState, subscribe: fn => { panelListeners.add(fn); return () => panelListeners.delete(fn) } } },
     remote: {}, locale: { register: (ns, copy) => dictionaries.set(ns, copy), bind: ns => key => key.startsWith('hostedApp') || key.startsWith('navigation') || key === 'reorderNavigation' || key === 'multiAgentCollaboration' ? dictionaries.get(ns)?.[activeLocale]?.[key] : key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) } },
     effect(fn) { const dispose = fn(); if (typeof dispose === 'function') disposers.push(dispose) },
     slots: {
-      inject(name, fn) { if ([footerSlot, 'shell.overlay', 'desktop.mode.content', 'sidebar.workspaces.collection', 'sidebar.primaryNavigation'].includes(name)) return fn() },
+      inject(name, fn) { if ([footerSlot, 'shell.overlay', 'desktop.mode.content', 'sidebar.content', 'sidebar.workspaces.collection', 'sidebar.primaryNavigation', 'conversation.session.header.toolbar'].includes(name)) return fn() },
       register(options, component) {
         if (options.name === footerSlot) return slotCore.register(options, component)
-        if (options.name === 'shell.overlay' && options.id !== 'desktop-bot-sidebar-back') return
-        registrations.set(options.name === 'shell.overlay' ? options.id : options.name, { component, props: options.inject() })
+        if (options.name === 'shell.overlay' && !['desktop-bot-sidebar-back', 'desktop-workspace-chrome'].includes(options.id)) return
+        registrations.set(options.name === 'shell.overlay' ? options.id : options.name, { component, props: options.inject?.() })
       },
       entries: name => name === 'sidebar.workspaces' ? sidebarEntries : slotCore.entries(name),
       entriesOfSlot: name => name === 'sidebar.workspaces' ? sidebarEntries : slotCore.entriesOfSlot(name),
@@ -170,7 +183,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
       }
     }
   })
-  if (navigationOptions.workspaceRoutes) {
+  if (navigationOptions.workspaceRoutes && !navigationOptions.renderWorkspace) {
     const { navigation } = registrations.get('desktop.mode.content').props
     disposers.push(navigation.start())
     return {
@@ -203,11 +216,37 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   document.body.append(container)
   root = createRoot(container)
   const content = registrations.get('desktop.mode.content'), history = registrations.get('sidebar.workspaces.collection'), primary = registrations.get('sidebar.primaryNavigation')
+  const sidebar = registrations.get('sidebar.content')
   const botBack = registrations.get('desktop-bot-sidebar-back')
+  const chrome = registrations.get('desktop-workspace-chrome')
+  const sessionToolbar = registrations.get('conversation.session.header.toolbar')
+  const workspaces = () => React.createElement(history.component, {
+    ...history.props, mode: 'projects', query: '', archivedOnly: false,
+    projects: () => React.createElement('div', { 'data-project': true }, 'Project task'),
+    items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', {
+      'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open')
+    }, 'Local task') }], ...collection
+  })
   await act(async () => root.render(React.createElement(React.Fragment, null,
     botBack && React.createElement(botBack.component, { ...botBack.props, t: key => dictionaries.get('desktop.chatWork')[activeLocale][key] }),
-    React.createElement('aside', { className: navigationOptions.wide === false ? 'pI_x6G_sidebarCol' : undefined, 'data-dsh-sidebar-root': navigationOptions.wide === false ? '' : undefined }, React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'), React.createElement(primary.component, { ...primary.props, wide: navigationOptions.wide ?? true, expandSidebar: navigationOptions.expandSidebar, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }, ...(navigationOptions.panels || [])], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }), React.createElement(history.component, { ...history.props, mode: 'projects', query: '', archivedOnly: false, projects: () => React.createElement('div', { 'data-project': true }, 'Project task'), items: [{ id: 'local-a', updatedAt: Date.parse('2026-10-17'), render: active => React.createElement('button', { 'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open') }, 'Local task') }], ...collection }), React.createElement(SidebarFooter)),
-    React.createElement(content.component, { ...content.props, rightbarWidth: 420, work: React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }) })
+    chrome && React.createElement(chrome.component, chrome.props),
+    React.createElement('aside', { className: navigationOptions.wide === false ? 'pI_x6G_sidebarCol' : undefined, 'data-dsh-sidebar-root': navigationOptions.wide === false ? '' : undefined },
+      React.createElement(sidebar.component, {
+        ...sidebar.props,
+        renderContent: children => children,
+        renderNewSession: render => render ? render({
+          label: 'New session', ariaLabel: 'Start a new session', shortcut: 'Meta+N', shortcutKeys: ['⌘', 'N'], onClick: uiWorkspaceStart
+        }) : React.createElement('button', { 'data-new-session': '', onClick: () => uiWorkspaceStart() }, 'New session'),
+        renderWorkspaces: workspaces,
+        renderSettings: () => React.createElement('button', null, 'Account'),
+        defaultContent: React.createElement(React.Fragment, null,
+          React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'),
+          React.createElement(primary.component, { ...primary.props, wide: navigationOptions.wide ?? true, expandSidebar: navigationOptions.expandSidebar, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }, ...(navigationOptions.panels || [])], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }),
+          workspaces(), React.createElement(SidebarFooter))
+      })),
+    React.createElement(content.component, { ...content.props, rightbarWidth: 420, work: React.createElement(React.Fragment, null,
+      navigationOptions.sessionToolbar && React.createElement(sessionToolbar.component, { row: React.createElement('button', { onClick: navigationOptions.sessionToolbar }, 'Session action') }),
+      React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' })) })
   )))
   return {
     async sidebarEntry(face) {
@@ -273,6 +312,131 @@ it('routes the plugin entry to the existing plugins main panel', async () => {
   navigation.navigate('/')
   expect(navigation.snapshot().workspacePath).toBe('/')
   expect(navigation.snapshot().workspaceNative).toBe(false)
+})
+
+it('places the AI Chat switch in the toolbar and keeps login gating and the original sidebar lists', async () => {
+  const view = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, renderWorkspace: true })
+  expect(container.querySelector('.dshWorkspaceModePicker')).toBeNull()
+  await act(async () => view.controller.navigate('/chat'))
+  expect(view.selected()).toBe('work')
+  expect(container.querySelectorAll('.dshWorkspaceToolbar .dshWorkspaceModePicker button')).toHaveLength(2)
+  expect(container.querySelector('.dshModesHeader')).toBeNull()
+  const newSession = container.querySelector('.dshChatSidebarNew button')
+  expect(newSession.textContent).toBe('New session')
+  expect(container.querySelector('.dshChatSidebarNew').nextElementSibling.className).toBe('dshChatWorkspaceList')
+  await act(async () => container.querySelector('[data-workspace-sidebar-toggle]').click())
+  expect(container.querySelector('.dshWorkspaceToolbar .dshWorkspaceModePicker')).not.toBeNull()
+  expect(container.querySelector('.dshChatWorkspaceList [data-project]')).not.toBeNull()
+  expect(container.querySelector('.dshChatWorkspaceList [data-local-row]')).not.toBeNull()
+  expect(container.querySelector('.dshChatWorkspaceList .dshRecentHistory')).toBeNull()
+  expect(container.querySelector('aside [data-navigation-id]')).toBeNull()
+  expect(container.querySelector('aside').textContent).not.toContain('Account')
+  expect(container.querySelector('aside [data-workspace-account-slot]')).toBeNull()
+  expect(container.querySelector('.dshWorkHistoryDock')).toBeNull()
+  const draft = view.draft()
+  await view.click('chat')
+  expect(document.querySelector('[aria-modal=true]')).not.toBeNull()
+  expect(view.selected()).toBe('work')
+  await view.account(true)
+  expect(view.selected()).toBe('chat')
+  expect(view.controller.snapshot().workspacePath).toBe('/chat')
+  expect(container.querySelector('.dshChatWorkspaceList .dshRecentHistory').textContent).toContain('Cloud chat')
+  await act(async () => newSession.click())
+  expect(window.dshEnterpriseChat.open).toHaveBeenLastCalledWith('new')
+  expect(container.querySelector('.dshRecentHistory [data-local-row]')).toBeNull()
+  await view.click('work')
+  expect(view.draft()).toBe(draft)
+  await act(async () => view.controller.open('cloud-a'))
+  expect(window.dshEnterpriseChat.open).toHaveBeenLastCalledWith('cloud-a')
+  expect(view.selected()).toBe('chat')
+  expect(container.querySelector('.dshWorkspaceModePicker')).toBeNull()
+  await act(async () => container.querySelector('[data-local-row]').click())
+  expect(view.selected()).toBe('work')
+  await view.click('chat')
+  await view.account(false, 2)
+  expect(view.selected()).toBe('work')
+  expect(view.controller.snapshot().workspacePath).toBe('/chat')
+  expect(container.querySelector('.dshChatWorkspaceList .dshRecentHistory')).toBeNull()
+})
+
+it('moves the session actions into the Work toolbar and restores them when leaving', async () => {
+  const action = vi.fn()
+  const view = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, renderWorkspace: true, sessionToolbar: action })
+  const inlineAction = () => container.querySelector('#dsh-panel-work button')
+  expect(inlineAction()?.textContent).toBe('Session action')
+  await act(async () => view.controller.navigate('/chat'))
+  const portalled = container.querySelector('[data-workspace-session-toolbar] button')
+  expect(portalled?.textContent).toBe('Session action')
+  expect(portalled.closest('.dshWorkspaceToolbarEnd').firstElementChild).toBe(portalled.parentElement)
+  expect(inlineAction()).toBeNull()
+  await act(async () => portalled.click())
+  expect(action).toHaveBeenCalledOnce()
+  await act(async () => view.controller.navigate('/'))
+  expect(container.querySelector('[data-workspace-session-toolbar]')).toBeNull()
+  expect(inlineAction()?.textContent).toBe('Session action')
+})
+
+it('passes the native new session action and shortcut to the Board UI sidebar button', async () => {
+  const startSession = vi.fn()
+  const ChatNewSession = vi.fn(({ label, ariaLabel, shortcut, onClick }) =>
+    React.createElement('button', { 'aria-label': ariaLabel, 'aria-keyshortcuts': shortcut, onClick }, label))
+  const view = await mount(false, {}, false, undefined, false, {
+    workspaceRoutes: true, renderWorkspace: true, startSession, chatControls: { ChatNewSession, ChatSegment: () => null }
+  })
+  await act(async () => view.controller.navigate('/chat'))
+  const button = container.querySelector('.dshChatSidebarNew button')
+  expect(button.textContent).toBe('New session')
+  expect(button.getAttribute('aria-label')).toBe('Start a new session')
+  expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+N')
+  expect(ChatNewSession.mock.lastCall[0].shortcutKeys).toEqual(['⌘', 'N'])
+  startSession.mockClear()
+  await act(async () => button.click())
+  expect(startSession).toHaveBeenCalledTimes(1)
+})
+
+it('shows toolbar mode selection only for blank conversations on the AI Chat route', async () => {
+  const view = await mount(true, {}, false, undefined, false, { workspaceRoutes: true, renderWorkspace: true })
+  const picker = () => container.querySelector('.dshWorkspaceToolbar .dshWorkspaceModePicker')
+  await act(async () => view.controller.navigate('/chat'))
+  expect(picker()).not.toBeNull()
+  await view.workLive({ pendingSubmissions: [{ requestId: 'sending' }] })
+  expect(picker()).toBeNull()
+  await view.workLive({ pendingSubmissions: [], blank: false })
+  expect(picker()).toBeNull()
+  await act(async () => container.querySelector('.dshChatSidebarNew button').click())
+  await view.workLive({ blank: true })
+  expect(picker()).not.toBeNull()
+  await view.click('chat')
+  expect(picker()).not.toBeNull()
+  await view.cloudLanding(false)
+  expect(picker()).toBeNull()
+  await view.cloudLanding(true)
+  expect(picker()).not.toBeNull()
+})
+
+it('sends the workspace card color to enterprise Chat and keeps the regular palette for settings', async () => {
+  const computedStyle = globalThis.getComputedStyle
+  vi.spyOn(globalThis, 'getComputedStyle').mockImplementation(element => {
+    const token = /^var\((--[\w-]+), rgb\(1, 2, 3\)\)$/.exec(element.style?.color)?.[1]
+    if (!token) return computedStyle(element)
+    const dark = document.body.hasAttribute('data-ds-dark-theme')
+    return { color: token === '--dsh-workspace-card-surface'
+      ? (dark ? 'rgb(53, 54, 56)' : 'rgb(245, 246, 247)')
+      : (dark ? 'rgb(44, 44, 46)' : 'rgb(255, 255, 255)') }
+  })
+  const view = await mount(true, {}, false, undefined, false, { workspaceRoutes: true, renderWorkspace: true })
+  const present = window.dshEnterpriseChat.present
+  await act(async () => view.controller.navigate('/chat'))
+  await view.click('chat')
+  expect(present.mock.lastCall[0]).toMatchObject({ workspaceCard: true, palette: { surface: [245, 246, 247] } })
+  await act(async () => document.body.setAttribute('data-ds-dark-theme', ''))
+  expect(present.mock.lastCall[0]).toMatchObject({ theme: 'dark', palette: { surface: [53, 54, 56] } })
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent('dsh-desktop:settings-visibility', { detail: { open: true } }))
+    window.dispatchEvent(new CustomEvent('dsh-desktop:settings-surface', { detail: { section: 'tools', bounds: { x: 200, y: 80, width: 500, height: 400 } } }))
+  })
+  expect(present.mock.lastCall[0]).toMatchObject({ settings: 'tools', palette: { surface: [44, 44, 46] } })
+  expect(present.mock.lastCall[0]).not.toHaveProperty('workspaceCard')
 })
 
 it('routes registered workspace panels and their previews through the host selection', async () => {

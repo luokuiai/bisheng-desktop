@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { forwardRef, useCallback, useState, type ButtonHTMLAttributes, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@/components/base/buttons/button'
 import { CloseButton } from '@/components/base/buttons/close-button'
@@ -37,12 +37,13 @@ type SettingsSwitchProps = {
   checked: boolean
   disabled?: boolean
   title?: string
+  className?: string
   onChange: (checked: boolean) => void
 }
 
-function SettingsSwitch({ label, checked, disabled, title, onChange }: SettingsSwitchProps) {
+function SettingsSwitch({ label, checked, disabled, title, className, onChange }: SettingsSwitchProps) {
   return <div className="dshSettingsControl" title={title}>
-    <Switch aria-label={label} isSelected={checked} isDisabled={disabled} onChange={onChange} />
+    <Switch aria-label={label} isSelected={checked} isDisabled={disabled} className={className} onChange={onChange} />
   </div>
 }
 
@@ -57,6 +58,30 @@ const SettingsButton = forwardRef<HTMLButtonElement, ComponentPropsWithoutRef<ty
 }, ref) {
   return <span className="dshSettingsControl">
     <Button {...props} ref={ref} variant={variant} size={size} />
+  </span>
+})
+
+type PluginButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'ghost' | 'outline' | 'toolbar'
+  size?: 'sm' | 'md'
+  icon?: ReactNode
+  iconOnly?: boolean
+  danger?: boolean
+}
+
+const PluginButton = forwardRef<HTMLButtonElement, PluginButtonProps>(function PluginButton({
+  variant = 'ghost', size = 'md', icon, iconOnly, danger, className, children, ...props
+}, ref) {
+  const boardSize = size === 'sm' ? 'small' : 'medium'
+  const boardVariant = danger ? 'danger' : variant === 'outline' ? 'secondary' : variant === 'toolbar' ? 'ghost' : variant
+  return <span className="dshSettingsControl" style={{ display: 'contents' }}>
+    <Button {...props} ref={ref} variant={boardVariant} size={boardSize}
+      className={`${iconOnly ? (size === 'sm' ? 'size-8 p-0 ' : 'size-9 p-0 ') : ''}${danger ? '' : className ?? ''}`}>
+      <span className="inline-flex items-center gap-1">
+        {icon && <span aria-hidden="true" className="inline-flex shrink-0">{icon}</span>}
+        {children}
+      </span>
+    </Button>
   </span>
 })
 
@@ -110,6 +135,7 @@ export const settingsControls = {
   Switch: SettingsSwitch,
   Input: SettingsInput,
   Button: SettingsButton,
+  PluginButton,
   CloseButton: SettingsCloseButton,
   Tabs: SettingsTabs
 }

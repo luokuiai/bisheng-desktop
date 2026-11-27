@@ -1,5 +1,5 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js
-index c38bfbb..d6eb8aa 100644
+index c38bfbb..3f5a3f0 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js
 @@ -719,6 +719,11 @@ window.__ModuleLoader__.load({
@@ -151,6 +151,15 @@ index c38bfbb..d6eb8aa 100644
  			const triggerLabel = effortLabel === void 0 ? modelLabel : `${modelLabel} · ${effortLabel}`;
  			const triggerAria = waiting ? t("trigger.loading") : currentChoice === void 0 ? t("trigger.selectAria") : effortLabel === void 0 ? t("trigger.aria", { model: modelLabel }) : t("trigger.ariaEffort", {
  				model: modelLabel,
+@@ -1526,7 +1569,7 @@ window.__ModuleLoader__.load({
+ 					open && (0, react_dom.createPortal)((0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.MenuSurface, {
+ 						ref: menuRef,
+ 						id: `${id}-menu`,
+-						className: ModelSelect_module_css_default.menu,
++						className: clsx(ModelSelect_module_css_default.menu, "dshWorkPicker dshWorkModelPicker"),
+ 						style: menuPos ?? MEASURE_STYLE,
+ 						role: pane === "model" ? "group" : "menu",
+ 						"aria-label": t("menu.aria"),
 @@ -1747,6 +1790,9 @@ window.__ModuleLoader__.load({
  			"option.loadError": "目录加载失败：{message}",
  			"trigger.fallback": "请选择模型",
@@ -198,6 +207,13 @@ index c38bfbb..d6eb8aa 100644
  				const name = group.id === "deepseek-account" ? t("provider.account") : group.name;
  				for (const model of group.models) rows.push({
  					id: rowId(group.id, model.id),
+@@ -1932,4 +1981,4 @@ window.__ModuleLoader__.load({
+ 	}
+ });
+
+-//# sourceMappingURL=client.js.map
+\ No newline at end of file
++//# sourceMappingURL=client.js.map
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/directory.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/directory.d.ts
 index 1483e59..26a3823 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/directory.d.ts

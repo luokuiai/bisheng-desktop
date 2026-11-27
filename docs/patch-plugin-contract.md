@@ -18,6 +18,14 @@ Harness 0.2.0-rc.2 的 `dsh-client-ui-input-trigger` 将 pointer hover 与 keybo
 
 变更在依赖安装时由 patch-package 重放，类型声明同步；行为回归见 `test/input-trigger-scroll.test.mjs`，覆盖部分可见行悬停、手动滚动后的结果刷新、键盘循环及鼠标转键盘操作。上游提供同等输入来源区分与列表内滚动后删除本地兼容变更，并保留行为回归。此修复只影响原生 Work 候选菜单，网页 Chat 使用自己的菜单实现。
 
+### Work 输入区动效与菜单外观（Harness 0.2.1-rc.2）
+
+`conversation.input.decoration` 是会话作用域的单占用插槽，位于原生编辑器的胶囊内。它接收 `InputBar` 已订阅的运行状态，工作界面用 Board UI 的 `ComposerLoader` 绘制边缘流光。装饰层不接收指针或键盘输入。Todo 面板保持现有投影、收起状态和进度文案，通过保留折叠内容的 DOM 支持双向展开动画，收起时隐藏可访问树中的列表。动效参考插件仓库 `develop` 的代码工作台。
+
+`conversation.chat.runningStatus` 是会话作用域的单占用插槽，只在会话运行期间挂载。它从 `RunningStatus` 接收格式化后的实际用时和上游默认内容，保留上游的计时、停止清理与无障碍通知。桌面仅在 `/chat` 的原生工作界面挂载 Board UI 的 `AgentThinking`，资源未就绪及其他界面使用默认内容。减少动态效果时保留静态状态提示。上游提供等价渲染接缝后可移除此插槽补丁。
+
+权限、模型与推理强度、工作区和预设菜单继续由各自的上游组件管理，仅给上游渲染的菜单表面传入样式标记，供桌面 Work 场景共享 Board UI 外观。权限确认、选中项、键盘焦点和子菜单定位沿用上游逻辑。改动在已发现的客户端模块执行阶段生效，未增加加载入口、Profile 依赖或安装资源。上游能配置这些样式标记及 Todo 展开行为后可移除相应补丁。相关回归位于 `test/workspace-conversation.test.mjs` 与 `test/workspace-chrome.test.mjs`。
+
 ### 原生语言同步（Harness 0.2.0-rc.2，2026-10-20）
 
 直接消费上游 `dsh-client-locale` 的 `__DSH_LOCALE__.read()/onChange(active)` 接口，不新增补丁、插件或语言偏好副本。preload 只暴露读取系统语言与上报活动语言两项能力；main 复用可信主窗口与主 frame 校验，并仅接受 `zh` / `en`。初始化返回系统语言顺序与 `preference: null`，持久偏好由 Harness 已有 configForms 从当前 Profile 提供；Client 初始化后立即上报解析值，后续通过上游 locale/change 上报。main 在内存保留该值供手机桥及原生文案使用，尚未激活 Client 的启动/恢复页面保留现有回退。此改动不参与 Profile 组合、包解析或客户端加载图。
@@ -177,6 +185,8 @@ BoardUI 的设置原型、桌面设置与消息共用 `CloseButton`，用显式 
 
 插件页签、添加模型和 Agent 预设指南复用 BoardUI Tabs。页签容器保留已访问插件的状态和原有禁用条件。内置生图和插件安装管理使用同一组按钮及开关，生图保留原表单的保存行为，回归见 `test/image-generation-settings-ui.test.mjs`。
 
+独立的插件管理页通过 `dsh-client-ui-plugin-manager@0.2.1-rc.2` 的 `plugins.controls` slot 复用同一套 BoardUI 控件。添加插件及其菜单触发器、刷新和详情操作沿用原有回调、键盘交互及禁用条件，插件包和条目开关继续由管理页维护状态。资源不可用时回退到 Harness 控件。上游开放等价的组件覆盖接口后移除该接缝，行为回归见 `test/plugin-manager-controls.test.mjs`。
+
 设置与消息在进场和退场使用 BoardUI 的 300ms 缩放、淡入淡出与模糊曲线，遵循减少动态效果偏好。退场期间保留当前分区和焦点边界，停止弹窗内容交互并撤回原生视图，动画结束后才恢复背景。AI 接入和消息的原生视图在进场动画结束或取消后读取实际坐标。常规页隐藏 `current-version`，复用 Harness 外观卡片及其主题偏好，桌面通过常规项标记约束卡片的列宽和高度。回归见 `test/desktop-settings-view.test.mjs`。Harness 提供等价生命周期接缝后移除对应补丁。
 
 ### Agent preset configuration tooltips (Harness 0.2.1-rc.2, 2026-10-27)
@@ -184,6 +194,8 @@ BoardUI 的设置原型、桌面设置与消息共用 `CloseButton`，用显式 
 The preset configuration button renders the existing Harness `Tooltip` with `portal: true`, top placement and end alignment. The bubble belongs to the body overlay layer and uses the primitive's viewport fitting, theme tokens and hover/focus lifecycle. The previous absolutely positioned `data-tip` pseudo-element belonged to the card inside the settings scroll container, which clipped the English label at the right edge. Its attribute and CSS rules are removed together.
 
 The button keeps its accessible name, configuration action and viewer focus-return reference. The roster, settings slots, import/export and preset selection retain their existing ownership. The installed agent-preset renderer owns this button and exposes no tooltip configuration slot, so the direct component change is recorded in its existing versioned install replay file. Remove this change when Harness provides equivalent portal rendering for this action.
+
+Agent 预设工具栏只提供本地导入，版本补丁不再添加 Awesome preset 外链入口。上游提供可配置的导入工具栏后可移除对应结构补丁。`test/preset-toolbar.test.mjs` 覆盖中英文界面、Board UI 与回退控件的导入动作和搜索。
 
 `node scripts/verify-agent-settings-tooltips.mjs` renders the installed section and Tooltip in an isolated native Electron window. It covers English/Chinese, light/dark theme tokens, two window widths, three zoom levels, scroll, hover/focus, click dispatch, dismissal and unmount cleanup. Remote data and unrelated dialogs use fixture stubs; real-account desktop acceptance remains a separate check.
 
@@ -428,6 +440,8 @@ Windows installed-package and real-account acceptance remain separate checks.
 
 行为覆盖在 `test/input-trigger-bounds.test.mjs` 和 `test/input-trigger-scroll.test.mjs`；真实 Electron 入口为 `node scripts/verify-composer-menu-bounds.mjs`。上游菜单提供同等动态裁切布局后移除此兼容段并保留回归，验收证据见 [本轮记录](status/composer-menu-bounds-20261030.md)。
 
+AI 对话中的添加和 `/` 指令共用原生候选列表。桌面样式为该列表应用与多代理协作添加菜单一致的宽度、圆角、行样式和 150ms 动效。`dsh-client-ui-input-trigger` 补丁提供按触发类型的样式标记。关闭时仅为退场保留上一帧列表，停用其交互，动画结束即卸载。没有退场动画时立即卸载，重新打开会取消待执行的卸载。定位使用输入框锚点的尺寸，避免缩放动画影响可见边界。输入框重新获得焦点时，若草稿仍是同一版本，保留手动打开的菜单状态，使触发器能正确显示为已展开并再次点击关闭。上游提供同等标记、退场生命周期和触发器状态同步时移除对应补丁段。
+
 ### 会话搜索空态归属（Harness 0.2.1-rc.2，2026-11-02）
 
 `sidebar.workspaces.collection` 的搜索贡献项拥有合并后列表的空态。搜索组件通过可选 owner 字段 `searchPending` 传递本地历史搜索进度；桌面贡献项按本地与云端结果总数、搜索进度和云端首屏加载状态决定空态。上游原有“无匹配会话”随默认结果行一起放入 slot fallback，保留无贡献项时的独立搜索体验。搜索加载提示、结果数量上限提示与远程搜索生命周期继续由搜索组件管理。
@@ -436,7 +450,13 @@ Windows installed-package and real-account acceptance remain separate checks.
 
 ### 工作台对话历史（Harness 0.2.1-rc.2）
 
-AI 对话通过 `desktop.mode.content` 挂载会话历史，通过 `conversation.hero.brand.title` 提供快捷问题。会话切换、创建、发送、附件、模型、重命名和确认删除均由 Harness 与已有宿主服务处理。历史按目录成员、归档状态及当前工作台可见性筛选。导出使用会话的分页事件视图，只序列化用户与助手可见的文本消息。
+AI 对话通过 `sidebar.content` 复用新会话操作与 `sidebar.workspaces`，底部账号菜单仅在工作台首页挂载。`renderNewSession` 可接收渲染函数，让 Board UI 按钮使用 Harness 的原始文案、快捷键与会话导航，缺少自定义渲染时回退为原按钮。工作区及本地会话由原列表提供。企业对话通过 `sidebar.workspaces.collection` 在账号连接时追加，搜索时与本地结果合并。`sidebar.workspaces.search` 是仅在 AI 对话展开侧栏消费的根作用域单占用插槽。Board UI 渲染独占一行的快速搜索，Harness 仍管理查询、快捷键、结果与搜索焦点。工作区标题行保留视图选项和添加工作区入口。工作区与会话行菜单保留原有操作和定位，通过表面标记使用 Board UI 的配色、圆角和动效。上游提供侧栏操作和搜索渲染及菜单表面配置后可移除对应的兼容接缝。
+
+Work 右栏由原生 `rightbar` 插槽及会话布局服务管理。普通展开占用独立列，折叠、拖宽和全屏沿用原生状态。`dsh-client-ui-conversation@0.2.1-rc.2` 提供单占用会话插槽 `conversation.session.header.toolbar`，将会话标题、模式和操作移入 Work 顶部工具栏，「对话／轨迹」保留在内容区。没有桌面挂载点时使用原生行。上游提供等价标题行位置配置后可移除该补丁段。顶部模式切换与经典界面共用新会话判定，Work 在本地提交后隐藏，企业 Chat 根据导航和 landing 状态隐藏。
+
+`shell.overlay` 在 `/chat` 的窗口工具栏中挂载 Board UI Segment，默认显示工作。切换聊天沿用企业账号提示和原生内容区，回到工作时保留会话。快捷问题继续使用 `conversation.hero.brand.title`。空白工作会话的欢迎区与输入区居中成组排列，工作区及模式控件在输入框上方，PPT、Word 和 Excel 模板沿用输入区下方的原有挂载点。已开始的会话继续使用原有的底部输入区。此调整只改变现有客户端 UI 挂载，沿用当前 Profile、模块解析与企业登录桥。
+
+`dsh-client-ui-sidebar` 和 `dsh-client-ui-workspace` 的补丁分发侧栏内容与搜索触发器接缝。上游提供等价的侧栏呈现与搜索定制后移除对应补丁段。回归见 `test/desktop-modes-ui.test.mjs` 和 `test/workspace-chrome.test.mjs`。
 
 原生侧栏的已读状态属于 workspace 查看偏好，已有 collection slot 只在侧栏渲染其子树时传递该状态。现有 `dsh-client-ui-workspace` 补丁在 `uiWorkspace.readStatus` 提供同一份快照、订阅及单会话更新，使右侧历史与原生列表共用持久化。上游公开等价服务后移除这段兼容代码。会话录入、恢复、导出和宽窄视口回归见 `test/workspace-conversation.test.mjs`。
 
