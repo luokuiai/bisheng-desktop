@@ -17,7 +17,8 @@ interface PairingPageApi {
 async function runPairingPage(
   locale: 'en' | 'zh',
   fetch: (input: string) => Promise<{ ok: boolean; json(): Promise<unknown> }>,
-  reload: () => void
+  reload: () => void,
+  internetModeEnabled = true
 ): Promise<PairingPageApi> {
   const html = renderDesktopPairingPage({
     qrSvg: '<svg></svg>',
@@ -25,6 +26,7 @@ async function runPairingPage(
     expiresAt: Date.now() + 60_000,
     locale,
     connected: false,
+    internetModeEnabled,
     pinConsent: true
   })
   const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1]
@@ -43,7 +45,7 @@ async function runPairingPage(
     `return (async()=>{${script};await poll();return {poll,switchMode,state:()=>({pairingUrl,tunnelActive,pinConsent})}})()`
   )
   return run(
-    { body: element(), getElementById: element },
+    { body: element(), getElementById: (id: string) => html.includes(`id="${id}"`) ? element() : null },
     fetch,
     { reload },
     () => 0,
@@ -658,6 +660,27 @@ describe('LAN mobile page', () => {
     await api.poll()
     expect(reloads).toBe(1)
     expect(api.state().tunnelActive).toBe(true)
+  })
+
+  it('refreshes the WiFi pairing link without rendering or using the mode switch', async () => {
+    const requests: string[] = []
+    const pairingUrl = 'http://192.168.1.2/pair?token=refreshed'
+    const api = await runPairingPage('en', async (input) => {
+      requests.push(input)
+      return {
+        ok: true,
+        json: async () => input === '/desktop/status'
+          ? { connected: false, locale: 'en' }
+          : { active: false, pairingUrl, qrSvg: '<svg></svg>' }
+      }
+    }, () => undefined, false)
+
+    await api.switchMode(true)
+    await api.poll()
+
+    expect(api.state().pairingUrl).toBe(pairingUrl)
+    expect(api.state().tunnelActive).toBe(false)
+    expect(new Set(requests)).toEqual(new Set(['/desktop/status', '/desktop/tunnel/status']))
   })
 
   it('renders the temporary pin hint with remaining seconds from one helper', () => {

@@ -97,6 +97,7 @@ export interface LanMobileBridgeOptions {
   brandLogoPaths?: { light: string; dark: string }
   appIconPath?: string
   port?: number
+  internetModeEnabled?: boolean
   cloudflaredCacheDir?: string
   cloudflaredPath?: string
   pinggySshPath?: string
@@ -290,6 +291,9 @@ export class LanMobileBridge {
 
   async toggleTunnel(enable?: boolean): Promise<LanMobileBridgeSnapshot> {
     const targetState = enable !== undefined ? enable : !this.tunnelActive
+    if (targetState && this.options.internetModeEnabled === false) {
+      throw new Error('Internet connection mode is disabled.')
+    }
     if (targetState && this.sessions.size > 0 && !this.tunnelActive) {
       throw new Error('Disconnect the phone before switching connection modes.')
     }
@@ -740,6 +744,7 @@ export class LanMobileBridge {
           expiresAt: snapshot.expiresAt ?? this.now(),
           locale: this.locale(),
           connected,
+          internetModeEnabled: this.options.internetModeEnabled,
           tunnelActive: snapshot.tunnelActive,
           tunnelLoading: snapshot.tunnelLoading,
           tunnelProvider: snapshot.tunnelProvider ?? this.lastTunnelProvider,
@@ -771,6 +776,9 @@ export class LanMobileBridge {
     if (request.method === 'POST' && url.pathname === '/desktop/tunnel/fallback') {
       if (this.rejectUnlessDesktop(request, transportAddress, response)) return
       this.verifySameOrigin(request)
+      if (this.options.internetModeEnabled === false) {
+        return this.json(response, 403, { ok: false, error: 'Internet connection mode is disabled.' })
+      }
       if (this.sessions.size > 0) {
         return this.json(response, 409, {
           ok: false,
@@ -861,6 +869,9 @@ export class LanMobileBridge {
     if (request.method === 'POST' && url.pathname === '/desktop/tunnel/toggle') {
       if (this.rejectUnlessDesktop(request, transportAddress, response)) return
       this.verifySameOrigin(request)
+      if (this.options.internetModeEnabled === false) {
+        return this.json(response, 403, { ok: false, error: 'Internet connection mode is disabled.' })
+      }
       if (this.sessions.size > 0) {
         return this.json(response, 409, {
           ok: false,

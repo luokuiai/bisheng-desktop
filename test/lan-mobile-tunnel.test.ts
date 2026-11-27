@@ -267,6 +267,46 @@ async function authorizeDesktop(bridge: LanMobileBridge): Promise<string> {
 }
 
 describe('LanMobileBridge tunnel state and endpoints', () => {
+  it('serves WiFi pairing and blocks both tunnel providers when internet mode is disabled', async () => {
+    const startTunnel = vi.fn(async () => fakeTunnel('cloudflare', 'https://hidden.trycloudflare.com'))
+    const bridge = new LanMobileBridge({
+      harnessUrl: () => 'http://127.0.0.1:3000',
+      port: 0,
+      internetModeEnabled: false,
+      createCloudflareTunnel: startTunnel,
+      createPinggyTunnel: startTunnel
+    })
+    bridges.push(bridge)
+    const snapshot = await bridge.start()
+    if (!snapshot.pairingUrl || !snapshot.desktopUrl) throw new Error('WiFi pairing unavailable')
+    const cookie = await authorizeDesktop(bridge)
+    const page = await fetch(snapshot.desktopUrl, { headers: { cookie } })
+    expect(page.status).toBe(200)
+    const html = await page.text()
+    expect(html).toContain('Keep the phone and computer on the same WiFi.')
+    expect(html).toContain('id="qrCode"><svg')
+    expect(html).not.toContain('id="btnTunnel"')
+
+    await expect(bridge.toggleTunnel(true)).rejects.toThrow('Internet connection mode is disabled.')
+    for (const action of ['toggle', 'fallback']) {
+      const response = await fetch(`${snapshot.desktopUrl}/tunnel/${action}`, {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ enable: true })
+      })
+      expect(response.status).toBe(403)
+    }
+    expect(startTunnel).not.toHaveBeenCalled()
+
+    const pairingUrl = new URL(snapshot.pairingUrl)
+    expect(pairingUrl.protocol).toBe('http:')
+    const pairing = await fetch(`http://127.0.0.1:${snapshot.port}${pairingUrl.pathname}${pairingUrl.search}`, {
+      redirect: 'manual'
+    })
+    expect(pairing.status).toBe(302)
+    expect(bridge.snapshot().connected).toBe(true)
+  })
+
   it('exposes tunnel status and handles tunnel toggle', async () => {
     const bridge = new LanMobileBridge({
       harnessUrl: () => 'http://127.0.0.1:3000',

@@ -236,6 +236,8 @@ const PLUGIN_RECOVERY_ACTIONS = new Set<PluginRecoveryAction>([
   'market-remove'
 ])
 
+const MOBILE_INTERNET_MODE_ENABLED = false
+
 let mainWindow: BrowserWindow | undefined
 let mobileWindow: BrowserWindow | undefined
 let tray: Tray | undefined
@@ -3361,8 +3363,19 @@ async function showMobilePairing(): Promise<void> {
     return
   }
 
-  if (!snapshot.pairingUrl && !snapshot.tunnelActive && !snapshot.connected) {
+  if (MOBILE_INTERNET_MODE_ENABLED && !snapshot.pairingUrl && !snapshot.tunnelActive && !snapshot.connected) {
     snapshot = await mobileBridge.toggleTunnel(true)
+  }
+
+  if (!MOBILE_INTERNET_MODE_ENABLED && !snapshot.pairingUrl && !snapshot.connected) {
+    const options: MessageBoxOptions = {
+      type: 'warning',
+      message: zh ? '未找到可用于配对的局域网地址。' : 'No local network address is available for pairing.',
+      detail: zh ? '请将电脑和移动设备连接到同一个 Wi‑Fi 后重试。' : 'Connect the computer and phone to the same Wi-Fi and try again.',
+      buttons: [zh ? '确定' : 'OK']
+    }
+    await (mainWindow ? dialog.showMessageBox(mainWindow, options) : dialog.showMessageBox(options))
+    return
   }
 
   if (mobileWindow && !mobileWindow.isDestroyed()) mobileWindow.destroy()
@@ -3491,6 +3504,7 @@ async function bootstrap(): Promise<void> {
       dark: dshBrandLogoPath('dark')
     },
     appIconPath: desktopIconPath(),
+    internetModeEnabled: MOBILE_INTERNET_MODE_ENABLED,
     cloudflaredCacheDir: join(app.getPath('userData'), 'bin'),
     forceCloudflareFailure: process.env.DSH_TUNNEL_FORCE_PINGGY === '1',
     tunnelLog: (message) => console.warn(message),
