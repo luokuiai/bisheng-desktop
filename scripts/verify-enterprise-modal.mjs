@@ -15,9 +15,11 @@ await mkdir(output, { recursive: true })
 const html = `<!doctype html><html><head><style>
 *{box-sizing:border-box}body{margin:0;background:#fff;color:#222;font:15px sans-serif}
 #root{height:100vh;background:#fff;padding:30px}button{padding:8px 20px;margin:8px}
+.w-screen{width:100vw}
+#layout-center{margin:auto;width:4px}
 .mask{position:fixed;inset:0;background:transparent;z-index:100}
 [role=dialog],[role=alertdialog]{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,90vw);background:white;padding:24px;border-radius:12px;z-index:101;box-shadow:0 5px 18px #0003}
-</style></head><body><main id="root"><h2>Tools and skills · local fixture</h2><button id="upload">Upload skill</button><p>The page keeps its original content bounds.</p></main><script>
+</style></head><body><main id="root"><div class="dsh-web-chat w-screen"><div id="layout-center"></div><h2>Tools and skills · local fixture</h2><button id="upload">Upload skill</button><p>The page keeps its original content bounds.</p></div></main><script>
 window.maskClicks=0;window.pageClicks=0;
 document.querySelector('#upload').onclick=()=>openModal();
 document.querySelector('#root').onclick=()=>window.pageClicks++;
@@ -66,6 +68,15 @@ try {
           const region={x:280,y:40,width:width-280,height:height-40}
           assert.deepEqual(view.getBounds(),region)
           const before=await wc.executeJavaScript('JSON.stringify(document.querySelector("#root").getBoundingClientRect())')
+          const center = async () => (await wc.executeJavaScript('document.querySelector("#layout-center").getBoundingClientRect().x + 2')) * zoom + view.getBounds().x
+          const beforeCenter = await center()
+          host.present(window,{...presentation,coveredLeft:96/zoom})
+          await until(()=>wc.executeJavaScript('document.documentElement.hasAttribute("data-dsh-sidebar-cropped")'))
+          assert.deepEqual(view.getBounds(),{...region,x:376,width:region.width-96})
+          assert.ok(Math.abs((await center())-beforeCenter)<1)
+          host.present(window,presentation)
+          await until(()=>wc.executeJavaScript('!document.documentElement.hasAttribute("data-dsh-sidebar-cropped")'))
+          assert.deepEqual(view.getBounds(),region)
           await wc.executeJavaScript('openModal()')
           await until(()=>view.getBounds().x===0)
           await until(()=>wc.executeJavaScript('document.documentElement.dataset.dshWindowDialog==="open"'))

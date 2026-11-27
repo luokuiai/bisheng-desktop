@@ -649,6 +649,28 @@ it('retains the signed-in account after logout fails and discards profile reads 
   expect(document.querySelector('.dshAccountTrigger').textContent).not.toContain('旧账号')
 })
 
+it('shows the account avatar when available and falls back to the app logo', async () => {
+  const f = await fixture()
+  await f.render('settings.launcher', { wide: true })
+  const image = () => document.querySelector('.dshAccountTrigger .dshAccountAvatar img')
+  const logo = '/dsh-desktop-logo-light.png'
+  const first = 'https://example.test/avatar-one.png'
+  const second = 'https://example.test/avatar-two.png'
+  expect(image().getAttribute('src')).toBe(logo)
+  const setAvatar = async (avatarUrl) => {
+    f.setAccount(avatarUrl ? { connected: true, user: { display_name: '张三', avatar_url: avatarUrl } } : { connected: false })
+    await act(async () => window.dispatchEvent(new window.CustomEvent('dsh-desktop:enterprise-account-changed')))
+  }
+  await setAvatar(first)
+  expect(image().getAttribute('src')).toBe(first)
+  await act(async () => image().dispatchEvent(new window.Event('error')))
+  expect(image().getAttribute('src')).toBe(logo)
+  await setAvatar(second)
+  expect(image().getAttribute('src')).toBe(second)
+  await setAvatar(undefined)
+  expect(image().getAttribute('src')).toBe(logo)
+})
+
 it('shows reported approvals on the account entry and the approvals action', async () => {
   const f = await fixture()
   await f.render('settings.launcher', { wide: true })

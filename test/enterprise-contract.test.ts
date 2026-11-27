@@ -247,6 +247,21 @@ describe('BiSheng compatible client API mock', () => {
     })).status).toBe(401)
   })
 
+  it('preserves only usable account avatar URLs from the token response', async () => {
+    service = createMockEnterpriseServer({ port: 0 })
+    const origin = await service.listen()
+    const issued = await issueSession(origin)
+    const sessionWithAvatar = (avatar_url: string) => parseToken({
+      ...issued.raw, user: { ...issued.raw.user, avatar_url }
+    }, origin).user
+
+    expect(sessionWithAvatar('/images/avatar.png')).toHaveProperty('avatar_url', `${origin}/images/avatar.png`)
+    expect(sessionWithAvatar('https://cdn.example.test/photo.png')).toHaveProperty('avatar_url', 'https://cdn.example.test/photo.png')
+    for (const avatar of ['', 'file:///photo.png', 'https://user@example.test/photo.png', 'http://example.test/photo.png']) {
+      expect(sessionWithAvatar(avatar)).not.toHaveProperty('avatar_url')
+    }
+  })
+
   it('runs login and model streaming against a 0.4.0 server without cache token details', async () => {
     const legacyServer = { port: 0, contractVersion: '0.4.0' as const }
     service = createMockEnterpriseServer(legacyServer)

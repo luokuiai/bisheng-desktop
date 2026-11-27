@@ -530,8 +530,12 @@ window.__ModuleLoader__.load({
         open && h(ApprovalsPanel, { onClose, t }))
     }
 
-    function AccountAvatar({ name }) {
-      return h('span', { className: 'dshAccountAvatar', 'aria-hidden': 'true' }, name ? Array.from(name).slice(0, 2).join('').toLocaleUpperCase() : h('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5 }, h('circle', { cx: 12, cy: 8, r: 4 }), h('path', { d: 'M4 22v-2a8 8 0 0 1 16 0v2' })))
+    function AccountAvatar({ avatarUrl }) {
+      const [failed, setFailed] = useState(false)
+      return h('span', { className: 'dshAccountAvatar', 'aria-hidden': 'true' },
+        avatarUrl && !failed
+          ? h('img', { src: avatarUrl, width: 28, height: 28, alt: '', referrerPolicy: 'no-referrer', style: { borderRadius: '50%', objectFit: 'cover' }, onError: () => setFailed(true) })
+          : h('img', { src: '/dsh-desktop-logo-light.png', width: 20, height: 20, alt: '' }))
     }
 
     function AccountMenuIcon({ kind }) {
@@ -626,6 +630,7 @@ window.__ModuleLoader__.load({
       const name = [identity.account?.user?.display_name, identity.account?.user?.username, identity.account?.user?.id].find(value => typeof value === 'string' && value.trim())
       const label = name || t(identity.account ? 'signedOut' : identity.error ? 'identityError' : 'identityLoading')
       const connected = identity.account?.connected === true
+      const avatarUrl = connected ? identity.account?.user?.avatar_url : undefined
       const quota = identity.account?.usage
       const credits = !identity.error && quota && quota.source !== 'unavailable' && quota.quota_state !== 'unavailable'
         && Number.isFinite(quota.limit) && Number.isFinite(quota.used)
@@ -668,9 +673,9 @@ window.__ModuleLoader__.load({
       const launcher = h('div', { className: launcherClass, 'data-dsh-account-launcher': '' },
         h(Menu, { open: menuOpen, animatePresence: Boolean(workspace), onClose: () => { if (!busy) setMenuOpen(false) }, side: 'top', align: 'start', portal: true, autoFocus: true, className: 'dshAccountMenuAnchor', listClassName: `dshAccountMenu${menuStyle}`,
           anchor: h('button', { ref: trigger, type: 'button', className: `dshAccountTrigger${wide ? '' : ' dshAccountTriggerRail'}`, 'aria-label': triggerLabel, title: wide ? undefined : label, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, disabled: settingsOpen || busy, onClick: () => { setMenuOpen(previous => !previous); setActionError(false); void identity.refresh() } },
-            h('span', { className: 'dshAccountAvatarWrap' }, h(AccountAvatar, { name }), badge),
+            h('span', { className: 'dshAccountAvatarWrap' }, h(AccountAvatar, { key: avatarUrl, avatarUrl }), badge),
             wide && h('span', { className: 'dshAccountTriggerCopy' }, h('span', null, label)), wide && h(IconChevronDownOutlineRegular)) },
-          h('div', { className: 'dshAccountMenuIdentity', 'data-dsh-sidebar-account-menu': '' }, h(AccountAvatar, { name }), h('div', null, h('strong', null, label), h('small', null, t(connected ? 'enterpriseAccount' : 'signInHint'))),
+          h('div', { className: 'dshAccountMenuIdentity', 'data-dsh-sidebar-account-menu': '' }, h(AccountAvatar, { key: avatarUrl, avatarUrl }), h('div', null, h('strong', null, label), h('small', null, t(connected ? 'enterpriseAccount' : 'signInHint'))),
             connected && h('div', { className: 'dshAccountMenuCredits', role: 'status' }, h('strong', null, credits ?? '—'), h('small', null, t(credits === null ? 'creditsUnavailable' : 'creditsRemaining')))),
           h(MenuItemButton, { icon: h(IconSettingsOutlineRegular), shortcut: settingsShortcut, disabled: busy, onSelect: () => { setMenuOpen(false); openSettings() } }, t('settings')),
           connected && h(MenuItemButton, { icon: h(AccountMenuIcon, { kind: 'account' }), disabled: busy, onSelect: openAccountSettings }, t('accountSettings')),
