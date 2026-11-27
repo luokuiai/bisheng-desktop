@@ -24,7 +24,11 @@ export default defineConfig({
         output: {
           format: 'cjs',
           entryFileNames: '[name].cjs'
-        }
+        },
+        // Sandboxed preloads can only require a small set of builtins. Keep
+        // `electron` external and never split preload entries, otherwise the
+        // generated `chunks/*.cjs` import fails before any bridge is exposed.
+        external: ['electron']
       }
     }
   }

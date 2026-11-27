@@ -819,6 +819,25 @@ it('opens an enterprise module inside the workspace chrome without unmounting th
   expect(ui.controller.snapshot().workspacePath).toBe('/')
 })
 
+it('opens the tools-and-skills module reported as capabilities or legacy skills', async () => {
+  const ui = await mount(true)
+  await ui.navigation([
+    { id: 'capabilities', label: '工具与技能', path: '/capabilities', primary: true, active: true }
+  ], '/capabilities')
+  await act(async () => { await ui.controller.openRemoteModule('capabilities') })
+  expect(ui.controller.snapshot().remotePageId).toBe('capabilities')
+  expect(ui.controller.snapshot().workspacePath).toBe('/capabilities')
+  expect(window.dshEnterpriseChat.openPage).toHaveBeenLastCalledWith('capabilities')
+
+  await ui.navigation([
+    { id: 'skills', label: '工具与技能', path: '/skills', primary: true, active: true }
+  ], '/skills')
+  await act(async () => { await ui.controller.openRemoteModule('capabilities') })
+  expect(ui.controller.snapshot().remotePageId).toBe('skills')
+  expect(ui.controller.snapshot().workspacePath).toBe('/skills')
+  expect(window.dshEnterpriseChat.openPage).toHaveBeenLastCalledWith('skills')
+})
+
 it('removes an embedded enterprise module when the account changes or signs out', async () => {
   const ui = await mount(true)
   await ui.navigation([

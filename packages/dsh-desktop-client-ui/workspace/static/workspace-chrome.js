@@ -12,11 +12,13 @@ const pluginEntry = { id: 'plugins', kind: 'panel', route: '/plugins', panelId: 
 // The original platform menu keeps its published order. Entries are emitted
 // only after the enterprise document authorizes them for the current account.
 const remoteEntries = [
-  { moduleId: 'knowledge', icon: 'knowledge' },
-  { moduleId: 'channel', icon: 'channel' },
-  { moduleId: 'apps', icon: 'apps' },
-  { moduleId: 'skills', icon: 'skills' },
-  { moduleId: 'square', icon: 'square' }
+  { moduleIds: ['knowledge'], icon: 'knowledge' },
+  { moduleIds: ['channel'], icon: 'channel' },
+  { moduleIds: ['apps'], icon: 'apps' },
+  // 1.2.0 reports the tools-and-skills page as `capabilities`; keep the older
+  // `skills` identity as an alias so both platform revisions use one menu item.
+  { moduleIds: ['capabilities', 'skills'], icon: 'skills', labelKey: 'skills' },
+  { moduleIds: ['square'], icon: 'square' }
 ]
 const pageSidebars = new Set(['/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/ai-profile', '/project-board', '/components'])
 const nativeSurfaces = new Map([
@@ -55,13 +57,14 @@ const EMPTY_SNAPSHOT = () => EMPTY_STATE
 export function buildDestinations({ entries = [], navigationReported = false, hasPanel } = {}) {
   const destinations = localEntries.map(entry => ({ ...entry }))
   if (hasPanel ? hasPanel('plugins') : true) destinations.push({ ...pluginEntry })
-  for (const { moduleId, icon } of remoteEntries) {
-    const entry = entries.find(item => item?.id === moduleId)
+  for (const { moduleIds, icon, labelKey } of remoteEntries) {
+    const entry = moduleIds.map(moduleId => entries.find(item => item?.id === moduleId)).find(Boolean)
     // Until the enterprise document reports its menu, keep every original
     // entry visible. Once it does, only hide what this account cannot use.
     if (navigationReported && !entry) continue
+    const moduleId = entry?.id ?? moduleIds[0]
     destinations.push({
-      id: 'remote:' + moduleId, kind: 'remote', moduleId, icon,
+      id: 'remote:' + moduleId, kind: 'remote', moduleId, icon, labelKey,
       route: '/' + moduleId, ...(entry ? { label: entry.label } : {})
     })
   }
@@ -72,7 +75,7 @@ export function buildDestinations({ entries = [], navigationReported = false, ha
 export function sidebarDestinations(React, destinations, t) {
   return destinations.map(destination => ({
     key: destination.id,
-    label: destination.label || t(pageKey(destination.route)),
+    label: destination.label || t(destination.labelKey || pageKey(destination.route)),
     icon: sidebarIcon(React, destination.icon),
     href: destination.route
   }))
@@ -137,7 +140,7 @@ export function createWorkspaceChrome(React, loadPages) {
   }
 
   function RouteButton({ destination, active, t, navigate, openRemote, compact = false }) {
-    const label = destination.label || t(pageKey(destination.route))
+    const label = destination.label || t(destination.labelKey || pageKey(destination.route))
     const dest = destination.route
     const open = () => destination.kind === 'remote'
       ? (openRemote ? openRemote(destination.moduleId) : navigate(dest))

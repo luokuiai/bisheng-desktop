@@ -63,7 +63,7 @@ it('shows one flat list of workbench and native panel entries in the expanded si
   for (const surface of ['.dshWorkspaceDirectory', '.dshWorkspaceRail']) {
     expect([...container.querySelectorAll(`${surface} [data-workspace-route]`)].map(button => button.dataset.workspaceRoute))
       .toEqual(['/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
-        '/plugins', '/knowledge', '/channel', '/apps', '/skills', '/square'])
+        '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'])
   }
   expect(container.querySelector('.dshWorkspaceNavGroup')).toBeNull()
   container.querySelector('.dshWorkspaceToolbar [title="settings"]').click()
@@ -143,15 +143,15 @@ it('keeps one toolbar and one right-side portal when the native plugin replaces 
 })
 
 it('merges the authorized enterprise entries after the new workbench entries without groups', () => {
-  const entries = ['square', 'apps', 'channel', 'knowledge', 'skills']
+  const entries = ['square', 'apps', 'channel', 'knowledge', 'capabilities']
     .map(id => ({ id, label: `label:${id}`, path: `/${id}`, active: false, primary: true }))
   expect(buildDestinations({ entries, navigationReported: true }).map(item => item.route)).toEqual([
     '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
-    '/plugins', '/knowledge', '/channel', '/apps', '/skills', '/square'
+    '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'
   ])
   expect(buildDestinations({ entries: [], navigationReported: false }).map(item => item.route)).toEqual([
     '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
-    '/plugins', '/knowledge', '/channel', '/apps', '/skills', '/square'
+    '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'
   ])
   expect(buildDestinations({
     entries: entries.filter(entry => entry.id === 'knowledge'), navigationReported: true
@@ -160,6 +160,32 @@ it('merges the authorized enterprise entries after the new workbench entries wit
   ])
   expect(buildDestinations({ entries, navigationReported: true, hasPanel: () => false }).map(item => item.route))
     .not.toContain('/plugins')
+})
+
+it('maps the capabilities entry to tools and skills without duplicating the legacy skills identity', async () => {
+  const entries = [
+    { id: 'skills', label: '旧技能入口', path: '/skills', active: false, primary: true },
+    { id: 'capabilities', label: '工具与技能', path: '/capabilities', active: false, primary: true }
+  ]
+  const destinations = buildDestinations({ entries, navigationReported: true })
+  expect(destinations.filter(item => item.kind === 'remote')).toEqual([
+    expect.objectContaining({ moduleId: 'capabilities', route: '/capabilities', label: '工具与技能' })
+  ])
+
+  const fallback = buildDestinations({ entries, navigationReported: true }).find(item => item.moduleId === 'capabilities')
+  expect(fallback?.labelKey).toBe('skills')
+
+  const Chrome = createWorkspaceChrome(React, vi.fn())
+  const snapshot = { connected: true, navigation: { entries } }
+  await act(async () => root.render(React.createElement(Chrome, {
+    path: '/', navigation: {
+      navigate: vi.fn(), openRemoteModule: vi.fn(), hasPanel: () => true,
+      subscribe: () => () => {}, snapshot: () => snapshot
+    },
+    theme, t: key => key === 'skills' ? '工具与技能' : key
+  })))
+  const route = container.querySelector('.dshWorkspaceDirectory [data-workspace-route="/capabilities"]')
+  expect(route?.textContent).toContain('工具与技能')
 })
 
 it('dispatches remote entries without navigating the local workspace route', async () => {

@@ -490,8 +490,9 @@ window.__ModuleLoader__.load({
     }
 
     const workspacePanels = { '/plugins': 'plugins', '/ai-chat': 'code-workbench-layout', '/ai-image-generation': 'copylee-image-gen.paintings', '/project-board': 'super-kanban' }
-    const workspaceRemoteIds = new Set(['knowledge', 'channel', 'apps', 'skills', 'square'])
-    const workspaceDestinations = new Set(['', 'chat', 'multi-agent-chat', 'ai-chat', 'ai-image-generation', 'ai-profile', 'project-board', 'plugins', 'knowledge', 'channel', 'apps', 'skills', 'square', 'lab', 'components', 'charts', 'icons', 'templates', 'admin', 'settings', 'model', 'harness'])
+    const workspaceRemoteIds = new Set(['knowledge', 'channel', 'apps', 'capabilities', 'skills', 'square'])
+    const remoteModuleAliases = { capabilities: 'skills', skills: 'capabilities' }
+    const workspaceDestinations = new Set(['', 'chat', 'multi-agent-chat', 'ai-chat', 'ai-image-generation', 'ai-profile', 'project-board', 'plugins', 'knowledge', 'channel', 'apps', 'capabilities', 'skills', 'square', 'lab', 'components', 'charts', 'icons', 'templates', 'admin', 'settings', 'model', 'harness'])
     function createChatNavigation(ctx) {
       let value = { mode: 'work', connected: false, phase: 'idle', epoch: undefined, items: [], page: 0, hasMore: false, historyPhase: 'idle', settingsOpen: false, signInPromptOpen: false, approvalsOpen: false, accountDialogOpen: false, settingsSurface: undefined, pageId: undefined, remotePageId: undefined, navigation: undefined, workLanding: false, nativeWork: true, panelOpen: false, activePanelId: null }
       const enabled = typeof document !== 'undefined' && Boolean(document.querySelector?.('link[href="/desktop-workspace/workspace.css"]'))
@@ -526,22 +527,23 @@ window.__ModuleLoader__.load({
       const openRemoteModule = async (id) => {
         if (!workspaceRemoteIds.has(id)) return
         if (!value.connected) { publish({ signInPromptOpen: true }); return }
-        const authorized = value.navigation?.entries.some(entry => entry.id === id)
+        const authorized = value.navigation?.entries.find(entry => entry.id === id || entry.id === remoteModuleAliases[id])
         // A missing report means the enterprise document has not loaded yet.
         // Show the scene so the host can connect and finish on `applyState`.
         if (value.navigation !== undefined && !authorized) return
+        const moduleId = authorized?.id ?? id
         const request = ++routeRevision
         leaveBot()
         ctx.layout.selectPanel(null)
         publish({
-          mode: 'chat', workspacePath: '/' + id, workspaceNative: false,
-          pageId: id, remotePageId: id, signInPromptOpen: false
+          mode: 'chat', workspacePath: '/' + moduleId, workspaceNative: false,
+          pageId: moduleId, remotePageId: moduleId, signInPromptOpen: false
         })
         if (!authorized) { pendingRemoteId = id; return }
         pendingRemoteId = undefined
         const epoch = value.epoch
         try {
-          await window.dshEnterpriseChat.openPage(id)
+          await window.dshEnterpriseChat.openPage(moduleId)
         } catch {
           if (!active || request !== routeRevision || epoch !== value.epoch) return
           publish({ workspacePath: '/', remotePageId: undefined, pageId: undefined })
@@ -731,7 +733,8 @@ publish({ items: [...new Map(items.map(item => [item.id, item])).values()], page
         const becameReady = next.phase === 'ready' && value.phase !== 'ready'
         const clearHistory = identityChanged || !next.connected
         const remotePageId = value.remotePageId && next.connected && !identityChanged &&
-          (next.navigation ? next.navigation.entries.some(entry => entry.id === value.remotePageId) : true)
+          (next.navigation ? next.navigation.entries.some(entry =>
+            entry.id === value.remotePageId || entry.id === remoteModuleAliases[value.remotePageId]) : true)
           ? value.remotePageId : undefined
         const remoteLost = value.remotePageId !== undefined && remotePageId === undefined
 if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
@@ -748,7 +751,8 @@ if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
         if (pendingRemoteId !== undefined && next.navigation !== undefined) {
           const id = pendingRemoteId
           pendingRemoteId = undefined
-          if (next.connected && next.navigation.entries.some(entry => entry.id === id)) void openRemoteModule(id)
+          const authorized = next.navigation.entries.find(entry => entry.id === id || entry.id === remoteModuleAliases[id])
+          if (next.connected && authorized) void openRemoteModule(authorized.id)
         }
         if (!next.connected) pendingRemoteId = undefined
         if (signedIn) window.dispatchEvent(new CustomEvent('dsh-desktop:close-settings'))
