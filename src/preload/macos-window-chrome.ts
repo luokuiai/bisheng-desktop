@@ -3,7 +3,8 @@ const sidebarThemes = new WeakMap<Document, { style: HTMLStyleElement; owners: n
 /** Enable Harness's native macOS layout before its client modules mount. */
 export function mountMacosWindowChrome(
   doc: Document,
-  subscribe: (listener: (fullscreen: boolean) => void) => () => void
+  subscribe: (listener: (fullscreen: boolean) => void) => () => void,
+  zoomFactor: () => number = () => 1
 ): () => void {
   let fullscreen = false
   let theme = sidebarThemes.get(doc)
@@ -25,10 +26,14 @@ export function mountMacosWindowChrome(
     if (!style.isConnected && doc.head) doc.head.append(style)
     root.dataset.dshDesktopWebShortcuts = 'true'
     root.dataset.platform = 'darwin'
+    // The physical traffic lights keep their size when the renderer zooms out.
+    const zoom = zoomFactor()
+    root.style.setProperty('--dsh-caption-scale', String(zoom > 0 && zoom < 1 ? 1 / zoom : 1))
     if (fullscreen) root.dataset.fullscreen = 'true'
     else delete root.dataset.fullscreen
   }
   mark()
+  doc.defaultView?.addEventListener('resize', mark)
   doc.addEventListener('DOMContentLoaded', mark, { once: true })
   const unsubscribe = subscribe(value => {
     fullscreen = value
@@ -36,7 +41,12 @@ export function mountMacosWindowChrome(
   })
   return () => {
     doc.removeEventListener('DOMContentLoaded', mark)
+    doc.defaultView?.removeEventListener('resize', mark)
     unsubscribe()
-    if (--theme.owners === 0) { style.remove(); sidebarThemes.delete(doc) }
+    if (--theme.owners === 0) {
+      style.remove()
+      doc.documentElement?.style.removeProperty('--dsh-caption-scale')
+      sidebarThemes.delete(doc)
+    }
   }
 }

@@ -1157,14 +1157,14 @@ async function openHarness(
 
 }
 
-async function showSplash(): Promise<void> {
+async function showSplash(stage?: 'keychain'): Promise<void> {
   if (quitting || gpuFallbackRelaunching) return
   clearProfileBootConfirmation()
   const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createWindow()
   const navigationVersion = ++mainWindowNavigationVersion
   window.webContents.stop()
   const loaded = await loadDesktopResource(window, desktopResourcePath('splash.html'), {
-    query: { theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light', locale: harnessLocale() }
+    query: { theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light', locale: harnessLocale(), ...(stage ? { stage } : {}) }
   })
   if (!loaded) return
   if (quitting || gpuFallbackRelaunching || window.isDestroyed() || navigationVersion !== mainWindowNavigationVersion) return
@@ -3469,6 +3469,7 @@ async function bootstrap(): Promise<void> {
       },
       userDataPath: app.getPath('userData'),
       safeStorage,
+      ...(process.platform === 'darwin' ? { macKeychain: safeStorage, beforeKeychainAccess: () => showSplash('keychain') } : {}),
       fetchImpl: createElectronEnterpriseFetch(net.fetch.bind(net)),
       allowInsecureLoopback: allowInsecureEnterpriseLoopback(),
       note: (line) => runtime.note(line)

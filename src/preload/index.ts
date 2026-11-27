@@ -2,7 +2,7 @@ import { createAboutPresentation } from './about-presentation'
 import { APP_ICON_STYLES, createAppIcon, mountAppIconTheme } from './app-icon'
 import { renderSafeModeBannerLocale, type SafeModeBannerElements } from './safe-mode-locale'
 import type { EnterpriseChatPresentation, EnterpriseChatViewState } from '../shared/enterprise-chat-view'
-import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { UpdateStatus } from '../shared/contracts'
 import { setupDesktopStoragePersistence } from './desktop-storage'
 import { setupDesktopNotificationBridge } from './desktop-notification'
@@ -30,7 +30,7 @@ if (process.platform === 'darwin') {
     }
     ipcRenderer.on('dsh-desktop:window-fullscreen', receive)
     return () => ipcRenderer.removeListener('dsh-desktop:window-fullscreen', receive)
-  })
+  }, () => webFrame.getZoomFactor())
   window.addEventListener('unload', dispose, { once: true })
 }
 

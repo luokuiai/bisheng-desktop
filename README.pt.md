@@ -46,6 +46,7 @@ As versões instaladas verificam atualizações logo após a inicialização e a
 
 O DeepSeek Harness já fornece o Agent Runtime e a Web UI. O DSH Desktop acrescenta os recursos nativos necessários para um produto desktop:
 
+- Inicia na visão geral do LUOKUI-AI, com chat de IA, espaços de trabalho, modelos e biblioteca de componentes. Os plugins instalados de agentes, imagens, código e quadro de tarefas abrem no espaço correspondente.
 - Inicia e encerra o Harness sem uma CLI separada ou outra aba do navegador
 - Usa o seletor de diretórios do sistema para adicionar e gerenciar espaços de trabalho
 - Oferece suporte aos modelos oficiais da DeepSeek e a provedores de terceiros populares

@@ -24,9 +24,14 @@ export function buildDisclaimedUtilityProcessSpec(
     throw new Error('Unexpected Harness Node arguments for the macOS utility process.')
   }
 
+  const env = definedEnvironment(spawnOptions.env)
+  // Chromium drops empty values during utilityProcess.fork. Git uses empty
+  // GIT_CONFIG_VALUE_n entries (e.g. to reset a helper), and rejects an
+  // incomplete indexed configuration. Carry only the names across this hop.
+  const emptyKeys = Object.keys(env).filter(key => env[key] === '')
   return {
     modulePath,
-    args,
+    args: emptyKeys.length ? [`--desktop-empty-env=${JSON.stringify(emptyKeys)}`, ...args] : args,
     options: {
       cwd:
         typeof spawnOptions.cwd === 'string'
@@ -34,7 +39,7 @@ export function buildDisclaimedUtilityProcessSpec(
           : spawnOptions.cwd
             ? fileURLToPath(spawnOptions.cwd)
             : undefined,
-      env: definedEnvironment(spawnOptions.env),
+      env,
       execArgv: [internalLoaderFlag],
       stdio: 'pipe',
       serviceName: 'DSH Harness',

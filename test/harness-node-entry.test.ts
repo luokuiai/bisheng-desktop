@@ -11,6 +11,41 @@ import {
   buildPackagedPnpmInvocation
 } from '../build/packaged-pnpm-invocation.mjs'
 import { projectRoot } from './patch-path'
+import { buildDisclaimedUtilityProcessSpec } from '../src/main/runtime/disclaimed-utility-process'
+
+it('preserves empty Git configuration values for tools started by the macOS Harness', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-utility-env-'))
+  try {
+    const fixture = join(directory, 'git-config.mjs')
+    await writeFile(fixture, `
+      import { execFileSync } from 'node:child_process'
+      export function runCli() {
+        const value = execFileSync('git', ['config', '--get', 'dshqa.empty'], { encoding: 'utf8' })
+        console.log('probe:' + JSON.stringify([value.trimEnd(), process.env.OMITTED, process.argv.slice(2)]))
+      }
+    `)
+    const spec = buildDisclaimedUtilityProcessSpec(
+      ['--expose-internals', join(projectRoot, 'build', 'harness-node-entry.mjs'), fixture, '--test-arg'],
+      {
+        env: {
+          PATH: process.env.PATH,
+          SystemRoot: process.env.SystemRoot,
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'dshqa.empty',
+          GIT_CONFIG_VALUE_0: '',
+          OMITTED: undefined
+        }
+      }
+    )
+    // Electron's macOS utility process omits every empty environment entry.
+    const childEnv = Object.fromEntries(Object.entries(spec.options.env ?? {}).filter(([, value]) => value !== ''))
+    const result = spawnSync(process.execPath, [spec.modulePath, ...spec.args], { env: childEnv, encoding: 'utf8' })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('probe:["",null,["--test-arg"]]')
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
 
 describe('linked Profile plugin host dependency fallback', () => {
   it.each(['esm', 'commonjs'])('keeps the %s plugin local and resolves only missing @deepseek-ai peers from the host', async (mode) => {

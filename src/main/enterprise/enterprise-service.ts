@@ -91,7 +91,7 @@ export interface EnterprisePublicModel {
 
 export interface EnterprisePublicState {
   connected: boolean
-  secureStorageAvailable: boolean
+  secureStorageAvailable?: boolean
   phase: EnterprisePhase
   revision: number
   models: EnterprisePublicModel[]
@@ -159,7 +159,7 @@ export class EnterpriseService {
   private revision = 0
   private phase: EnterprisePhase
   private session: EnterpriseCredentialSession | null = null
-  private vaultGeneration = 0
+  private vaultGeneration?: number
   private models: EnterprisePublicModel[] = []
   private modelsAvailable = false
   private usage: EnterprisePublicUsage | undefined
@@ -185,8 +185,8 @@ export class EnterpriseService {
   private auditTitleInFlight = false
 
   constructor(private readonly options: EnterpriseServiceOptions) {
-    this.phase = options.vault.available ? 'idle' : 'disabled'
-    if (!options.vault.available) {
+    this.phase = options.vault.available === false ? 'disabled' : 'idle'
+    if (options.vault.available === false) {
       this.error = options.vault.unavailableReason ?? 'Operating-system secure storage is unavailable.'
     }
   }
@@ -202,7 +202,7 @@ export class EnterpriseService {
       connected,
       ...(connected && this.auditFields.length ? { audit_context: { fields: [...this.auditFields] } } : {}),
       ...(connected && this.auditTitleAvailable ? { audit_conversation_title: { version: 1 as const }, auditTitleEpoch: this.epoch } : {}),
-      secureStorageAvailable: this.options.vault.available,
+      ...(this.options.vault.available === undefined ? {} : { secureStorageAvailable: this.options.vault.available }),
       phase: this.phase,
       revision: this.revision,
       desktopVersion: this.options.desktopVersion,
@@ -229,10 +229,10 @@ export class EnterpriseService {
     }
   }
 
-  async restore(): Promise<void> {
-    if (!this.options.vault.available) return
+  async restore(beforeKeychainAccess?: () => Promise<void>): Promise<void> {
+    if (this.options.vault.available === false) return
     try {
-      const stored = await this.options.vault.read()
+      const stored = await this.options.vault.read(beforeKeychainAccess)
       this.vaultGeneration = stored.generation
       if (!stored.session) return
       this.session = stored.session
@@ -245,6 +245,7 @@ export class EnterpriseService {
       this.publish()
       void this.refreshModels(true)
     } catch (error) {
+      this.vaultGeneration = undefined
       this.session = null
       this.allowPrivateHttpForSession = false
       this.phase = 'error'
@@ -277,8 +278,11 @@ export class EnterpriseService {
     this.invalidateAuthSession()
     const authEpoch = this.authEpoch
     return this.enqueueMutation(async () => {
-      if (!this.options.vault.available) {
-        throw Object.assign(new Error(this.options.vault.unavailableReason ?? 'Secure storage is unavailable.'), {
+      if (!await this.options.vault.checkAvailable()) {
+        this.phase = this.options.vault.available === false ? 'disabled' : 'error'
+        this.error = this.options.vault.unavailableReason ?? 'Operating-system secure storage is unavailable.'
+        this.publish()
+        throw Object.assign(new Error(this.error), {
           status: 503
         })
       }
@@ -298,6 +302,9 @@ export class EnterpriseService {
         ...this.platformRequestOptions(),
         allowInsecurePrivateHttp: options.confirmInsecurePrivateHttp === true
       })
+      // A rejected startup unlock leaves the saved generation unknown. Capture it
+      // before requesting new tokens so the eventual write has a meaningful CAS.
+      if (this.vaultGeneration === undefined) this.vaultGeneration = (await this.options.vault.read()).generation
       this.allowPrivateHttpForSession = isInsecurePrivateHttpOrigin(base)
       const contract = await loadEnterpriseContract()
       await this.cancelPendingLogin()
@@ -374,7 +381,7 @@ export class EnterpriseService {
         await callback.close()
         if (this.epoch === loginEpoch) this.pendingLogin = undefined
         this.rememberRequest(error)
-        if (!this.session?.access_token) this.phase = this.options.vault.available ? 'idle' : 'disabled'
+        if (!this.session?.access_token) this.phase = this.options.vault.available === false ? 'disabled' : 'idle'
         this.publish()
         throw error
       }
@@ -448,7 +455,7 @@ export class EnterpriseService {
         }
       }
       await this.clearLocalSession('idle')
-      this.note('logout_committed')
+      if (this.phase !== 'error') this.note('logout_committed')
       return this.snapshot()
     })
   }
@@ -552,7 +559,7 @@ export class EnterpriseService {
         this.now()
       )
       if (this.epoch !== expectedEpoch) return
-      await this.commitSession(token as EnterpriseCredentialSession, expectedEpoch)
+      if (!await this.commitSession(token as EnterpriseCredentialSession, expectedEpoch)) return
       if (this.authEpoch === pending.authEpoch && this.session?.access_token) this.authEnabled = true
       await this.syncCatalog(expectedEpoch, { includeUsage: true })
       this.note('login_committed', { originHash: hashEnterpriseOrigin(pending.base) })
@@ -600,7 +607,7 @@ export class EnterpriseService {
         this.now()
       )
       if (this.epoch !== epoch) return this.snapshot()
-      await this.commitSession(token as EnterpriseCredentialSession, epoch, generation)
+      if (!await this.commitSession(token as EnterpriseCredentialSession, epoch, generation)) return this.snapshot()
       await this.syncCatalog(epoch, { includeUsage: true })
       this.note('refresh_committed')
       return this.snapshot()
@@ -630,16 +637,18 @@ export class EnterpriseService {
     session: EnterpriseCredentialSession,
     expectedEpoch: number,
     expectedGeneration = this.vaultGeneration
-  ): Promise<void> {
-    if (this.epoch !== expectedEpoch) return
+  ): Promise<boolean> {
+    if (this.epoch !== expectedEpoch) return false
     try {
+      if (expectedGeneration === undefined) throw new EnterpriseVaultError('Enterprise credential vault generation is unknown.', 'stale')
       const stored = await this.options.vault.replace(expectedGeneration, session)
-      if (this.epoch !== expectedEpoch) return
+      if (this.epoch !== expectedEpoch) return false
       this.vaultGeneration = stored.generation
       this.session = stored.session
       this.clearError()
       // Leave phase as refreshing; syncCatalog flips to connected after usage.
-    } catch {
+      return true
+    } catch (error) {
       this.invalidateAuthSession()
       this.session = null
       this.auditFields = []
@@ -649,15 +658,19 @@ export class EnterpriseService {
       this.usage = undefined
       this.modelUsage = {}
       this.phase = 'reauthRequired'
+      this.vaultGeneration = undefined
       this.error = 'Enterprise credentials could not be saved. Sign in again.'
       this.errorCode = undefined
       this.publish()
-      try {
-        await this.options.vault.clear()
-      } catch {
-        // Isolation of the previous vault is best-effort.
+      if (!(error instanceof EnterpriseVaultError && (error.code === 'unavailable' || error.code === 'stale'))) {
+        try {
+          await this.options.vault.clear()
+        } catch {
+          // Isolation of the previous vault is best-effort.
+        }
       }
       this.note('vault_write_failed')
+      return false
     }
   }
 
@@ -1411,14 +1424,15 @@ export class EnterpriseService {
     this.modelsAvailable = false
     this.usage = undefined
     this.modelUsage = {}
-    this.phase = this.options.vault.available ? phase : 'disabled'
+    this.phase = this.options.vault.available === false ? 'disabled' : phase
     this.clearError()
     try {
-      if (this.options.vault.available) {
-        const cleared = await this.options.vault.clear()
+      if (this.options.vault.available !== false) {
+        const cleared = await this.options.vault.clear({ ifPresent: this.options.vault.available === undefined })
         this.vaultGeneration = cleared.generation
       }
     } catch {
+      this.vaultGeneration = undefined
       this.phase = 'error'
       this.error = 'Enterprise credentials could not be cleared.'
       this.errorCode = undefined

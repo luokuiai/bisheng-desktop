@@ -1,6 +1,10 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./packages/dsh-desktop-client-ui/workspace', import.meta.url)) }
+  },
   test: {
     include: ['test/**/*.{test,spec}.{ts,js,mjs}'],
     // ARM64 and Rosetta x64 CI workers share the same Mac. Serialize files in

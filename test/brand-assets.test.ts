@@ -163,7 +163,7 @@ describe('LUOKUI-AI brand assets', () => {
     expect(offset).toBe(ico.length)
   })
 
-  it('keeps the startup splash text-only and bilingual', async () => {
+  it('uses the bundled prototype mark and bilingual startup status', async () => {
     const splash = await readFile(build('splash.html'), 'utf8')
 
     expect(splash).toContain('Starting LUOKUI-AI')
@@ -172,7 +172,9 @@ describe('LUOKUI-AI brand assets', () => {
     expect(splash).toContain('首次启动可能需要一点时间。')
     expect(splash).toContain('data-platform="windows"')
     expect(splash).toContain("data-theme='dark'")
-    expect(splash).not.toMatch(/<img\b/u)
+    expect(splash).toContain('<img class="mark" src="icon.png" alt=""')
+    expect(splash).toContain('aria-live="polite"')
+    await expect(sharp(build('icon.png')).metadata()).resolves.toMatchObject({ format: 'png' })
     expect(splash).not.toMatch(/\.gif\b/u)
   })
 

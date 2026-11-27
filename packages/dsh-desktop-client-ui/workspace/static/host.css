@@ -1,0 +1,17 @@
+body[data-dsh-desktop-ui=dsh] {
+  --dsh-font-family-text-default: var(--font-inter), 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.dshWorkspacePages {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+  font-family: var(--dsw-font-family);
+}
+.dshWorkspaceLoadState { display: grid; height: 100%; place-content: center; justify-items: center; gap: 12px; }
+.dshWorkspaceLoadState button { cursor: pointer; font: inherit; }

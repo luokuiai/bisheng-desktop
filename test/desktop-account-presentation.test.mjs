@@ -29,6 +29,22 @@ function hostStyles(colors) {
   }
 }
 
+function runClient(source, dom, readPalette) {
+  const { window } = dom
+  vm.runInNewContext(source, {
+    window, document: window.document, MutationObserver: window.MutationObserver,
+    ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+    queueMicrotask: window.queueMicrotask.bind(window),
+    getComputedStyle(node) {
+      if (node.style.color.startsWith('var(--dsw-')) {
+        if (!readPalette) throw new Error('The host palette cannot be measured')
+        return readPalette(node)
+      }
+      return window.getComputedStyle(node)
+    }
+  })
+}
+
 /** Mount the single Chat/Work presenter and return its latest presentation. */
 async function presenter({ computedStyle } = {}) {
   const dom = new JSDOM('<html><head></head><body><div id="root"></div></body></html>', { url: 'http://localhost/' })
@@ -42,7 +58,7 @@ async function presenter({ computedStyle } = {}) {
   dom.window.dshEnterpriseChat = { present: vi.fn(async () => {}) }
   dom.window.__ModuleLoader__ = { load: next => { definition = next } }
   const source = await readFile(new URL('../packages/dsh-desktop-client-ui/client.js', import.meta.url), 'utf8')
-  vm.runInNewContext(source, { window: dom.window, document: dom.window.document, ResizeObserver: class { observe() {} disconnect() {} }, MutationObserver: dom.window.MutationObserver, ...(computedStyle ? { getComputedStyle: computedStyle } : {}) })
+  runClient(source, dom, computedStyle)
   const plugin = definition.factory(id => { if (id === 'react') return React; if (id === '@deepseek-ai/dsh-client-ui-primitives') return {}; throw new Error(id) })
   const locale = { register() {}, bind: () => key => key, getSnapshot: () => ({ active: 'en' }), subscribe: () => () => {} }
   plugin.apply({
@@ -95,7 +111,7 @@ it('presents approvals independently while preserving native Settings presentati
   dom.window.dshEnterpriseChat = { present: vi.fn(async () => {}) }
   dom.window.__ModuleLoader__ = { load: next => { definition = next } }
   const source = await readFile(new URL('../packages/dsh-desktop-client-ui/client.js', import.meta.url), 'utf8')
-  vm.runInNewContext(source, { window: dom.window, document: dom.window.document, ResizeObserver: class { observe() {} disconnect() {} }, MutationObserver: dom.window.MutationObserver })
+  runClient(source, dom)
   const plugin = definition.factory(id => { if (id === 'react') return React; if (id === '@deepseek-ai/dsh-client-ui-primitives') return {}; throw new Error(id) })
   const locale = { register() {}, bind: () => key => key, getSnapshot: () => ({ active: 'en' }), subscribe: () => () => {} }
   plugin.apply({

@@ -33,6 +33,12 @@ BISHENG_DEV_USER_DATA="$(mktemp -d)" BISHENG_DEV_PORT_OFFSET=100 npm run dev
 
 On PowerShell, set the same variables using `$env:BISHENG_DEV_USER_DATA` and `$env:BISHENG_DEV_PORT_OFFSET` before `npm run dev`. The offset is added to the production mobile and Harness ports 43227 and 43229. The development default offset is 1.
 
+### Desktop workspace
+
+The overview and workspace routes are rendered by `dsh-desktop-client-ui` inside the authenticated Harness document. Use `npm run workspace:prepare` after editing page components, CSS, chrome modules or media. Reload the app to pick up a rebuilt entry point. Open renderers keep access to their previous lazy chunks during development. Before enumerating files, electron-builder pins a clean copy of `.build/desktop-workspace` for the entire packaging run. The package check compares all lazy chunks, media and fonts against that copy. The build uses the host React runtime and serves all fonts and media locally.
+
+The main workspace entries open the corresponding registered plugins. The template directory also provides previews. The AI chat editor, session history, model catalog and task list use the active Profile. Account settings and workspace usage follow enterprise sign-in. For local acceptance, use the isolated development Profile described above.
+
 ## Validation
 
 Run the core checks before submitting a change:

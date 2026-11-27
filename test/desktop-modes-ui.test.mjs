@@ -25,6 +25,7 @@ beforeEach(() => {
 })
 afterEach(async () => {
   if (root) await act(async () => root.unmount())
+  root = undefined
   container?.remove()
   document.documentElement.removeAttribute('data-dsh-safe-mode-page')
   document.documentElement.removeAttribute('data-dsh-about-open')
@@ -40,6 +41,12 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 async function mount(connected = false, collection = {}, inert = false, workbench, desktop = false, navigationOptions = {}) {
+  if (navigationOptions.workspaceRoutes) {
+    const stylesheet = document.createElement('link')
+    stylesheet.href = '/desktop-workspace/workspace.css'
+    document.head.append(stylesheet)
+    disposers.push(() => stylesheet.remove())
+  }
   if (desktop) window.dshDesktop = { restartHarness: vi.fn() }
   let workbenchSnapshot = workbench
   let bindWorkbench, disposeWorkbench
@@ -88,7 +95,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     }
   })
   let plugin, navigate
-  let sessionList = { phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }
+  let sessionList = navigationOptions.sessionList ?? { phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }
   let liveState = { blank: true, pendingSubmissions: [], running: false, awaitingFirstTurn: false }
   const liveListeners = new Set()
   const liveSession = { getSnapshot: () => liveState, subscribe: fn => { liveListeners.add(fn); return () => liveListeners.delete(fn) } }
@@ -110,7 +117,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   }
   const footerSlot = 'sidebar.footer.action'
   const slotCore = new SlotCore()
-  slotCore.register({ name: 'root', children: { [footerSlot]: { kind: 'list', scope: 'root' } } }, () => null)
+  slotCore.register({ name: 'root', children: { [footerSlot]: { kind: 'list', scope: 'root' }, main: { kind: 'keyed', scope: 'root' } } }, () => null)
   function SidebarFooter() {
     React.useSyncExternalStore(listener => slotCore.subscribe(footerSlot, listener), () => slotCore.getVersion(footerSlot))
     return React.createElement('footer', null, slotCore.entriesOfSlot(footerSlot).map(entry =>
@@ -133,14 +140,16 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   } }
   new Function(await readFile(process.env.DSH_TEST_HOST_DIALOG_CLIENT_SOURCE || 'packages/dsh-desktop-client-ui/client.js', 'utf8'))()
   plugin.apply({
-    get: name => name === 'shortcuts' ? { catalog: { getSnapshot: () => [{ id: 'sidebar.left.toggle', binding: { code: 'KeyB', modifiers: ['meta'] } }] } } : undefined,
+    theme: { getTheme: () => ({ active: { colorScheme: 'light' } }) },
+    on: () => () => {},
+    get: name => name === 'workspaces' ? { list: { getSnapshot: () => ({ items: navigationOptions.folders ?? [{ workspaceId: 'work', sessionIds: ['draft'] }] }) } } : name === 'conversation' ? { input: { requestDraftInitialization: navigationOptions.initializeDraft } } : name === 'shortcuts' ? { catalog: { getSnapshot: () => [{ id: 'sidebar.left.toggle', binding: { code: 'KeyB', modifiers: ['meta'] } }] } } : undefined,
     inject(names, callback) {
       if (names.includes('desktopWorkbenches')) {
         bindWorkbench = callback
         if (workbenchSnapshot) attachWorkbench()
       }
     },
-    uiWorkspace: { registerNavigationHandler: (fn) => { navigate = fn; return () => {} }, startSession: () => { navigate('new'); setSessions({ phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }); setPanel(null) } },
+    uiWorkspace: { openWorkspace: navigationOptions.openWorkspace, openSession: navigationOptions.openSession, registerNavigationHandler: (fn) => { navigate = fn; return () => {} }, startSession: navigationOptions.startSession ?? (() => { navigate('new'); setSessions({ phase: 'ready', byId: { draft: { id: 'draft', blank: true, retainedBy: { mainView: 1 } } } }); setPanel(null) }) },
     sessions: { binding: id => id === 'draft' ? { session: liveSession } : undefined, list: { getSnapshot: () => sessionList, subscribe: fn => { sessionListeners.add(fn); return () => sessionListeners.delete(fn) } } },
     layout: { selectPanel: setPanel, panelInfo: { getSnapshot: () => panelState, subscribe: fn => { panelListeners.add(fn); return () => panelListeners.delete(fn) } } },
     remote: {}, locale: { register: (ns, copy) => dictionaries.set(ns, copy), bind: ns => key => key.startsWith('hostedApp') || key.startsWith('navigation') || key === 'reorderNavigation' || key === 'multiAgentCollaboration' ? dictionaries.get(ns)?.[activeLocale]?.[key] : key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) } },
@@ -161,6 +170,31 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
       }
     }
   })
+  if (navigationOptions.workspaceRoutes) {
+    const { navigation } = registrations.get('desktop.mode.content').props
+    disposers.push(navigation.start())
+    return {
+      navigation,
+      registerPanel: key => slotCore.register({ name: 'main', key }, () => null),
+      async registerBot(mode) {
+        const listeners = new Set()
+        const surface = {
+          getSnapshot: () => ({ mode }),
+          subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) }
+        }
+        const setSurface = vi.fn(next => {
+          if (mode === next) return
+          mode = next
+          listeners.forEach(listener => listener())
+        })
+        const unregister = slotCore.register({ name: footerSlot, id: 'bot-return', inject: () => ({ hooks: { surface }, actions: { setSurface } }) }, () => null)
+        // SlotCore coalesces registration changes into one microtask.
+        await Promise.resolve()
+        return { setSurface, remove: async () => { unregister(); await Promise.resolve() }, surface }
+      },
+      selectPanel: setPanel
+    }
+  }
   container = document.createElement('div')
   container.id = 'root'
   // jsdom reflects the host interaction boundary through this browser property.
@@ -225,6 +259,182 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     draft: () => container.querySelector('textarea')
   }
 }
+const mountWorkspaceRoutes = (connected = false) => mount(connected, {}, false, undefined, false, { workspaceRoutes: true })
+
+it('routes registered workspace panels and their previews through the host selection', async () => {
+  const { navigation, registerPanel, selectPanel } = await mountWorkspaceRoutes()
+  for (const [path, panel] of [
+    ['/ai-chat', 'code-workbench-layout'],
+    ['/ai-image-generation', 'copylee-image-gen.paintings'],
+    ['/project-board', 'super-kanban']
+  ]) {
+    navigation.navigate(path)
+    expect(navigation.snapshot()).toMatchObject({ workspacePath: path, workspaceNative: false, activePanelId: null })
+    const remove = registerPanel(panel)
+    navigation.navigate(path)
+    expect(navigation.snapshot()).toMatchObject({ workspacePath: path, workspaceNative: true, activePanelId: panel })
+    navigation.navigate(path + '?preview=0')
+    navigation.goBack()
+    expect(navigation.snapshot().workspacePath).toBe('/')
+    navigation.navigate(path + '?preview=0')
+    expect(navigation.snapshot()).toMatchObject({ workspacePath: path, workspaceNative: true, activePanelId: panel })
+    navigation.navigate(path + '?preview=1')
+    expect(navigation.snapshot()).toMatchObject({ workspacePath: path + '?preview=1', workspaceNative: false, activePanelId: null })
+    selectPanel(panel)
+    expect(navigation.snapshot()).toMatchObject({ workspacePath: path, workspaceNative: true, activePanelId: panel })
+    selectPanel(null)
+    expect(navigation.snapshot()).toMatchObject({ workspacePath: '/', workspaceNative: false, activePanelId: null })
+    remove()
+  }
+})
+
+it('keeps workspace routes until the user explicitly enters the Bot and releases it on exit or unload', async () => {
+  const { navigation, registerBot } = await mountWorkspaceRoutes()
+  const initial = await registerBot('bot')
+  expect(initial.setSurface).toHaveBeenCalledWith('agent')
+  expect(navigation.snapshot().workspacePath).toBe('/')
+  await initial.remove()
+  navigation.navigate('/multi-agent-chat?preview=1')
+  const reloaded = await registerBot('bot')
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat?preview=1', workspaceNative: false })
+  expect(reloaded.surface.getSnapshot().mode).toBe('agent')
+  navigation.navigate('/multi-agent-chat')
+  expect(reloaded.surface.getSnapshot().mode).toBe('bot')
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat', workspaceNative: true })
+  navigation.navigate('/multi-agent-chat?preview=1')
+  expect(reloaded.surface.getSnapshot().mode).toBe('agent')
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat?preview=1', workspaceNative: false })
+  reloaded.setSurface('bot')
+  reloaded.setSurface('agent')
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/', workspaceNative: false })
+  navigation.navigate('/multi-agent-chat')
+  await reloaded.remove()
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat', workspaceNative: false })
+})
+
+it('switches exclusively between workspace panels and the Bot for external host actions', async () => {
+  const { navigation, registerBot, registerPanel, selectPanel } = await mountWorkspaceRoutes()
+  registerPanel('code-workbench-layout')
+  const bot = await registerBot('agent')
+  selectPanel('code-workbench-layout')
+  bot.setSurface('bot')
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat', workspaceNative: true, activePanelId: null })
+  selectPanel('code-workbench-layout')
+  expect(bot.surface.getSnapshot().mode).toBe('agent')
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/ai-chat', workspaceNative: true, activePanelId: 'code-workbench-layout' })
+  navigation.openDesktop()
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: undefined, workspaceNative: false, activePanelId: null })
+  navigation.navigate('/multi-agent-chat')
+  navigation.openDesktop()
+  expect(bot.surface.getSnapshot().mode).toBe('agent')
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: undefined, workspaceNative: false, activePanelId: null })
+})
+
+it('keeps a newly selected workspace panel when an earlier workbench exit rejects', async () => {
+  const { navigation, registerPanel, selectPanel } = await mountWorkspaceRoutes()
+  registerPanel('super-kanban')
+  const leaving = Promise.withResolvers()
+  const workbench = {
+    getSnapshot: () => ({ enabled: true, state: { active: 'writer' } }),
+    subscribe: () => () => {},
+    leave: vi.fn(() => leaving.promise),
+    run: vi.fn(report => report.catch(() => {}))
+  }
+  disposers.push(navigation.bindWorkbench(workbench))
+  navigation.navigate('/chat')
+  expect(workbench.leave).toHaveBeenCalledOnce()
+  selectPanel('super-kanban')
+  leaving.reject(new Error('workbench save failed'))
+  await Promise.resolve()
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/project-board', workspaceNative: true, activePanelId: 'super-kanban' })
+  expect(workbench.run).not.toHaveBeenCalled()
+})
+
+it('starts a template draft after the chat navigation and ignores a superseded workbench exit', async () => {
+  const initializeDraft = vi.fn(() => 'applied')
+  const openWorkspace = vi.fn(async (_workspace, prepare) => prepare('draft'))
+  const { navigation } = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, openWorkspace, initializeDraft })
+  const leaving = Promise.withResolvers()
+  const workbench = {
+    getSnapshot: () => ({ enabled: true, state: { active: 'writer' } }),
+    subscribe: () => () => {},
+    leave: () => leaving.promise,
+    run: vi.fn()
+  }
+  const unbind = navigation.bindWorkbench(workbench)
+  try {
+    const abandoned = navigation.host.openCapability('code', { prompt: 'old draft' })
+    navigation.navigate('/settings')
+    const current = navigation.host.openCapability('code', { prompt: 'current draft' })
+    expect(openWorkspace).not.toHaveBeenCalled()
+    initializeDraft.mockImplementation(() => {
+      expect(navigation.snapshot().workspacePath).toBe('/chat')
+      return 'applied'
+    })
+    leaving.resolve()
+    await Promise.all([abandoned, current])
+    expect(initializeDraft.mock.calls.map(([, options]) => options)).toEqual([{ prompt: 'current draft' }])
+  } finally { unbind() }
+})
+
+it('restores the template form when the native workspace reuses an occupied blank from another conversation', async () => {
+  const native = { text: 'an unsent note', attachments: ['file-1'] }
+  const initializeDraft = vi.fn((_binding, { prompt }) => {
+    if (native.text || native.attachments.length) return 'preserved'
+    native.text = prompt
+    return 'applied'
+  })
+  const openWorkspace = vi.fn(async (workspace, prepare) => {
+    expect(workspace).toBe('active')
+    prepare('draft')
+  })
+  const openSession = vi.fn()
+  const ui = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, openWorkspace, openSession, initializeDraft,
+    sessionList: { phase: 'ready', byId: { current: { id: 'current', blank: false, retainedBy: { mainView: 1 } } } },
+    folders: [{ workspaceId: 'other', sessionIds: [] }, { workspaceId: 'active', sessionIds: ['current', 'draft'] }] })
+  const navigation = ui.navigation
+  navigation.navigate('/ai-chat?preview=1')
+  navigation.host.setTaskDraft('code', ' new template task ')
+  await navigation.host.openCapability('code', { prompt: 'new template task' })
+  expect(navigation.snapshot().workspacePath).toBe('/ai-chat?preview=1')
+  expect(navigation.host.getTaskDraft('code')).toEqual({ prompt: ' new template task ', error: 'taskDraftConflict', sessionId: 'draft' })
+  expect(native).toEqual({ text: 'an unsent note', attachments: ['file-1'] })
+  navigation.goBack()
+  expect(navigation.snapshot().workspacePath).toBe('/')
+  await navigation.host.openTask('draft')
+  expect(openSession).toHaveBeenCalledWith('draft')
+  navigation.navigate('/ai-chat?preview=1')
+  expect(navigation.host.getTaskDraft('code').prompt).toBe(' new template task ')
+  native.text = ''
+  await navigation.host.openCapability('code', { prompt: 'new template task' })
+  expect(navigation.snapshot().workspacePath).toBe('/ai-chat?preview=1')
+  native.attachments = []
+  await navigation.host.openCapability('code', { prompt: 'new template task' })
+  expect(native.text).toBe('new template task')
+  expect(navigation.host.getTaskDraft('code')).toBeUndefined()
+  expect(navigation.snapshot().workspacePath).toBe('/chat')
+})
+
+it('keeps the workspace home on enterprise startup and releases the Bot for explicit enterprise Chat', async () => {
+  const { navigation, registerBot } = await mountWorkspaceRoutes(true)
+  expect(navigation.snapshot()).toMatchObject({ connected: true, workspacePath: '/', mode: 'work' })
+  const bot = await registerBot('agent')
+  navigation.navigate('/multi-agent-chat')
+  navigation.select('chat')
+  expect(bot.surface.getSnapshot().mode).toBe('agent')
+  expect(navigation.snapshot()).toMatchObject({ mode: 'chat', workspacePath: undefined, workspaceNative: false })
+})
+
+it('opens the desktop workspace directly from Settings and retains its enterprise chat entrance', async () => {
+  const { navigation } = await mountWorkspaceRoutes()
+  navigation.navigate('/settings')
+  expect(navigation.snapshot().workspacePath).toBe('/settings')
+  navigation.host.openCapability('desktop')
+  expect(navigation.snapshot()).toMatchObject({ mode: 'work', workspacePath: undefined, workspaceNative: false })
+  navigation.select('chat')
+  expect(navigation.snapshot().signInPromptOpen).toBe(true)
+})
+
 it('shows mode selection on the native landing page and restores it after leaving a workbench', async () => {
   const ui = await mount()
   const draft = ui.draft()

@@ -25,7 +25,16 @@ if (process.versions.electron !== undefined) {
   process.env.ELECTRON_RUN_AS_NODE = '1'
 }
 
-const [dshEntryPath, ...dshArguments] = process.argv.slice(2)
+const launchArguments = process.argv.slice(2)
+const emptyEnvOption = '--desktop-empty-env='
+if (launchArguments[0]?.startsWith(emptyEnvOption)) {
+  const keys = JSON.parse(launchArguments.shift().slice(emptyEnvOption.length))
+  if (!Array.isArray(keys) || !keys.every(key => typeof key === 'string' && key && !/[=\0]/.test(key))) {
+    throw new Error('Invalid list of empty Harness environment keys.')
+  }
+  for (const key of keys) process.env[key] ??= ''
+}
+const [dshEntryPath, ...dshArguments] = launchArguments
 
 function report(label, value) {
   process.stderr.write(`[harness-node] ${label}: ${value}\n`)
