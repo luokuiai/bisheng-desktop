@@ -35,7 +35,7 @@ async function buildWorkspace(outdir) {
   // bundle import the same objects as the surrounding slot (including portals).
   const hostModules = new Set(['react', 'react-dom', 'react/jsx-runtime'])
   await build({
-    entryPoints: ['pages.tsx', 'settings-controls.tsx', 'chat-controls.tsx'].map(file => path.join(source, file)), outdir, bundle: true,
+    entryPoints: ['pages.tsx', 'settings-controls.tsx', 'chat-controls.tsx', 'usage-profile.tsx', 'work-model-picker.tsx'].map(file => path.join(source, file)), outdir, bundle: true,
     format: 'esm', platform: 'browser', target: 'chrome140', splitting: true,
     // Preserve the dsh-workspace filename prefix on CSS Module classes and
     // keyframes. Other independently built plugins share this document.

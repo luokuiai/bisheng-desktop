@@ -48,7 +48,10 @@ it('derives current-year contributions, peak tokens and the Shanghai streak', ()
 it('hides the trend delta until two comparable 30-day windows exist', () => {
   const recent = [point('2026-11-25', 10)]
   expect(tokenDeltaPercent(recent)).toBeNull()
-  expect(tokenDeltaPercent([point('2026-09-30', 5), point('2026-11-25', 10)])).toBe(100)
+  expect(tokenDeltaPercent([point('2026-09-30', 5), point('2026-11-25', 10)])).toBeNull()
+  const complete = Array.from({ length: 60 }, (_, index) =>
+    point(new Date(now - (60 - index) * 86400000).toISOString().slice(0, 10), index < 30 ? 5 : 10))
+  expect(tokenDeltaPercent(complete)).toBe(100)
   expect(formatDeltaPercent(9.44)).toBe('+9.4%')
   expect(formatDeltaPercent(null)).toBeNull()
 })

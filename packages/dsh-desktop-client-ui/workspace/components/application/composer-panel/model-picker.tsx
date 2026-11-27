@@ -2,9 +2,9 @@
 
 import { useTemplateCopy } from "@/components/foundations/template-copy/template-copy";
 
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import Image from "@/host/image";
-import { RiArrowDownSLine, RiSearchLine } from "@remixicon/react";
+import { RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiSearchLine } from "@remixicon/react";
 import { motion } from "motion/react";
 import {
   Button as AriaButton,
@@ -16,6 +16,7 @@ import { EFFORT_LEVELS, EffortSlider } from "@/components/application/ai-chat/ai
 import { RadioDot } from "@/components/base/radio/radio";
 import { cx } from "@/utils/cx";
 import { useDismissOnOutsidePress, useTriggerToggle } from "@/utils/use-dismiss-on-outside-press";
+import { MENU_ITEM, MENU_ITEM_ACTIVE, MENU_ITEM_COMPACT, MENU_ITEM_INTERACTIVE, MENU_POPOVER_SURFACE } from "@/components/base/dropdown/menu-styles";
 
 /**
  * Figma sources: Board UI → "model selector" (node 4433:13541) and "model
@@ -559,6 +560,20 @@ export interface ModelPickerProps {
   onEffortChange?: (effort: number) => void;
   providers?: ModelProvider[];
   className?: string;
+  columns?: {
+    label: string;
+    caption: string;
+    providersLabel: string;
+    emptyLabel: string;
+    isDisabled?: boolean;
+    pending?: boolean;
+    efforts: { id?: string; label: string; selected: boolean }[];
+    effortLabel: string;
+    onOpen: () => void;
+    onModelSelect: (id: string) => Promise<boolean>;
+    onEffortSelect: (id?: string) => Promise<boolean>;
+    footer?: ReactNode;
+  };
 }
 
 export function ModelPicker({
@@ -570,6 +585,7 @@ export function ModelPicker({
   onEffortChange,
   providers = MODEL_PROVIDERS,
   className,
+  columns,
 }: ModelPickerProps) {
   const localize = useTemplateCopy();
   const [isOpen, setIsOpen] = useState(false);
@@ -591,13 +607,14 @@ export function ModelPicker({
   const effortValue = effort ?? internalEffort;
   const selected = findModel(providers, modelId) ?? {
     provider: providers[0],
-    model: providers[0]?.models[0],
+    model: value === undefined ? providers[0]?.models[0] : undefined,
   };
 
   // The rail browses; it starts on the chosen model's provider each time.
   const [browsing, setBrowsing] = useState<string | null>(null);
   const activeProvider =
     providers.find((provider) => provider.id === browsing) ?? selected.provider;
+  const activeProviderId = activeProvider?.id;
 
   // Quick Search: null when the header shows the hint, the query otherwise.
   const [query, setQuery] = useState<string | null>(null);
@@ -612,7 +629,7 @@ export function ModelPicker({
   // popover element itself: React Aria focuses the dialog, and keys landing
   // there never pass through a handler nested inside it.
   useEffect(() => {
-    if (!isOpen || searching) return;
+    if (!isOpen || searching || columns) return;
     const popover = popoverRef.current;
     if (!popover) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -625,7 +642,7 @@ export function ModelPicker({
     };
     popover.addEventListener("keydown", onKeyDown);
     return () => popover.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, searching]);
+  }, [isOpen, searching, columns]);
 
   // The rail keeps the active provider's mark in view: instantly when the
   // panel opens, smoothly when a pick from search or a rail press lands on a
@@ -638,7 +655,8 @@ export function ModelPicker({
       return;
     }
     const rail = railRef.current;
-    const mark = rail?.querySelector<HTMLElement>(`[data-provider="${activeProvider.id}"]`);
+    const mark = Array.from(rail?.querySelectorAll<HTMLElement>("[data-provider]") ?? [])
+      .find(element => element.dataset.provider === activeProviderId);
     if (!rail || !mark) return;
     const firstPaint = !railShownRef.current;
     railShownRef.current = true;
@@ -651,13 +669,13 @@ export function ModelPicker({
       top: Math.max(0, top - (rail.clientHeight - mark.offsetHeight) / 2),
       behavior: firstPaint || reduceMotion ? "instant" : "smooth",
     });
-  }, [isOpen, activeProvider.id]);
+  }, [isOpen, activeProviderId]);
 
   // The list's top edge softens once it has scrolled; a new lineup starts
   // at the top again.
   const listRef = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
-  const listKey = searching ? "search" : activeProvider.id;
+  const listKey = searching ? "search" : activeProviderId;
   const [prevListKey, setPrevListKey] = useState(listKey);
   if (prevListKey !== listKey) {
     setPrevListKey(listKey);
@@ -675,6 +693,73 @@ export function ModelPicker({
     setInternalEffort(next);
     onEffortChange?.(next);
   };
+
+  if (columns) {
+    const models = activeProvider?.models ?? [];
+    const rowClass = cx(MENU_ITEM, MENU_ITEM_COMPACT, MENU_ITEM_INTERACTIVE, "text-body-medium");
+    const closeOnSuccess = (operation: Promise<boolean>) => {
+      void operation.then(success => {
+        if (success) setIsOpen(false);
+      });
+    };
+    return (
+      <AriaDialogTrigger isOpen={isOpen} onOpenChange={next => {
+        if (!allowOpenChange(next)) return;
+        if (next) {
+          setBrowsing(null);
+          columns.onOpen();
+        }
+        setIsOpen(next);
+      }}>
+        <AriaButton ref={triggerRef} aria-label={columns.label} isDisabled={columns.isDisabled}
+          aria-busy={columns.pending}
+          className={cx("flex h-8 min-w-0 max-w-[min(240px,40vw)] cursor-pointer items-center gap-1 rounded-xl px-2 text-body-medium text-text-secondary outline-none hover:bg-background-primary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring disabled:cursor-default", className)}>
+          <span className="min-w-0 truncate">{columns.caption}</span>
+          <RiArrowDownSLine aria-hidden className={cx("size-4 shrink-0 transition-transform motion-reduce:transition-none", isOpen && "rotate-180")} />
+        </AriaButton>
+        <AriaPopover ref={popoverRef} isNonModal placement="bottom start" offset={4}
+          className={cx("w-[365px] motion-reduce:transition-none", MENU_POPOVER_SURFACE)}>
+          <AriaDialog aria-label={columns.label} className="outline-none">
+            <div className="grid grid-cols-2">
+              <div role="group" aria-label={columns.providersLabel} className="flex max-h-60 min-w-0 flex-col gap-1 overflow-y-auto border-e border-border-button-default p-1.5">
+                {providers.map(provider =>
+                  <button key={provider.id} type="button" onPointerEnter={event => {
+                    if (event.pointerType === "mouse") setBrowsing(provider.id);
+                  }} onClick={() => setBrowsing(provider.id)}
+                    aria-pressed={provider.id === activeProviderId}
+                    className={cx(rowClass, provider.id === activeProviderId && MENU_ITEM_ACTIVE)}>
+                    <span className="min-w-0 flex-1 truncate" title={provider.name}>{provider.name}</span>
+                    <RiArrowRightSLine aria-hidden className="size-4 shrink-0 rtl:rotate-180" />
+                  </button>)}
+              </div>
+              <div ref={listRef} role="group" aria-label={activeProvider?.name} className="flex max-h-60 min-w-0 flex-col gap-1 overflow-y-auto p-1.5">
+                {models.length === 0 && <p role="status" className="p-2 text-body-2-medium text-text-secondary">{columns.emptyLabel}</p>}
+                {models.map(model =>
+                  <button key={model.id} type="button" aria-disabled={columns.pending}
+                    onClick={() => { if (!columns.pending) closeOnSuccess(columns.onModelSelect(model.id)); }} aria-pressed={model.id === modelId}
+                    className={cx(rowClass, model.id === modelId && MENU_ITEM_ACTIVE)}>
+                    <span className="min-w-0 flex-1 truncate" title={model.name}>
+                      {model.name}
+                    </span>
+                    {model.id === modelId && <RiCheckLine aria-hidden className="size-4 shrink-0 text-accent-500" />}
+                  </button>)}
+              </div>
+            </div>
+            {columns.efforts.length > 0 && <div role="group" aria-label={columns.effortLabel}
+              className="mt-1 flex flex-wrap gap-1 border-t border-border-button-default px-1.5 pt-2">
+              {columns.efforts.map(option =>
+                <button key={option.id ?? ""} type="button" aria-disabled={columns.pending}
+                  aria-pressed={option.selected} onClick={() => { if (!columns.pending) closeOnSuccess(columns.onEffortSelect(option.id)); }}
+                  className={cx("cursor-pointer rounded-lg px-2 py-1 text-body-2-medium text-text-secondary outline-none hover:bg-background-primary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring disabled:cursor-default", option.selected && MENU_ITEM_ACTIVE)}>
+                  {option.label}
+                </button>)}
+            </div>}
+            {columns.footer}
+          </AriaDialog>
+        </AriaPopover>
+      </AriaDialogTrigger>
+    );
+  }
 
   return localize((
     <AriaDialogTrigger
@@ -822,7 +907,7 @@ export function ModelPicker({
                 <div
                   ref={listRef}
                   role="radiogroup"
-                  aria-label={searching ? "匹配的模型" : `${activeProvider.name} 的模型`}
+                  aria-label={searching ? "匹配的模型" : `${activeProvider?.name ?? ""} 的模型`}
                   onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}
                   className={cx(
                     "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-1",
@@ -834,10 +919,10 @@ export function ModelPicker({
                   )}
                   {(
                     results ??
-                    activeProvider.models.map((model) => ({
+                    activeProvider?.models.map((model) => ({
                       provider: activeProvider,
                       model,
-                    }))
+                    })) ?? []
                   ).map(({ provider, model }) => {
                     const checked = model.id === modelId;
                     return (

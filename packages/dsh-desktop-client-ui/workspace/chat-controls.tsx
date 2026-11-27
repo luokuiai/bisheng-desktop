@@ -4,7 +4,6 @@ import { RiChatNewLine, RiSearchLine } from '@remixicon/react'
 import { Button } from '@/components/base/buttons/button'
 import { CloseButton } from '@/components/base/buttons/close-button'
 import { InputBase } from '@/components/base/input/input'
-import { Kbd } from '@/components/base/kbd/kbd'
 import { SegmentedControl, SegmentedControlItem } from '@/components/base/segmented-control/segmented-control'
 import { AgentThinking } from '@/components/application/agent-thinking/agent-thinking'
 import { ComposerLoader } from '@/components/application/composer-loader/composer-loader'
@@ -58,7 +57,6 @@ type ChatSearchProps = {
   placeholder: string
   expanded: boolean
   shortcut?: string
-  shortcutKeys?: readonly string[]
   query: string
   maxLength: number
   inputRef: Ref<HTMLInputElement>
@@ -67,7 +65,7 @@ type ChatSearchProps = {
   onChange: (query: string) => void
 }
 
-export function ChatSearch({ caption, label, clearLabel, placeholder, expanded, shortcut, shortcutKeys, query, maxLength, inputRef, onOpen, onClose, onChange }: ChatSearchProps) {
+export function ChatSearch({ caption, label, clearLabel, placeholder, expanded, shortcut, query, maxLength, inputRef, onOpen, onClose, onChange }: ChatSearchProps) {
   const restoreFocus = useRef(false)
   const close = () => {
     restoreFocus.current = true
@@ -92,7 +90,7 @@ export function ChatSearch({ caption, label, clearLabel, placeholder, expanded, 
           }}
           leadingIcon={RiSearchLine}
           trailingAddon={<CloseButton size="2xs" aria-label={clearLabel} onClick={close} />}
-          fieldClassName="rounded-full"
+          fieldClassName="dshChatSearchPill"
         />
       : <button
           ref={node => {
@@ -105,11 +103,10 @@ export function ChatSearch({ caption, label, clearLabel, placeholder, expanded, 
           aria-keyshortcuts={shortcut}
           aria-expanded={false}
           onClick={onOpen}
-          className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-full bg-background-tertiary-default px-2.5 text-start text-body-medium text-text-secondary transition-colors duration-150 hover:bg-background-tertiary-hover/55"
+          className="dshChatSearchPill flex h-9 w-full cursor-pointer items-center gap-2 bg-background-tertiary-default px-2.5 text-start text-body-medium text-text-secondary transition-colors duration-150 hover:bg-background-tertiary-hover/55"
         >
           <RiSearchLine className="size-5 shrink-0 text-foreground-icon-secondary" aria-hidden />
           <span className="min-w-0 flex-1 truncate">{caption}</span>
-          {shortcutKeys?.length ? <Kbd aria-hidden>{shortcutKeys.join('')}</Kbd> : null}
         </button>}
   </div>
 }

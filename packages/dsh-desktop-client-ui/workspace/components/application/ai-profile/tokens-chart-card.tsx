@@ -44,14 +44,14 @@ function dateLabelFor(day: number) {
 const TOTAL_TOKENS = 667.7;
 
 /** Active point marker — the revenue card's pulsing dot; grey on idle days. */
-function PulsingDot(props: { cx?: number; cy?: number; payload?: { value?: number } }) {
+function PulsingDot(props: { cx?: number; cy?: number; payload?: { value?: number | null } }) {
   const localize = useTemplateCopy();
   const { cx: x, cy: y, payload } = props;
   if (x == null || y == null) return null;
   const color = payload?.value === 0 ? "var(--color-neutral-400)" : "var(--color-purple-500)";
   return localize((
     <g>
-      <circle cx={x} cy={y} r={5} fill={color} opacity={0.3}>
+      <circle className="motion-reduce:hidden" cx={x} cy={y} r={5} fill={color} opacity={0.3}>
         <animate attributeName="r" values="5;13" dur="1.4s" repeatCount="indefinite" />
         <animate attributeName="opacity" values="0.35;0" dur="1.4s" repeatCount="indefinite" />
       </circle>
@@ -69,7 +69,7 @@ function PulsingDot(props: { cx?: number; cy?: number; payload?: { value?: numbe
 
 /** Solid-segment marker — skips zero days (the boundary points shared with a
  *  dashed segment), so those only get the dashed line's grey dot. */
-function SolidDot(props: { cx?: number; cy?: number; payload?: { value?: number } }) {
+function SolidDot(props: { cx?: number; cy?: number; payload?: { value?: number | null } }) {
   const localize = useTemplateCopy();
   if (props.payload?.value === 0) return null;
   return localize(<PulsingDot {...props} />);
@@ -81,29 +81,36 @@ function SolidDot(props: { cx?: number; cy?: number; payload?: { value?: number 
  * zero on each side (so the purple line touches the baseline before the grey
  * dashes take over).
  */
-function buildSegments(series: { value: number }[]) {
+type TokenPoint = { value: number | null; label?: string };
+
+function buildSegments(series: TokenPoint[]) {
   const segments: { key: string; dashed: boolean; from: number; to: number }[] = [];
-  let i = 0;
-  while (i < series.length) {
-    const zero = series[i].value === 0;
-    let end = i;
-    while (end + 1 < series.length && (series[end + 1].value === 0) === zero) end++;
+  let start = 0;
+  while (start < series.length) {
+    const value = series[start].value;
+    if (value === null) {
+      start++;
+      continue;
+    }
+    const zero = value === 0;
+    let end = start;
+    while (end + 1 < series.length && series[end + 1].value !== null && (series[end + 1].value === 0) === zero) end++;
     if (zero) {
-      segments.push({ key: `idle-${i}`, dashed: true, from: i, to: end });
+      segments.push({ key: `idle-${start}`, dashed: true, from: start, to: end });
     } else {
       // Extend one point into the neighbouring zero runs for the descent/climb
       segments.push({
-        key: `run-${i}`,
+        key: `run-${start}`,
         dashed: false,
-        from: Math.max(0, i - 1),
-        to: Math.min(series.length - 1, end + 1),
+        from: series[start - 1]?.value === 0 ? start - 1 : start,
+        to: series[end + 1]?.value === 0 ? end + 1 : end,
       });
     }
-    i = end + 1;
+    start = end + 1;
   }
 
   const data = series.map((point, index) => {
-    const row: Record<string, number | null> & { value: number } = { ...point };
+    const row: TokenPoint & Record<string, number | null | string | undefined> = { ...point };
     for (const seg of segments) {
       row[seg.key] = index >= seg.from && index <= seg.to ? point.value : null;
     }
@@ -113,16 +120,20 @@ function buildSegments(series: { value: number }[]) {
   return { segments, data };
 }
 
-export function TokensChartCard({ title = "词元", className, series = TOKENS_SERIES, total = TOTAL_TOKENS, change = "+9.4%", variant = "area", startLabel = "6月14日", endLabel = "今天", plotHeight = 200 }: {
+const formatDemoValue = (value: number) => `${new Intl.NumberFormat("zh-CN", { notation: "compact", maximumFractionDigits: 1 }).format(value * 1_000_000)} 词元`;
+
+export function TokensChartCard({ title = "词元", className, series = TOKENS_SERIES, total = TOTAL_TOKENS, change = "+9.4%", variant = "area", startLabel = "6月14日", endLabel = "今天", plotHeight = 200, formatValue, chartLabel }: {
   title?: string;
   className?: string;
-  series?: { value: number; label?: string }[];
-  total?: number;
-  change?: string;
+  series?: TokenPoint[];
+  total?: number | null;
+  change?: string | null;
   variant?: "area" | "bar";
   startLabel?: string;
   endLabel?: string;
   plotHeight?: number;
+  formatValue?: (value: number) => string;
+  chartLabel?: string;
 }) {
   const localize = useTemplateCopy();
   const gradientId = useId();
@@ -130,11 +141,12 @@ export function TokensChartCard({ title = "词元", className, series = TOKENS_S
 
   const { segments, data } = useMemo(() => buildSegments(series), [series]);
 
-  const hovering = activeIndex !== null && activeIndex < series.length;
-  const targetValue = hovering ? series[activeIndex].value : total;
-  const label = hovering ? (series[activeIndex].label ?? dateLabelFor(activeIndex)) : title;
-  // Animate in tenths so the ".7" decimal rolls too (useCountUp rounds to ints)
-  const display = useCountUp(Math.round(targetValue * 10)) / 10;
+  const active = activeIndex === null ? undefined : series[activeIndex];
+  const targetValue = active ? active.value : total;
+  const label = active && activeIndex !== null ? (active.label ?? dateLabelFor(activeIndex)) : title;
+  const scale = formatValue ? 1 : 10;
+  const display = useCountUp(Math.round((targetValue ?? 0) * scale)) / scale;
+  const hasData = segments.length > 0 || (variant === "bar" && series.some(point => point.value !== null));
 
   return localize((
     <section
@@ -144,28 +156,29 @@ export function TokensChartCard({ title = "词元", className, series = TOKENS_S
       )}
     >
       {/* Header — overlaps the top of the plot like the Figma frame */}
-      <div className="relative z-10 -mb-8 flex w-full px-4 pt-1">
+      <div className={cx("relative z-10 flex w-full px-4 pt-1", hasData && "-mb-8")}>
         <div className="flex flex-col gap-0.5">
           <p className="text-body-medium whitespace-nowrap text-text-secondary">{label}</p>
           <div className="flex items-center gap-2">
-            <p
+            {targetValue !== null && <p
               key={String(activeIndex)}
-              className="animate-number-fade text-title-2-medium whitespace-nowrap text-text-primary tabular-nums"
+              className="animate-number-fade text-title-2-medium whitespace-nowrap text-text-primary tabular-nums motion-reduce:animate-none"
             >
-              {new Intl.NumberFormat("zh-CN", { notation: "compact", maximumFractionDigits: 1 }).format(display * 1_000_000)} 词元
-            </p>
-            <Chip variant="bold" color="purple">
+              {(formatValue ?? formatDemoValue)(display)}
+            </p>}
+            {change && <Chip variant="bold" color="purple">
               {change}
-            </Chip>
+            </Chip>}
           </div>
         </div>
       </div>
 
       {/* Plot — clip-path sweep draws the line + area in left→right */}
-      <div className="w-full animate-chart-reveal" style={{ height: plotHeight }}>
+      {hasData ? <><div className="w-full animate-chart-reveal" style={{ height: plotHeight }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={data}
+            aria-label={chartLabel}
             // 2px bottom room so the 2px stroke isn't clipped on zero days
             margin={{ top: 27, right: 0, bottom: 2, left: 0 }}
             onMouseMove={(state) => {
@@ -217,7 +230,7 @@ export function TokensChartCard({ title = "词元", className, series = TOKENS_S
                 stroke={seg.dashed ? "var(--color-neutral-400)" : "var(--color-purple-400)"}
                 strokeWidth={2}
                 strokeDasharray={seg.dashed ? "5 5" : undefined}
-                dot={false}
+                dot={seg.from === seg.to ? { r: 2 } : false}
                 activeDot={seg.dashed ? <PulsingDot /> : <SolidDot />}
                 // The container's clip-path reveal handles the entrance;
                 // recharts' own interpolation would fight it.
@@ -226,7 +239,7 @@ export function TokensChartCard({ title = "词元", className, series = TOKENS_S
             ))}
           </ComposedChart>
         </ResponsiveContainer>
-      </div>
+      </div></> : null}
 
       {/* X axis */}
       <div className="mt-2 flex w-full items-start justify-between px-4 text-[11px] leading-[15px] font-medium tracking-[0.2px] whitespace-nowrap text-text-tertiary">

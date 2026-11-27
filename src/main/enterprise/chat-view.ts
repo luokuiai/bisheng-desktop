@@ -258,13 +258,14 @@ export class EnterpriseChatView {
 
   /** Optional avatar/department projection; the renderer degrades when either read fails. */
   async profile(): Promise<EnterpriseProfile | null> {
+    const epoch = this.generation
     if (this.state.phase !== 'ready') await this.connect()
-    if (!this.enterprise.snapshot().connected) return null
+    if (epoch !== this.generation || !this.enterprise.snapshot().connected) return null
     const [userInfo, dshProfile] = await Promise.allSettled([
       this.readSelfService('/api/v1/user/info'),
       this.readSelfService('/api/v1/dsh/me/profile')
     ])
-    if (!this.enterprise.snapshot().connected) return null
+    if (epoch !== this.generation || !this.enterprise.snapshot().connected) return null
     return parseEnterpriseProfile(
       userInfo.status === 'fulfilled' ? userInfo.value : undefined,
       dshProfile.status === 'fulfilled' ? dshProfile.value : undefined,

@@ -2,7 +2,7 @@
 
 import { useTemplateCopy } from "@/components/foundations/template-copy/template-copy";
 
-import { useState } from "react";
+import { useState, type ComponentPropsWithoutRef } from "react";
 import { Button as AriaButton } from "react-aria-components";
 import { Chip } from "@/components/base/badges/chip";
 import { SegmentedControl, SegmentedControlItem } from "@/components/base/segmented-control/segmented-control";
@@ -114,6 +114,19 @@ const COLUMN_CLASSES: Record<number, string> = {
   38: "grid-cols-[repeat(38,13px)] sm:grid-cols-[repeat(38,minmax(0,1fr))]",
 };
 
+export function ContributionGridSurface({ accent = "violet", className, ...props }: ComponentPropsWithoutRef<"div"> & { accent?: Accent }) {
+  return <div {...props} data-accent={accent} className={cx("contributions-grid grid gap-1", className)} />;
+}
+
+export function contributionCellPresentation(row: number, column: number, tier: number, animateIn: boolean) {
+  const pop = animateIn && tier > 0;
+  return {
+    'data-tier': tier,
+    className: cx("contribution-cell aspect-square w-full cursor-default rounded-[3px] outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring", pop && "animate-cell-pop"),
+    style: pop ? { animationDelay: `${(hashCell(row, column) >>> 7) % 800}ms` } : undefined,
+  };
+}
+
 /**
  * The bare heatmap grid — hash-scattered tiers, accent color ramp, and a
  * tooltip per cell. Extracted so other cards (e.g. the AI profile template)
@@ -134,34 +147,27 @@ export function ContributionsGrid({
 }) {
   const localize = useTemplateCopy();
   return localize((
-    <div
-      data-accent={accent}
-      className={cx("contributions-grid grid gap-1", COLUMN_CLASSES[columns] ?? COLUMN_CLASSES[GRID_COLUMNS], className)}
+    <ContributionGridSurface
+      accent={accent}
+      className={cx(COLUMN_CLASSES[columns] ?? COLUMN_CLASSES[GRID_COLUMNS], className)}
     >
       {Array.from({ length: GRID_ROWS }, (_, row) =>
         Array.from({ length: columns }, (_, col) => {
           const label = tooltipLabel(row, col, columns);
           const tier = tierFor(row, col);
-          // Reuse the cell hash (different bits) for a scattered 0–800ms delay
-          const pop = animateIn && tier > 0;
           return (
             <TooltipTrigger key={`${row}-${col}`} delay={0} closeDelay={0}>
               <AriaButton
                 aria-label={label}
                 excludeFromTabOrder
-                data-tier={tier}
-                className={cx(
-                  "contribution-cell aspect-square w-full cursor-default rounded-[3px] outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring",
-                  pop && "animate-cell-pop",
-                )}
-                style={pop ? { animationDelay: `${(hashCell(row, col) >>> 7) % 800}ms` } : undefined}
+                {...contributionCellPresentation(row, col, tier, animateIn)}
               />
               <Tooltip>{label}</Tooltip>
             </TooltipTrigger>
           );
         }),
       )}
-    </div>
+    </ContributionGridSurface>
   ));
 }
 

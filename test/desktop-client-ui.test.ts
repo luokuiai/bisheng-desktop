@@ -121,6 +121,7 @@ describe('BISHENG client slot occupants', () => {
       'sidebar.workspaces.search',
       'conversation.chat.runningStatus',
       'conversation.input.decoration',
+      'conversation.input.model.picker',
       'conversation.session.header.toolbar',
       'sidebar.workspaces.title',
       'desktop.mode.content',

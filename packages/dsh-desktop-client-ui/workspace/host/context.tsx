@@ -3,16 +3,14 @@ import { createContext, useCallback, useContext, useId, useLayoutEffect, useMemo
 import { UNSAFE_PortalProvider } from 'react-aria'
 import { DirectionProvider } from '@/components/foundations/direction/direction'
 
-export type Capability = 'agents' | 'code' | 'image' | 'settings' | 'profile' | 'tools' | 'storage' | 'model' | 'board' | 'usage' | 'desktop'
+export type Capability = 'settings' | 'model' | 'usage'
 export type ModelStatus = { configured: boolean; model?: string | null; providerLabel?: string | null }
 export type TaskSummary = { id: string; title: string; updatedAt?: number | string; status?: string }
 export type WorkspaceHost = {
   locale?: string
   t?: (key: PageMessage) => string
   setTheme: (mode: 'light' | 'dark') => void
-  getTaskDraft?: (name: 'code' | 'image') => { prompt: string; error?: string; sessionId?: string } | undefined
-  setTaskDraft?: (name: 'code' | 'image', prompt: string) => void
-  openCapability: (name: Capability, input?: { prompt: string }) => void | Promise<void>
+  openCapability: (name: Capability) => void | Promise<void>
   getModelStatus: (signal: AbortSignal) => ModelStatus | Promise<ModelStatus>
   listTasks: (signal: AbortSignal) => TaskSummary[] | Promise<TaskSummary[]>
   openTask: (id: string) => void | Promise<void>
@@ -21,10 +19,12 @@ export type WorkspaceProps = {
   path: string
   navigate: (href: string) => void
   host: WorkspaceHost
+  entries?: readonly WorkspaceEntry[]
 }
+export type WorkspaceEntry = { id: string; label: string; description?: string; glyph: ReactNode; open: () => void }
 const Context = createContext<(WorkspaceProps & { portal: HTMLElement }) | null>(null)
 
-export function WorkspaceProvider({ path, navigate, host, children }: WorkspaceProps & { children: ReactNode }) {
+export function WorkspaceProvider({ path, navigate, host, entries, children }: WorkspaceProps & { children: ReactNode }) {
   const [portal, setPortal] = useState<HTMLElement | null>(null)
   const owner = useId()
   useLayoutEffect(() => {
@@ -35,7 +35,7 @@ export function WorkspaceProvider({ path, navigate, host, children }: WorkspaceP
     setPortal(target)
     return () => target.remove()
   }, [owner])
-  const value = useMemo(() => portal && ({ path, navigate, host, portal }), [path, navigate, host, portal])
+  const value = useMemo(() => portal && ({ path, navigate, host, entries, portal }), [path, navigate, host, entries, portal])
   if (!value) return null
   return <Context.Provider value={value}>
     <DirectionProvider locale={host.locale || 'zh-CN'}>

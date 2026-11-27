@@ -1029,6 +1029,24 @@ const usageTotals = { message_count: 2, input_tokens: 10, output_tokens: 5, tota
 const usageSummary = { start_at: '2026-10-28T00:00:00+08:00', end_at: '2026-10-28T12:00:00+08:00', timezone: 'Asia/Shanghai', granularity: 'day', totals: usageTotals, points: [] }
 const usageResponse = (url: string) => new Response(JSON.stringify({ status_code: 200, data: url.endsWith('usage-summary') ? usageSummary : [{ resource_type: 'knowledge_space_file', user_used: 0.1, effective: -1 }] }))
 
+it('discards the account avatar when the enterprise identity changes during the profile read', async () => {
+  const f = fixture()
+  try {
+    f.host.present(f.owner, presentation)
+    await flush()
+    let finishUserInfo: (response: Response) => void = () => {}
+    const userInfo = new Promise<Response>(resolve => { finishUserInfo = resolve })
+    fake.sessions[0].fetch.mockImplementation((url: string) =>
+      url.endsWith('/api/v1/user/info') ? userInfo : Promise.resolve(new Response('', { status: 500 })))
+    const pending = f.host.profile()
+    await flush()
+    expect(fake.sessions[0].fetch).toHaveBeenCalledWith('https://enterprise.example/api/v1/user/info', expect.any(Object))
+    f.change({ connected: true, connectionKey: 'tenant-b' })
+    finishUserInfo(new Response(JSON.stringify({ status_code: 200, data: { avatar: '/avatar/previous.png' } })))
+    await expect(pending).resolves.toBeNull()
+  } finally { f.host.dispose() }
+})
+
 it.each(['summary', 'storage'])('preserves the other usage section when %s fails', async failed => {
   const f = fixture()
   try {

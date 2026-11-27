@@ -99,7 +99,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js b/node
  			]);
  			const main = (0, react.useMemo)(() => (0, react_jsx_runtime.jsx)(MainPanel, {
  				usePanelInfo,
-@@ -313,6 +394,24 @@
+@@ -313,6 +394,25 @@
  			const overlays = (0, react.useMemo)(() => renderSlot("shell.overlay", {}), [renderSlot]);
  			const leading = (0, react.useMemo)(() => renderSlot("shell.leading", {}), [renderSlot]);
  			const leadingMounted = darwin && sidebarCollapsed;
@@ -121,10 +121,11 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js b/node
 +						onDrag: onRightbarDrag,
 +						onEnd: onDragEnd
 +					});
++			const fallback = (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [work, fallbackResizeHandle] });
  			return (0, react_jsx_runtime.jsxs)("div", {
  				ref: frameRef,
  				className: AppFrame_module_css_default.frame,
-@@ -321,6 +420,13 @@
+@@ -321,6 +421,13 @@
  					gridTemplateColumns: `${cols.sidebar}px minmax(${cols.rightbar === 0 ? 0 : 400}px, 1fr) minmax(0px, ${rightbarMax}px)`
  				},
  				"data-sidebar-collapsed": sidebarCollapsed || void 0,
@@ -138,7 +139,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js b/node
  				"data-rightbar-collapsed": cols.rightbar === 0 || void 0,
  				"data-rightbar-fullscreen": layoutInfo.rightbarFullscreen || void 0,
  				"data-rightbar-instant": layoutInfo.rightbarInstant || void 0,
-@@ -333,14 +439,14 @@
+@@ -333,14 +440,14 @@
  						usePanelInfo
  					}),
  					(0, react_jsx_runtime.jsx)("div", {
@@ -154,11 +155,11 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js b/node
 -						viewportWidth: viewport,
 -						canShow: normal.rightbar > 0
 -					}) })] }),
-+					renderSlot("desktop.mode.content", { work, rightbarWidth: normal.rightbar, resizeHandle }, { fallback: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [work, fallbackResizeHandle] }) }),
++					renderSlot("desktop.mode.content", { work, rightbarWidth: normal.rightbar, resizeHandle, fallback }, { fallback }),
  					(0, react_jsx_runtime.jsx)("div", {
  						className: AppFrame_module_css_default.bottomRow,
  						"data-shell-bottom": true,
-@@ -352,8 +458,18 @@
+@@ -352,8 +459,18 @@
  						children: overlays
  					}),
  					leadingMounted && (0, react_jsx_runtime.jsx)("div", {
@@ -177,7 +178,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js b/node
  						children: leading
  					}),
  					!sidebarCollapsed && (0, react_jsx_runtime.jsx)(DragHandle, {
-@@ -362,13 +478,6 @@
+@@ -362,13 +479,6 @@
  						onStart: onSidebarStart,
  						onDrag: onSidebarDrag,
  						onEnd: onDragEnd
@@ -191,7 +192,7 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js b/node
  					})
  				]
  			});
-@@ -624,6 +733,7 @@
+@@ -624,6 +734,7 @@
  					name: "root",
  					locale: "common",
  					children: {
@@ -200,7 +201,6 @@ diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js b/node
  							kind: "single",
  							scope: "root"
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/types/client/index.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/types/client/index.d.ts
-index a15af0e..2cd8d08 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/types/client/index.d.ts
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/types/client/index.d.ts
 @@ -31,6 +31,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -208,7 +208,7 @@ index a15af0e..2cd8d08 100644
      }
      interface SlotMap {
 +        /** Right content wrapper spanning columns two and three. Keep work mounted once. */
-+        'desktop.mode.content': { kind: 'single'; scope: 'root'; owner: { work: import('react').ReactNode; rightbarWidth: number; resizeHandle: import('react').ReactNode } };
++        'desktop.mode.content': { kind: 'single'; scope: 'root'; owner: { work: import('react').ReactNode; rightbarWidth: number; resizeHandle: import('react').ReactNode; fallback: import('react').ReactNode } };
          /**
           * The whole left column. OCCUPIED by ui-sidebar's SidebarRoot, which
           * declares the workspace and settings seats inside it — registering here

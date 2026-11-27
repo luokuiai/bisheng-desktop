@@ -12,10 +12,16 @@ const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 export function useCountUp(target: number, duration = 320) {
   const [display, setDisplay] = useState(target);
   const fromRef = useRef(target);
+  const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
   useEffect(() => {
     const from = fromRef.current;
     if (from === target) return;
+    if (reducedMotion) {
+      fromRef.current = target;
+      setDisplay(target);
+      return;
+    }
     const start = performance.now();
     let raf = 0;
     const tick = (now: number) => {
@@ -30,7 +36,7 @@ export function useCountUp(target: number, duration = 320) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
+  }, [target, duration, reducedMotion]);
 
-  return display;
+  return reducedMotion ? target : display;
 }

@@ -4,8 +4,12 @@ import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
+import { SlotCore, resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import * as workspaceChrome from '../packages/dsh-desktop-client-ui/workspace/static/workspace-chrome.js'
+import { WorkspaceProvider } from '../packages/dsh-desktop-client-ui/workspace/host/context'
+import Home from '../packages/dsh-desktop-client-ui/workspace/app/page'
+
+vi.mock('../packages/dsh-desktop-client-ui/workspace/components/workspace/hero-agents', () => ({ HeroAgents: () => null }))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root, container
@@ -118,8 +122,12 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     return React.createElement('div', null, anchor, list && (portal ? createPortal(list, document.body) : list))
   }
   const footerSlot = 'sidebar.footer.action'
+  const panelListSlot = 'sidebar.panellist'
   const slotCore = new SlotCore()
-  slotCore.register({ name: 'root', children: { [footerSlot]: { kind: 'list', scope: 'root' }, main: { kind: 'keyed', scope: 'root' } } }, () => null)
+  slotCore.register({ name: 'root', children: {
+    [footerSlot]: { kind: 'list', scope: 'root' }, [panelListSlot]: { kind: 'list', scope: 'root' },
+    main: { kind: 'keyed', scope: 'root' }
+  } }, () => null)
   function SidebarFooter() {
     React.useSyncExternalStore(listener => slotCore.subscribe(footerSlot, listener), () => slotCore.getVersion(footerSlot))
     return React.createElement('footer', null, slotCore.entriesOfSlot(footerSlot).map(entry =>
@@ -143,9 +151,14 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   const source = await readFile(process.env.DSH_TEST_HOST_DIALOG_CLIENT_SOURCE || 'packages/dsh-desktop-client-ui/client.js', 'utf8')
   const client = source.replace("import('/desktop-workspace/workspace-chrome.js')", 'loadWorkspaceChrome()')
     .replace("import('/desktop-workspace/chat-controls.js')", 'loadChatControls()')
-  new Function('loadWorkspaceChrome', 'loadChatControls', client)(
-    async () => workspaceChrome,
-    async () => navigationOptions.chatControls ?? null
+    .replaceAll("import('/desktop-workspace/host-runtime.js')", 'Promise.resolve({ bindHost() {} })')
+    .replace("import('/desktop-workspace/work-model-picker.js')", 'loadWorkModelPicker()')
+    .replace("import('/desktop-workspace/pages.js')", 'getWorkspacePages()')
+  new Function('loadWorkspaceChrome', 'loadChatControls', 'loadWorkModelPicker', 'getWorkspacePages', client)(
+    navigationOptions.loadWorkspaceChrome ?? (async () => workspaceChrome),
+    async () => navigationOptions.chatControls ?? null,
+    navigationOptions.loadWorkModelPicker ?? (async () => null),
+    async () => navigationOptions.homePage ? { WorkspacePages: props => React.createElement(WorkspaceProvider, props, React.createElement(Home)) } : {}
   )
   const uiWorkspaceStart = navigationOptions.startSession ?? (() => {
     if (navigate('new')) return
@@ -161,14 +174,24 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
         bindWorkbench = callback
         if (workbenchSnapshot) attachWorkbench()
       }
+      if (names.includes('remote.pluginInventory') && navigationOptions.remote?.pluginInventory) {
+        const cleanups = []
+        callback({
+          remote: navigationOptions.remote,
+          on: () => () => {},
+          effect: effect => cleanups.push(effect())
+        })
+        return { dispose: () => cleanups.forEach(cleanup => cleanup()) }
+      }
     },
     uiWorkspace: { openWorkspace: navigationOptions.openWorkspace, openSession: navigationOptions.openSession, registerNavigationHandler: (fn) => { navigate = fn; return () => {} }, startSession: uiWorkspaceStart },
     sessions: { binding: id => id === 'draft' ? { session: liveSession } : undefined, list: { getSnapshot: () => sessionList, subscribe: fn => { sessionListeners.add(fn); return () => sessionListeners.delete(fn) } } },
     layout: { selectPanel: setPanel, panelInfo: { getSnapshot: () => panelState, subscribe: fn => { panelListeners.add(fn); return () => panelListeners.delete(fn) } } },
-    remote: {}, locale: { register: (ns, copy) => dictionaries.set(ns, copy), bind: ns => key => key.startsWith('hostedApp') || key.startsWith('navigation') || key === 'reorderNavigation' || key === 'multiAgentCollaboration' ? dictionaries.get(ns)?.[activeLocale]?.[key] : key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) } },
+    remote: { get pluginInventory() { throw new Error('cannot get property "remote.pluginInventory" without inject') } },
+    locale: { register: (ns, copy) => dictionaries.set(ns, copy), bind: ns => key => key.startsWith('hostedApp') || key.startsWith('navigation') || key === 'reorderNavigation' || key === 'multiAgentCollaboration' ? dictionaries.get(ns)?.[activeLocale]?.[key] : key, getSnapshot: () => ({ active: activeLocale }), subscribe: fn => { localeListeners.add(fn); return () => localeListeners.delete(fn) }, resolveText: text => typeof text === 'string' ? text : text[activeLocale] ?? text.en },
     effect(fn) { const dispose = fn(); if (typeof dispose === 'function') disposers.push(dispose) },
     slots: {
-      inject(name, fn) { if ([footerSlot, 'shell.overlay', 'desktop.mode.content', 'sidebar.content', 'sidebar.workspaces.collection', 'sidebar.primaryNavigation', 'conversation.session.header.toolbar'].includes(name)) return fn() },
+      inject(name, fn) { if ([footerSlot, 'shell.overlay', 'desktop.mode.content', 'sidebar.content', 'sidebar.workspaces.collection', 'sidebar.primaryNavigation', 'conversation.session.header.toolbar', 'conversation.input.model.picker'].includes(name)) return fn() },
       register(options, component) {
         if (options.name === footerSlot) return slotCore.register(options, component)
         if (options.name === 'shell.overlay' && !['desktop-bot-sidebar-back', 'desktop-workspace-chrome'].includes(options.id)) return
@@ -188,6 +211,7 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
     disposers.push(navigation.start())
     return {
       navigation,
+      modelPickerSeat: registrations.get('conversation.input.model.picker'),
       registerPanel: key => slotCore.register({ name: 'main', key }, () => null),
       async registerBot(mode) {
         const listeners = new Set()
@@ -220,6 +244,9 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
   const botBack = registrations.get('desktop-bot-sidebar-back')
   const chrome = registrations.get('desktop-workspace-chrome')
   const sessionToolbar = registrations.get('conversation.session.header.toolbar')
+  const work = React.createElement(React.Fragment, null,
+    navigationOptions.sessionToolbar && React.createElement(sessionToolbar.component, { row: React.createElement('button', { onClick: navigationOptions.sessionToolbar }, 'Session action') }),
+    React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' }))
   const workspaces = () => React.createElement(history.component, {
     ...history.props, mode: 'projects', query: '', archivedOnly: false,
     projects: () => React.createElement('div', { 'data-project': true }, 'Project task'),
@@ -227,28 +254,61 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
       'data-local-row': true, 'aria-current': active ? 'page' : undefined, onClick: () => navigate('open')
     }, 'Local task') }], ...collection
   })
+  const subscribePanelRows = fn => {
+    const unsubscribe = slotCore.subscribe(panelListSlot, fn)
+    localeListeners.add(fn)
+    return () => { unsubscribe(); localeListeners.delete(fn) }
+  }
+  function SidebarContent(props) {
+    const getSnapshot = () => `${slotCore.getVersion(panelListSlot)}:${activeLocale}`
+    const revision = React.useSyncExternalStore(subscribePanelRows, getSnapshot)
+    const panels = React.useMemo(() => slotCore.entriesOfSlot(panelListSlot)
+      .map(({ options }) => ({ id: options.id, label: resolveSlotLabel(options.label) ?? options.id })), [revision])
+    return React.createElement(sidebar.component, {
+      ...props, panels, selectPanel: setPanel,
+      renderPanelIcon: id => {
+        const entry = slotCore.entriesOfSlot(panelListSlot).find(row => row.options.id === id)
+        return entry && React.createElement(entry.component)
+      }
+    })
+  }
   await act(async () => root.render(React.createElement(React.Fragment, null,
     botBack && React.createElement(botBack.component, { ...botBack.props, t: key => dictionaries.get('desktop.chatWork')[activeLocale][key] }),
     chrome && React.createElement(chrome.component, chrome.props),
     React.createElement('aside', { className: navigationOptions.wide === false ? 'pI_x6G_sidebarCol' : undefined, 'data-dsh-sidebar-root': navigationOptions.wide === false ? '' : undefined },
-      React.createElement(sidebar.component, {
+      React.createElement(navigationOptions.homePage ? SidebarContent : sidebar.component, {
         ...sidebar.props,
         renderContent: children => children,
         renderNewSession: render => render ? render({
           label: 'New session', ariaLabel: 'Start a new session', shortcut: 'Meta+N', shortcutKeys: ['⌘', 'N'], onClick: uiWorkspaceStart
         }) : React.createElement('button', { 'data-new-session': '', onClick: () => uiWorkspaceStart() }, 'New session'),
         renderWorkspaces: workspaces,
-        renderSettings: () => React.createElement('button', null, 'Account'),
+        renderSettings: navigationOptions.renderSettings ?? (() => React.createElement('button', null, 'Account')),
         defaultContent: React.createElement(React.Fragment, null,
           React.createElement('button', { 'data-navigation-id': 'new', onClick: () => navigate('new') }, 'New session'),
           React.createElement(primary.component, { ...primary.props, wide: navigationOptions.wide ?? true, expandSidebar: navigationOptions.expandSidebar, renderAction: ({ id, label, onClick, expanded, active }) => React.createElement('button', { 'data-navigation-id': id, 'aria-expanded': expanded, 'aria-current': active ? 'page' : undefined, 'aria-label': label, onClick }, label), panels: [{ id: 'plugins', label: 'Plugins' }, ...(navigationOptions.panels || [])], startSession: (...args) => { expect(args).toHaveLength(0); navigate('new') }, selectPanel: setPanel, renderPanelIcon: () => null }),
           workspaces(), React.createElement(SidebarFooter))
       })),
-    React.createElement(content.component, { ...content.props, rightbarWidth: 420, work: React.createElement(React.Fragment, null,
-      navigationOptions.sessionToolbar && React.createElement(sessionToolbar.component, { row: React.createElement('button', { onClick: navigationOptions.sessionToolbar }, 'Session action') }),
-      React.createElement('textarea', { 'aria-label': 'work draft', defaultValue: 'retained draft' })) })
+    React.createElement(content.component, { ...content.props, rightbarWidth: 420,
+      resizeHandle: React.createElement('div', { 'data-workspace-resize': '' }),
+      work,
+      fallback: React.createElement(React.Fragment, null, work,
+        React.createElement('aside', { 'data-native-rightbar': '' }),
+        React.createElement('div', { 'data-native-resize': '' })) })
   )))
   return {
+    async registerPanelMenu(id, registrant) {
+      let removeMenu, removePanel
+      await act(async () => {
+        removeMenu = slotCore.register({ name: panelListSlot, id, label: () => activeLocale === 'en' ? 'Extension board' : '扩展看板' },
+          () => React.createElement('svg', { 'data-plugin-icon': id }))
+      })
+      return {
+        async enable() { await act(async () => { removePanel = slotCore.register({ name: 'main', key: id, registrant }, () => null) }) },
+        async disable() { await act(async () => removePanel()) },
+        async remove() { await act(async () => removeMenu()) }
+      }
+    },
     async sidebarEntry(face) {
       await act(async () => {
         sidebarEntries = face ? [{ inject: () => face }] : []
@@ -301,6 +361,71 @@ async function mount(connected = false, collection = {}, inert = false, workbenc
 }
 const mountWorkspaceRoutes = (connected = false) => mount(connected, {}, false, undefined, false, { workspaceRoutes: true })
 
+it('uses the Board UI in Work and keeps CLI agent routes out without hiding configured local providers', async () => {
+  let resolvePicker
+  const loadWorkModelPicker = vi.fn(() => new Promise(resolve => { resolvePicker = resolve }))
+  const { navigation, modelPickerSeat } = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, loadWorkModelPicker })
+  container = document.body.appendChild(document.createElement('div'))
+  root = createRoot(container)
+  const groups = [
+    { id: 'bisheng-enterprise', models: [{ id: 'server-model' }] },
+    { id: 'local-ollama', models: [{ id: 'default', name: 'Local model' }] }
+  ]
+  const agents = ['local-claude-code', 'local-codex-cli'].map(id => ({ id, models: [{ id: 'default', name: 'CLI default' }] }))
+  const render = catalog => act(async () => root.render(React.createElement(modelPickerSeat.component, {
+    ...modelPickerSeat.props, groups: catalog, fallback: 'Native picker'
+  })))
+  await render(groups)
+  expect(container.textContent).toBe('Native picker')
+  expect(loadWorkModelPicker).not.toHaveBeenCalled()
+  await act(async () => navigation.navigate('/chat'))
+  expect(container.textContent).toBe('Native picker')
+  await render([...agents, ...groups])
+  expect(container.textContent).toBe('')
+  await act(async () => resolvePicker({ WorkModelPicker: ({ groups }) => `Board UI picker: ${groups.map(group => group.id).join(', ')}` }))
+  expect(container.textContent).toBe('Board UI picker: bisheng-enterprise, local-ollama')
+  await render(agents)
+  expect(container.textContent).toBe('Board UI picker: ')
+  await render([])
+  expect(container.textContent).toBe('Native picker')
+  await render(groups)
+  await act(async () => navigation.navigate('/'))
+  expect(container.textContent).toBe('Native picker')
+  expect(loadWorkModelPicker).toHaveBeenCalledOnce()
+})
+
+it('shows the workspace loading state until the chrome is ready and opens the overview', async () => {
+  const chrome = Promise.withResolvers()
+  await mount(false, {}, false, undefined, false, {
+    workspaceRoutes: true, renderWorkspace: true, homePage: true, loadWorkspaceChrome: () => chrome.promise
+  })
+  expect(container.querySelector('.dshWorkspaceStartup [role="status"]')).not.toBeNull()
+  expect(container.querySelector('.dshWorkspaceToolbar')).toBeNull()
+  expect(container.querySelector('[data-native-rightbar]')).toBeNull()
+
+  await act(async () => chrome.resolve(workspaceChrome))
+  expect(container.querySelector('.dshWorkspaceStartup')).toBeNull()
+  expect(container.querySelector('.dshWorkspaceToolbar')).not.toBeNull()
+  expect(container.querySelector('[aria-labelledby="workspace-title"]')).not.toBeNull()
+})
+
+it('recovers from a workspace chrome load failure with the native content and resize handle', async () => {
+  const error = new Error('workspace chrome unavailable')
+  const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+  await mount(false, {}, false, undefined, false, {
+    workspaceRoutes: true, renderWorkspace: true, loadWorkspaceChrome: async () => { throw error }
+  })
+  expect(report).toHaveBeenCalledWith('[desktop-workspace] Loading navigation failed', error)
+  const recovery = container.querySelector('.dshWorkspaceStartup')
+  expect(recovery.querySelector('[role="alert"]')).not.toBeNull()
+
+  await act(async () => recovery.querySelector('button').click())
+  expect(container.querySelector('.dshWorkspaceStartup, .dshModes, [data-workspace-resize]')).toBeNull()
+  expect(container.querySelector('[data-native-rightbar]')).not.toBeNull()
+  expect(container.querySelector('[data-native-resize]')).not.toBeNull()
+  expect(container.querySelector('[aria-label="work draft"]')).not.toBeNull()
+})
+
 it('routes the plugin entry to the existing plugins main panel', async () => {
   const { navigation, registerPanel } = await mountWorkspaceRoutes()
   registerPanel('plugins')
@@ -312,6 +437,58 @@ it('routes the plugin entry to the existing plugins main panel', async () => {
   navigation.navigate('/')
   expect(navigation.snapshot().workspacePath).toBe('/')
   expect(navigation.snapshot().workspaceNative).toBe(false)
+})
+
+it('shares live native panel menus, labels, icons and actions between the workspace sidebar and homepage', async () => {
+  const moduleName = '@example/board'
+  let resolveInventory
+  const remote = { pluginInventory: { list: () => new Promise(resolve => { resolveInventory = resolve }) } }
+  const view = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, renderWorkspace: true, homePage: true, remote })
+  for (const panelId of ['plugins', 'schedules']) {
+    const builtIn = await view.registerPanelMenu(panelId)
+    await builtIn.enable()
+    expect(container.querySelector(`.dshWorkspaceDirectory [data-workspace-route="${panelId === 'plugins' ? '/plugins' : '/panel/schedules'}"]`)).not.toBeNull()
+    expect(container.querySelector(`[data-workspace-card="panel:${panelId}"]`)).toBeNull()
+  }
+  const id = 'extension.board'
+  const route = `/panel/${id}`
+  const side = () => container.querySelector(`.dshWorkspaceDirectory [data-workspace-route="${route}"]`)
+  const card = () => container.querySelector(`[data-workspace-card="panel:${id}"]`)
+  const plugin = await view.registerPanelMenu(id, moduleName)
+  expect(side()).toBeNull()
+  expect(card()).toBeNull()
+  await plugin.enable()
+  expect(side().textContent).toBe('Extension board')
+  expect(card().textContent).toBe('Extension board')
+  expect(side().querySelector('[data-plugin-icon]').dataset.pluginIcon).toBe(id)
+  expect(card().querySelector('[data-plugin-icon]').dataset.pluginIcon).toBe(id)
+  await act(async () => resolveInventory({ ok: true, value: { entries: [
+    { moduleName, enabled: true, meta: { description: { en: 'Track deliverables', zh: '跟踪交付进度' } } },
+    { moduleName: '@luokuiai/dsh-code-workbench', enabled: true, meta: { description: 'Edit project files' } }
+  ] } }))
+  expect(card().textContent).toBe('Extension boardTrack deliverables')
+  const legacy = await view.registerPanelMenu('code-workbench-layout')
+  await legacy.enable()
+  expect(container.querySelector('[data-workspace-card="panel:code-workbench-layout"]').textContent).toContain('Edit project files')
+  await view.locale('zh')
+  expect(side().textContent).toBe('扩展看板')
+  expect(card().textContent).toBe('扩展看板跟踪交付进度')
+  await act(async () => card().click())
+  expect(view.controller.snapshot()).toMatchObject({ workspacePath: route, workspaceNative: true, activePanelId: id })
+  expect(side().getAttribute('aria-current')).toBe('page')
+  expect(card()).toBeNull()
+  await act(async () => view.controller.navigate('/'))
+  await act(async () => side().click())
+  expect(view.controller.snapshot().activePanelId).toBe(id)
+  await plugin.disable()
+  expect(view.controller.snapshot()).toMatchObject({ workspacePath: '/', workspaceNative: false, activePanelId: null })
+  expect(card()).toBeNull()
+  expect(side()).toBeNull()
+  await plugin.enable()
+  expect(card()).not.toBeNull()
+  await plugin.remove()
+  expect(card()).toBeNull()
+  expect(side()).toBeNull()
 })
 
 it('places the AI Chat switch in the toolbar and keeps login gating and the original sidebar lists', async () => {
@@ -330,7 +507,7 @@ it('places the AI Chat switch in the toolbar and keeps login gating and the orig
   expect(container.querySelector('.dshChatWorkspaceList [data-local-row]')).not.toBeNull()
   expect(container.querySelector('.dshChatWorkspaceList .dshRecentHistory')).toBeNull()
   expect(container.querySelector('aside [data-navigation-id]')).toBeNull()
-  expect(container.querySelector('aside').textContent).not.toContain('Account')
+  expect(container.querySelector('aside [hidden]').textContent).toBe('Account')
   expect(container.querySelector('aside [data-workspace-account-slot]')).toBeNull()
   expect(container.querySelector('.dshWorkHistoryDock')).toBeNull()
   const draft = view.draft()
@@ -439,7 +616,7 @@ it('sends the workspace card color to enterprise Chat and keeps the regular pale
   expect(present.mock.lastCall[0]).not.toHaveProperty('workspaceCard')
 })
 
-it('routes registered workspace panels and their previews through the host selection', async () => {
+it('rejects removed page links and keeps registered panels accessible through native selection', async () => {
   const { navigation, registerPanel, selectPanel } = await mountWorkspaceRoutes()
   for (const [path, panel] of [
     ['/ai-chat', 'code-workbench-layout'],
@@ -447,17 +624,11 @@ it('routes registered workspace panels and their previews through the host selec
     ['/project-board', 'super-kanban']
   ]) {
     navigation.navigate(path)
-    expect(navigation.snapshot()).toMatchObject({ workspacePath: path, workspaceNative: false, activePanelId: null })
+    expect(navigation.snapshot()).toMatchObject({ workspacePath: '/', activePanelId: null })
     const remove = registerPanel(panel)
     navigation.navigate(path)
-    expect(navigation.snapshot()).toMatchObject({ workspacePath: path, workspaceNative: true, activePanelId: panel })
-    navigation.navigate(path + '?preview=0')
-    navigation.goBack()
-    expect(navigation.snapshot().workspacePath).toBe('/')
-    navigation.navigate(path + '?preview=0')
-    expect(navigation.snapshot()).toMatchObject({ workspacePath: path, workspaceNative: true, activePanelId: panel })
     navigation.navigate(path + '?preview=1')
-    expect(navigation.snapshot()).toMatchObject({ workspacePath: path + '?preview=1', workspaceNative: false, activePanelId: null })
+    expect(navigation.snapshot()).toMatchObject({ workspacePath: '/', activePanelId: null })
     selectPanel(panel)
     expect(navigation.snapshot()).toMatchObject({ workspacePath: path, workspaceNative: true, activePanelId: panel })
     selectPanel(null)
@@ -474,20 +645,22 @@ it('keeps workspace routes until the user explicitly enters the Bot and releases
   await initial.remove()
   navigation.navigate('/multi-agent-chat?preview=1')
   const reloaded = await registerBot('bot')
-  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat?preview=1', workspaceNative: false })
+  expect(navigation.snapshot().workspacePath).toBe('/')
   expect(reloaded.surface.getSnapshot().mode).toBe('agent')
   navigation.navigate('/multi-agent-chat')
-  expect(reloaded.surface.getSnapshot().mode).toBe('bot')
-  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat', workspaceNative: true })
-  navigation.navigate('/multi-agent-chat?preview=1')
   expect(reloaded.surface.getSnapshot().mode).toBe('agent')
-  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat?preview=1', workspaceNative: false })
+  expect(navigation.snapshot().workspacePath).toBe('/')
+  reloaded.setSurface('bot')
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat', workspaceNative: true })
+  navigation.navigate('/chat')
+  expect(reloaded.surface.getSnapshot().mode).toBe('agent')
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/chat', workspaceNative: false })
   reloaded.setSurface('bot')
   reloaded.setSurface('agent')
   expect(navigation.snapshot()).toMatchObject({ workspacePath: '/', workspaceNative: false })
-  navigation.navigate('/multi-agent-chat')
+  reloaded.setSurface('bot')
   await reloaded.remove()
-  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/multi-agent-chat', workspaceNative: false })
+  expect(navigation.snapshot()).toMatchObject({ workspacePath: '/', workspaceNative: false })
 })
 
 it('switches exclusively between workspace panels and the Bot for external host actions', async () => {
@@ -502,7 +675,7 @@ it('switches exclusively between workspace panels and the Bot for external host 
   expect(navigation.snapshot()).toMatchObject({ workspacePath: '/ai-chat', workspaceNative: true, activePanelId: 'code-workbench-layout' })
   navigation.openDesktop()
   expect(navigation.snapshot()).toMatchObject({ workspacePath: undefined, workspaceNative: false, activePanelId: null })
-  navigation.navigate('/multi-agent-chat')
+  bot.setSurface('bot')
   navigation.openDesktop()
   expect(bot.surface.getSnapshot().mode).toBe('agent')
   expect(navigation.snapshot()).toMatchObject({ workspacePath: undefined, workspaceNative: false, activePanelId: null })
@@ -528,10 +701,9 @@ it('keeps a newly selected workspace panel when an earlier workbench exit reject
   expect(workbench.run).not.toHaveBeenCalled()
 })
 
-it('starts a template draft after the chat navigation and ignores a superseded workbench exit', async () => {
-  const initializeDraft = vi.fn(() => 'applied')
-  const openWorkspace = vi.fn(async (_workspace, prepare) => prepare('draft'))
-  const { navigation } = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, openWorkspace, initializeDraft })
+it('opens only the latest session after a superseded workbench exit', async () => {
+  const openSession = vi.fn()
+  const { navigation } = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, openSession })
   const leaving = Promise.withResolvers()
   const workbench = {
     getSnapshot: () => ({ enabled: true, state: { active: 'writer' } }),
@@ -541,76 +713,86 @@ it('starts a template draft after the chat navigation and ignores a superseded w
   }
   const unbind = navigation.bindWorkbench(workbench)
   try {
-    const abandoned = navigation.host.openCapability('code', { prompt: 'old draft' })
-    navigation.navigate('/settings')
-    const current = navigation.host.openCapability('code', { prompt: 'current draft' })
-    expect(openWorkspace).not.toHaveBeenCalled()
-    initializeDraft.mockImplementation(() => {
+    const abandoned = navigation.host.openTask('old-session')
+    navigation.navigate('/model')
+    const current = navigation.host.openTask('current-session')
+    expect(openSession).not.toHaveBeenCalled()
+    openSession.mockImplementation(() => {
       expect(navigation.snapshot().workspacePath).toBe('/chat')
-      return 'applied'
     })
     leaving.resolve()
     await Promise.all([abandoned, current])
-    expect(initializeDraft.mock.calls.map(([, options]) => options)).toEqual([{ prompt: 'current draft' }])
+    expect(openSession).toHaveBeenCalledExactlyOnceWith('current-session')
   } finally { unbind() }
-})
-
-it('restores the template form when the native workspace reuses an occupied blank from another conversation', async () => {
-  const native = { text: 'an unsent note', attachments: ['file-1'] }
-  const initializeDraft = vi.fn((_binding, { prompt }) => {
-    if (native.text || native.attachments.length) return 'preserved'
-    native.text = prompt
-    return 'applied'
-  })
-  const openWorkspace = vi.fn(async (workspace, prepare) => {
-    expect(workspace).toBe('active')
-    prepare('draft')
-  })
-  const openSession = vi.fn()
-  const ui = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, openWorkspace, openSession, initializeDraft,
-    sessionList: { phase: 'ready', byId: { current: { id: 'current', blank: false, retainedBy: { mainView: 1 } } } },
-    folders: [{ workspaceId: 'other', sessionIds: [] }, { workspaceId: 'active', sessionIds: ['current', 'draft'] }] })
-  const navigation = ui.navigation
-  navigation.navigate('/ai-chat?preview=1')
-  navigation.host.setTaskDraft('code', ' new template task ')
-  await navigation.host.openCapability('code', { prompt: 'new template task' })
-  expect(navigation.snapshot().workspacePath).toBe('/ai-chat?preview=1')
-  expect(navigation.host.getTaskDraft('code')).toEqual({ prompt: ' new template task ', error: 'taskDraftConflict', sessionId: 'draft' })
-  expect(native).toEqual({ text: 'an unsent note', attachments: ['file-1'] })
-  navigation.goBack()
-  expect(navigation.snapshot().workspacePath).toBe('/')
-  await navigation.host.openTask('draft')
-  expect(openSession).toHaveBeenCalledWith('draft')
-  navigation.navigate('/ai-chat?preview=1')
-  expect(navigation.host.getTaskDraft('code').prompt).toBe(' new template task ')
-  native.text = ''
-  await navigation.host.openCapability('code', { prompt: 'new template task' })
-  expect(navigation.snapshot().workspacePath).toBe('/ai-chat?preview=1')
-  native.attachments = []
-  await navigation.host.openCapability('code', { prompt: 'new template task' })
-  expect(native.text).toBe('new template task')
-  expect(navigation.host.getTaskDraft('code')).toBeUndefined()
-  expect(navigation.snapshot().workspacePath).toBe('/chat')
 })
 
 it('keeps the workspace home on enterprise startup and releases the Bot for explicit enterprise Chat', async () => {
   const { navigation, registerBot } = await mountWorkspaceRoutes(true)
   expect(navigation.snapshot()).toMatchObject({ connected: true, workspacePath: '/', mode: 'work' })
   const bot = await registerBot('agent')
-  navigation.navigate('/multi-agent-chat')
+  bot.setSurface('bot')
   navigation.select('chat')
   expect(bot.surface.getSnapshot().mode).toBe('agent')
   expect(navigation.snapshot()).toMatchObject({ mode: 'chat', workspacePath: undefined, workspaceNative: false })
 })
 
-it('opens the desktop workspace directly from Settings and retains its enterprise chat entrance', async () => {
+it.each([['/settings', 'general'], ['/ai-profile', 'enterprise-account']])('opens %s in settings without pushing a page', async (path, id) => {
   const { navigation } = await mountWorkspaceRoutes()
-  navigation.navigate('/settings')
-  expect(navigation.snapshot().workspacePath).toBe('/settings')
-  navigation.host.openCapability('desktop')
-  expect(navigation.snapshot()).toMatchObject({ mode: 'work', workspacePath: undefined, workspaceNative: false })
-  navigation.select('chat')
-  expect(navigation.snapshot().signInPromptOpen).toBe(true)
+  const open = vi.fn()
+  window.addEventListener('dsh-desktop:open-settings-section', open)
+  disposers.push(() => window.removeEventListener('dsh-desktop:open-settings-section', open))
+  navigation.navigate('/model')
+  navigation.navigate(path)
+  expect(open).toHaveBeenCalledOnce()
+  expect(open.mock.calls[0][0].detail).toEqual({ id })
+  expect(navigation.snapshot().workspacePath).toBe('/model')
+  navigation.goBack()
+  expect(navigation.snapshot().workspacePath).toBe('/')
+})
+
+it('opens General from the toolbar without replacing the current conversation', async () => {
+  function SettingsSeat() {
+    const [section, setSection] = React.useState()
+    React.useEffect(() => {
+      if (!section) return
+      const publish = open => window.dispatchEvent(new CustomEvent('dsh-desktop:settings-visibility', { detail: { open } }))
+      publish(true)
+      return () => publish(false)
+    }, [section])
+    React.useEffect(() => {
+      const open = event => setSection(event.detail.id)
+      window.addEventListener('dsh-desktop:open-settings-section', open)
+      return () => window.removeEventListener('dsh-desktop:open-settings-section', open)
+    }, [])
+    return React.createElement(React.Fragment, null,
+      React.createElement('button', { 'data-test-account-launcher': '' }, 'Account'),
+      section && createPortal(React.createElement('button', {
+        role: 'dialog', 'aria-label': section, onClick: () => setSection(undefined)
+      }, 'Close'), document.body))
+  }
+  const view = await mount(false, {}, false, undefined, false, {
+    workspaceRoutes: true, renderWorkspace: true, renderSettings: () => React.createElement(SettingsSeat)
+  })
+  await act(async () => view.controller.navigate('/chat'))
+  const toolbar = container.querySelector('.dshWorkspaceToolbar')
+  const draft = view.draft()
+  const picker = toolbar.querySelector('.dshWorkspaceModePicker')
+  expect(picker.querySelectorAll('button')).toHaveLength(2)
+  for (const collapse of [false, true]) {
+    if (collapse) await act(async () => toolbar.querySelector('[data-workspace-sidebar-toggle]').click())
+    await act(async () => toolbar.querySelector('button[title="Settings"]').click())
+    const dialog = document.body.querySelector('[role="dialog"][aria-label="general"]')
+    expect(dialog).not.toBeNull()
+    expect(container.querySelector('[data-test-account-launcher]').closest('[hidden]')).not.toBeNull()
+    expect(view.controller.snapshot().workspacePath).toBe('/chat')
+    expect(view.controller.snapshot().settingsOpen).toBe(true)
+    expect(toolbar.querySelector('.dshWorkspaceModePicker')).toBe(picker)
+    expect(view.draft()).toBe(draft)
+    await act(async () => dialog.click())
+    expect(document.body.querySelector('[role="dialog"][aria-label="general"]')).toBeNull()
+    expect(view.controller.snapshot().settingsOpen).toBe(false)
+    expect(toolbar.querySelector('.dshWorkspaceModePicker')).toBe(picker)
+  }
 })
 
 it('shows mode selection on the native landing page and restores it after leaving a workbench', async () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { RiArrowRightUpLine, RiPlayLine, RiRestartLine } from "@remixicon/react";
+import { RiPlayLine, RiRestartLine } from "@remixicon/react";
 import { ContributionsCard } from "@/components/application/dashboard/contributions-card";
 import { AgentAvatar } from "@/components/application/agent-avatar/agent-avatar";
 import { AgentLimitsCard } from "@/components/application/agent-limits/agent-limits-card";
@@ -228,7 +228,6 @@ function AgentDemos() {
         <div className="h-[740px] min-w-0 overflow-hidden rounded-2xl border border-separator-border">
           <AgentCreator agent={agent} onChange={setAgent} />
         </div>
-        <a href="/multi-agent-chat" className="inline-flex w-fit items-center gap-1 text-body-medium text-accent-600 hover:underline">打开多代理协作 <RiArrowRightUpLine className="size-4" aria-hidden="true" /></a>
       </DemoCard>
     </>
   );

@@ -107,13 +107,45 @@ window.__ModuleLoader__.load({
       return inWork && controls ? React.createElement(controls.ChatComposerLoader, { running }) : null
     }
 
-    function ChatSidebarContent({ navigation, defaultContent, renderContent, renderNewSession, renderWorkspaces }) {
+    let workModelPickerRequest
+    function WorkModelPickerSeat({ navigation, fallback, t, ...props }) {
+      const inWork = React.useSyncExternalStore(navigation.subscribe, () => navigation.snapshot().workspacePath === '/chat')
+      const [Picker, setPicker] = React.useState(null)
+      React.useEffect(() => {
+        if (!inWork || Picker) return
+        let active = true
+        workModelPickerRequest ??= import('/desktop-workspace/host-runtime.js').then(runtime => {
+          runtime.bindHost(require)
+          return import('/desktop-workspace/work-model-picker.js')
+        }).catch(error => {
+          workModelPickerRequest = undefined
+          console.warn('[desktop-workspace] Could not load the Work model picker', error)
+          return null
+        })
+        void workModelPickerRequest.then(module => { if (active && module) setPicker(() => module.WorkModelPicker) })
+        return () => { active = false }
+      }, [inWork, Picker])
+      if (!inWork) return fallback
+      const groups = props.groups.filter(group => !group.id?.startsWith('local-') ||
+        !group.models.some(model => model.id === 'default' && model.name === 'CLI default'))
+      const hasAgentRoutes = groups.length !== props.groups.length
+      if (Picker && (hasAgentRoutes || groups.some(group => group.models.length > 0))) {
+        return React.createElement(Picker, { ...props, groups, enterpriseModelsLabel: t('workEnterpriseModels') })
+      }
+      return hasAgentRoutes ? null : fallback
+    }
+
+    function ChatSidebarContent({ navigation, defaultContent, renderContent, renderNewSession, renderWorkspaces, renderSettings, panels, renderPanelIcon, selectPanel }) {
       const isChat = React.useSyncExternalStore(navigation.subscribe, () => navigation.snapshot().workspacePath === '/chat')
       const controls = useChatControls(isChat)
+      React.useLayoutEffect(() => {
+        navigation.setWorkspacePanelSource(panels, renderPanelIcon, selectPanel)
+      }, [navigation, panels, renderPanelIcon, selectPanel])
       return isChat ? renderContent(React.createElement(React.Fragment, null,
         React.createElement('div', { className: 'dshChatSidebarNew' },
           renderNewSession(controls ? props => React.createElement(controls.ChatNewSession, props) : undefined)),
-        React.createElement('div', { className: 'dshChatWorkspaceList' }, renderWorkspaces()))) : defaultContent
+        React.createElement('div', { className: 'dshChatWorkspaceList' }, renderWorkspaces()),
+        React.createElement('div', { hidden: true }, renderSettings?.()))) : defaultContent
     }
 
     function ChatSidebarSearch({ fallback, t, ...props }) {
@@ -395,6 +427,7 @@ window.__ModuleLoader__.load({
         workWelcome: '有什么可以帮你？',
         quickSearch: '快速搜索',
         workThinking: '思考中',
+        workEnterpriseModels: '企业模型',
         workIntro: '对话使用已配置的模型。历史记录保存在当前工作区。',
         workAsk1: '介绍这个工作台能做什么',
         workAsk2: '用三句话写一份产品更新',
@@ -427,6 +460,7 @@ window.__ModuleLoader__.load({
         workWelcome: 'How can I help?',
         quickSearch: 'Quick search',
         workThinking: 'Thinking',
+        workEnterpriseModels: 'Enterprise models',
         workIntro: 'Chat with your configured model. History is saved in this workspace.',
         workAsk1: 'What can this workspace do?',
         workAsk2: 'Write a product update in three sentences',
@@ -528,7 +562,7 @@ window.__ModuleLoader__.load({
       return import('/desktop-workspace/pages.js')
     }
 
-    function WorkspaceView({ navigation, path, t }) {
+    function WorkspaceView({ navigation, path, entries, t }) {
       const [result, setResult] = React.useState(null)
       const [attempt, retry] = React.useReducer(number => number + 1, 0)
       React.useEffect(() => {
@@ -545,21 +579,29 @@ window.__ModuleLoader__.load({
         return () => { active = false }
       }, [attempt])
       return React.createElement('section', { className: 'dshWorkspacePages', 'data-workspace-path': path },
-        result?.Page ? React.createElement(result.Page, { path, navigate: navigation.navigate, host: navigation.host }) :
+        result?.Page ? React.createElement(result.Page, { path, entries, navigate: navigation.navigate, host: navigation.host }) :
           React.createElement('div', { role: 'status', className: 'dshWorkspaceLoadState' },
             t(result?.failed ? 'workspaceFailed' : 'workspaceLoading'),
             result?.failed && React.createElement('button', { type: 'button', onClick: retry }, t('workspaceRetry'))))
     }
 
     const workspacePanels = { '/plugins': 'plugins', '/ai-chat': 'code-workbench-layout', '/ai-image-generation': 'copylee-image-gen.paintings', '/project-board': 'super-kanban' }
+    const workspacePanelRoutes = new Map(Object.entries(workspacePanels).map(([path, id]) => [id, path]))
+    const legacyWorkspaceOwners = new Map([
+      ['code-workbench-layout', '@luokuiai/dsh-code-workbench'],
+      ['copylee-image-gen.paintings', '@luokuiai/dsh-image-gen'],
+      ['super-kanban', '@luokaiui/dsh-task-kanban'],
+      ['bot-return', '@luokuiai/dsh-agent-team']
+    ])
     const workspaceRemoteIds = new Set(['knowledge', 'channel', 'apps', 'capabilities', 'skills', 'square'])
     const remoteModuleAliases = { capabilities: 'skills', skills: 'capabilities' }
-    const workspaceDestinations = new Set(['', 'chat', 'multi-agent-chat', 'ai-chat', 'ai-image-generation', 'ai-profile', 'project-board', 'plugins', 'knowledge', 'channel', 'apps', 'capabilities', 'skills', 'square', 'lab', 'components', 'charts', 'icons', 'templates', 'admin', 'settings', 'model', 'harness'])
+    const workspaceDestinations = new Set(['', 'chat', 'plugins', 'knowledge', 'channel', 'apps', 'capabilities', 'skills', 'square', 'lab', 'components', 'charts', 'icons', 'templates', 'admin', 'model', 'harness'])
     function createChatNavigation(ctx) {
       let value = { mode: 'work', connected: false, phase: 'idle', epoch: undefined, items: [], page: 0, hasMore: false, historyPhase: 'idle', settingsOpen: false, signInPromptOpen: false, approvalsOpen: false, accountDialogOpen: false, settingsSurface: undefined, pageId: undefined, remotePageId: undefined, navigation: undefined, workLanding: false, nativeWork: true, panelOpen: false, activePanelId: null }
       const enabled = typeof document !== 'undefined' && Boolean(document.querySelector?.('link[href="/desktop-workspace/workspace.css"]'))
       const trail = []
       value.workspacePath = enabled ? '/' : undefined
+      value.workspaceEntries = []
       const listeners = new Set()
       let active = false, revision = 0, historyRequest = 0, historyDirty = false
       let pendingRemoteId
@@ -567,6 +609,54 @@ window.__ModuleLoader__.load({
       const publish = (patch) => { value = { ...value, ...patch }; listeners.forEach(fn => fn()) }
       const hasPanel = id => ctx.slots.entries('main').some(entry => entry.options.key === id)
       const currentBot = () => readBotReturn(createBotNavigation(ctx.slots).snapshot())
+      let panelSource, iconRenderer, selectWorkspacePanel, botAction, botRegistrant
+      let workspacePluginDescriptions = new Map()
+      const workspaceDescription = (id, registrant) => {
+        const text = workspacePluginDescriptions.get(registrant) ?? workspacePluginDescriptions.get(legacyWorkspaceOwners.get(id))
+        return text && ctx.locale.resolveText(text)?.trim() || undefined
+      }
+      function WorkspacePanelIcon({ id }) {
+        return iconRenderer?.(id) ?? React.createElement(NavigationIcon, { id: 'apps' })
+      }
+      const openWorkspacePanel = id => {
+        if (!panelSource?.some(panel => panel.id === id) || !hasPanel(id)) return
+        routeRevision++
+        resumeChatAfterSignIn = false
+        leaveBot()
+        const workspacePath = workspacePanelRoutes.get(id) ?? '/panel/' + encodeURIComponent(id)
+        publish({ workspacePath, workspaceNative: true, mode: 'work', pageId: undefined, remotePageId: undefined, signInPromptOpen: false })
+        selectWorkspacePanel(id)
+      }
+      const syncWorkspaceEntries = () => {
+        const panels = new Map(ctx.slots.entries('main').map(entry => [entry.options.key, entry]))
+        const menu = (panelSource ?? []).filter(({ id }) => panels.has(id))
+        const entries = menu.map(({ id, label }) => ({
+          id: `panel:${id}`, kind: 'panel', panelId: id, label,
+          description: workspaceDescription(id, panels.get(id)?.registrant),
+          route: workspacePanelRoutes.get(id) ?? '/panel/' + encodeURIComponent(id),
+          glyph: React.createElement(WorkspacePanelIcon, { id }),
+          open: () => openWorkspacePanel(id)
+        }))
+        if (botAction) entries.push({
+          id: BOT_RETURN_ID, kind: 'local', route: '/multi-agent-chat',
+          label: ctx.locale.bind(MODES_NS)('multiAgentCollaboration'),
+          description: workspaceDescription(BOT_RETURN_ID, botRegistrant),
+          glyph: React.createElement(IconUsersOutlineRegular, { size: 16 }),
+          open: () => currentBot()?.open()
+        })
+        if (entries.length === value.workspaceEntries.length && entries.every((entry, index) =>
+          entry.id === value.workspaceEntries[index].id && entry.label === value.workspaceEntries[index].label &&
+          entry.description === value.workspaceEntries[index].description)) return
+        publish({ workspaceEntries: entries })
+      }
+      const setWorkspacePanelSource = (panels, renderPanelIcon, selectPanel) => {
+        if (!enabled || !panels || !renderPanelIcon || !selectPanel) return
+        iconRenderer = renderPanelIcon
+        selectWorkspacePanel = selectPanel
+        if (panelSource === panels) return
+        panelSource = panels
+        syncWorkspaceEntries()
+      }
       let workbenches, routeRevision = 0
       const isNativeBot = () => value.workspaceNative && value.workspacePath === '/multi-agent-chat'
       const leaveBot = () => {
@@ -618,22 +708,25 @@ window.__ModuleLoader__.load({
       const navigate = (path, remember = true, afterOpen) => {
         if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) return
         const url = new URL(path, 'https://workspace.invalid')
-        if (url.origin !== 'https://workspace.invalid' || !workspaceDestinations.has(url.pathname.split('/')[1])) return
+        if (url.origin !== 'https://workspace.invalid') return
         const target = url.pathname
+        if (target === '/settings') return host.openCapability('settings')
+        if (target === '/ai-profile') return host.openCapability('usage')
+        if (!workspaceDestinations.has(target.split('/')[1])) return
         if (workspaceRemoteIds.has(target.slice(1))) return openRemoteModule(target.slice(1))
         const request = ++routeRevision
         const preview = url.searchParams.get('preview') === '1'
         resumeChatAfterSignIn = false
         const panel = !preview && workspacePanels[target]
-        const bot = !preview && target === '/multi-agent-chat' && currentBot()
         const nativePanel = Boolean(panel && hasPanel(panel))
-        const native = Boolean(bot || nativePanel)
-        const workspacePath = native ? target : path
-        if (remember && value.workspacePath && value.workspacePath !== workspacePath) trail.push(value.workspacePath)
-        if (!bot) leaveBot()
+        const workspacePath = nativePanel ? target : path
+        const previous = value.workspacePath
+        if (remember && previous && previous !== workspacePath && workspaceDestinations.has(previous.split(/[/?#]/u, 2)[1])) {
+          trail.push(previous)
+        }
+        leaveBot()
         ctx.layout.selectPanel(nativePanel ? panel : null)
-        publish({ workspacePath, workspaceNative: native, mode: 'work', pageId: undefined, remotePageId: undefined, signInPromptOpen: false })
-        if (bot) bot.open()
+        publish({ workspacePath, workspaceNative: nativePanel, mode: 'work', pageId: undefined, remotePageId: undefined, signInPromptOpen: false })
         if (target === '/chat' && workbenches && !value.nativeWork) {
           const leaving = workbenches.leave()
           // Workbench persistence may fail. Keep the original workspace available for retry.
@@ -654,87 +747,18 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register(pageNamespace, messages), 'desktop workspace: page locale')
         pageLocaleMounted = true
       }
-      const taskDrafts = new Map()
-      function templateWorkspace() {
-        const folders = ctx.get('workspaces')?.list.getSnapshot().items ?? []
-        const sessions = ctx.sessions.list.getSnapshot().byId
-        const selected = folders.find(folder => folder.sessionIds.some(id => sessions[id]?.retainedBy?.mainView > 0))
-        if (selected) return selected.workspaceId
-        // Match Harness's current-or-most-recent workspace choice before asking
-        // openWorkspace to resolve its actual reusable blank and retained binding.
-        let latest = -Infinity, target
-        for (const folder of folders) {
-          let updated = -Infinity
-          for (const id of folder.sessionIds) if (sessions[id]) updated = Math.max(updated, sessions[id].updatedAt)
-          if (updated === -Infinity) updated = Date.parse(folder.createdAt)
-          if (!target || updated > latest) { target = folder.workspaceId; latest = updated }
-        }
-        return target
-      }
       const host = {
         t: (...args) => ctx.locale.bind(pageNamespace)(...args),
         get locale() { return ctx.locale.getSnapshot().active },
-        getTaskDraft(name) { return taskDrafts.get(name) },
-        setTaskDraft(name, prompt) {
-          if (prompt) taskDrafts.set(name, { prompt })
-          else taskDrafts.delete(name)
-        },
         setTheme(mode) { if (mode === 'light' || mode === 'dark') ctx.theme.setTheme(mode) },
         async getModelStatus(signal) { return (await import('/desktop-workspace/workspace-host.js')).getModelStatus(ctx, signal) },
         async listTasks(signal) { return (await import('/desktop-workspace/workspace-host.js')).listTasks(ctx, signal) },
         openTask(id) { return navigate('/chat', true, () => ctx.uiWorkspace.openSession(id)) },
-        openCapability(name, input) {
-          if (name === 'desktop') return openDesktop()
-          const sections = { settings: 'general', profile: 'enterprise-account', tools: 'plugins', storage: 'enterprise-account', usage: 'enterprise-account', model: 'models' }
+        openCapability(name) {
+          const sections = { settings: 'general', usage: 'enterprise-account', model: 'models' }
           if (Object.hasOwn(sections, name)) {
             window.dispatchEvent(new CustomEvent('dsh-desktop:open-settings-section', { detail: { id: sections[name] } }))
-            return
           }
-          if (!['code', 'image', 'agents', 'board'].includes(name)) return
-          const route = { code: '/ai-chat', image: '/ai-image-generation', agents: '/multi-agent-chat', board: '/project-board' }[name]
-          const panelId = workspacePanels[route]
-          if (!input?.prompt && panelId && hasPanel(panelId)) {
-            navigate(route)
-            return
-          }
-          if (name === 'board') { navigate('/harness'); return }
-          if (name === 'agents' && !input?.prompt) {
-            if (currentBot()) navigate(route)
-            else if (hasPanel('plugins')) { openDesktop(); ctx.layout.selectPanel('plugins') }
-            else throw new Error(ctx.locale.bind(MODES_NS)('workspaceAgentsUnavailable'))
-            return
-          }
-          const prompt = name === 'image' && input?.prompt
-            ? ctx.locale.bind(MODES_NS)('workspaceImagePrompt', { prompt: input.prompt }) : input?.prompt
-          // Selecting a layout panel aborts Harness's pending session navigation.
-          // Start the draft after the chat panel and any workbench exit have settled.
-          if (!prompt) return navigate('/chat', true, () => ctx.uiWorkspace.startSession())
-          const source = value.workspacePath
-          const typed = taskDrafts.get(name)?.prompt
-          const draft = { prompt: typed?.trim() === input.prompt ? typed : input.prompt }
-          taskDrafts.set(name, draft)
-          return navigate('/chat', true, async () => {
-            const request = routeRevision
-            try {
-              const workspaceId = templateWorkspace()
-              if (!workspaceId) throw new Error(host.t('taskWorkspaceRequired'))
-              await ctx.uiWorkspace.openWorkspace(workspaceId, id => {
-                const binding = ctx.sessions.binding(id)
-                const result = binding && ctx.get('conversation')?.input.requestDraftInitialization(binding, { prompt })
-                if (result !== 'applied') {
-                  draft.sessionId = id
-                  throw new Error(host.t(result === 'preserved' ? 'taskDraftConflict' : 'taskDraftBlocked'))
-                }
-                if (taskDrafts.get(name) === draft) taskDrafts.delete(name)
-              })
-            } catch (error) {
-              draft.error = error instanceof Error ? error.message : host.t('openError')
-              if (request === routeRevision && source && taskDrafts.get(name) === draft) {
-                if (trail.at(-1) === source) trail.pop()
-                navigate(source, false)
-              }
-            }
-          })
         }
       }
       const select = (mode) => {
@@ -848,7 +872,7 @@ if (clearHistory) { historyRequest++; historyDirty = false; deletion.reset() }
       return {
         snapshot: () => value,
         subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn) },
-        select, open, refreshHistory, deletion, navigate, openDesktop, openRemoteModule, hasPanel, host, registerPageLocale,
+        select, open, refreshHistory, deletion, navigate, openDesktop, openRemoteModule, host, registerPageLocale, setWorkspacePanelSource, workspaceEnabled: enabled,
         canGoBack: () => trail.length > 0,
         goBack() { navigate(trail.pop() || '/', false) },
         requestDelete(id, title, epoch) {
@@ -946,16 +970,61 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
             // The layout subscription also fires when unrelated layout state changes.
             if (value.activePanelId === activePanelId) return
             const panelOpen = activePanelId !== null
+            const route = enabled && panelOpen && (workspacePanelRoutes.get(activePanelId) ??
+              (value.workspacePath && value.workspaceEntries.find(entry => entry.panelId === activePanelId)?.route))
             if (panelOpen) leaveBot()
             if (panelOpen && value.mode !== 'work') select('work')
-            const route = enabled && panelOpen && Object.keys(workspacePanels).find(path => workspacePanels[path] === activePanelId)
             const leavingPanel = value.workspaceNative && !panelOpen && value.activePanelId && value.workspacePath !== '/multi-agent-chat'
             publish({ panelOpen, activePanelId, remotePageId: undefined, ...(route ? { workspacePath: route, workspaceNative: true } :
               leavingPanel ? { workspacePath: '/', workspaceNative: false } : panelOpen ? { workspacePath: undefined, workspaceNative: false } : {}) })
           }
           const unsubscribe = ctx.layout.panelInfo.subscribe(panel)
           let stopBot = () => {}, stopBotSlots = () => {}
+          let stopMainSlots = () => {}, stopWorkspaceLocale = () => {}
+          let inventoryFiber
           if (enabled) {
+            inventoryFiber = ctx.inject(['remote', 'remote.pluginInventory'], scoped => {
+              scoped.effect(() => {
+                let inventoryRequest = 0
+                let disposed = false
+                const refreshInventory = async () => {
+                  const request = ++inventoryRequest
+                  try {
+                    const result = await scoped.remote.pluginInventory.list()
+                    if (!active || disposed || request !== inventoryRequest) return
+                    if (!result.ok) {
+                      console.warn('[desktop-workspace] Could not read plugin descriptions', result.error?.code)
+                      return
+                    }
+                    workspacePluginDescriptions = new Map(result.value.entries
+                      .filter(entry => entry.enabled && entry.meta?.description)
+                      .map(entry => [entry.moduleName, entry.meta.description]))
+                    syncWorkspaceEntries()
+                  } catch (error) {
+                    if (!disposed && request === inventoryRequest) console.warn('[desktop-workspace] Could not read plugin descriptions', error)
+                  }
+                }
+                const stopChanged = scoped.remote.$on?.('plugin-manager/changed', refreshInventory)
+                const stopReset = scoped.on('connection/reset', () => {
+                  workspacePluginDescriptions.clear()
+                  syncWorkspaceEntries()
+                  void refreshInventory()
+                })
+                void refreshInventory()
+                return () => {
+                  disposed = true
+                  stopChanged?.()
+                  stopReset?.()
+                  workspacePluginDescriptions.clear()
+                  if (active) syncWorkspaceEntries()
+                }
+              }, 'desktop workspace: plugin descriptions')
+            })
+            stopMainSlots = ctx.slots.subscribe('main', () => {
+              syncWorkspaceEntries()
+              if (value.workspaceNative && value.activePanelId && !hasPanel(value.activePanelId)) closePanel()
+            })
+            stopWorkspaceLocale = ctx.locale.subscribe(syncWorkspaceEntries)
             const source = createBotNavigation(ctx.slots)
             let entry
             const attachBot = () => {
@@ -963,9 +1032,11 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
               if (entry === next) return
               stopBot(); stopBot = () => {}; entry = next
               const bot = readBotReturn(entry)
+              botAction = bot
+              botRegistrant = entry?.registrant
+              syncWorkspaceEntries()
               if (!bot) {
-                // An unloaded plugin yields its route back to the bundled page.
-                if (isNativeBot()) publish({ workspaceNative: false })
+                if (isNativeBot()) publish({ workspacePath: '/', workspaceNative: false })
                 return
               }
               const syncSurface = () => {
@@ -1000,8 +1071,9 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
           document.addEventListener('visibilitychange', visibility)
           void sync()
           return () => {
-active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); unsubscribeSessions(); unsubscribeWork(); unsubscribeChat?.()
-            stopBot(); stopBotSlots()
+            active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); unsubscribeSessions(); unsubscribeWork(); unsubscribeChat?.()
+            stopBot(); stopBotSlots(); stopMainSlots(); stopWorkspaceLocale()
+            inventoryFiber?.dispose()
             window.removeEventListener('dsh-desktop:enterprise-account-changed', account)
             disposeNavigation()
             if (revealWorkSession && ctx.uiWorkspace.openSession === revealWorkSession) ctx.uiWorkspace.openSession = originalOpenSession
@@ -1358,10 +1430,16 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
     }
 
     function canPickMode(state) {
-      if (state.settingsOpen) return false
       return state.mode === 'chat'
         ? !state.hostedApp && !state.pageId && state.conversationId === 'new' && state.landing !== false
         : state.nativeWork && state.workLanding && !state.panelOpen
+    }
+
+    function DesktopModeSeat({ navigation, fallback, ...props }) {
+      const state = React.useSyncExternalStore(navigation.subscribe, navigation.snapshot)
+      React.useEffect(() => navigation.start(), [navigation])
+      if (navigation.workspaceEnabled && !state.workspacePath && fallback !== undefined) return fallback
+      return React.createElement(DesktopModes, { navigation, ...props })
     }
 
     function DesktopModes({ work, rightbarWidth, resizeHandle, navigation, t, locale, slots, shortcuts, botSidebarText }) {
@@ -1371,7 +1449,6 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       const nativeChat = mode === 'chat' && (!state.workspacePath || inChatWorkspace)
       const workspaceView = Boolean(state.workspacePath && !inChatWorkspace && !state.remotePageId && !state.workspaceNative && !state.panelOpen)
       const workspaceDockOpen = mode === 'chat' && state.phase === 'ready' && state.workspaceDockOpen === true
-      React.useEffect(() => navigation.start(), [navigation])
       const panel = React.useRef(null)
       const remoteSeat = React.useRef(null)
       const hostedSeat = React.useRef(null)
@@ -1582,7 +1659,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       React.useEffect(() => () => {
         void window.dshEnterpriseChat?.present({ visible: false, bounds: { x: 0, y: 48, width: 0, height: 0 }, theme: 'light' }).catch(() => {})
       }, [])
-      const showLegacyModePicker = !state.workspacePath && canPickMode(state)
+      const showLegacyModePicker = !state.workspacePath && !settingsOpen && canPickMode(state)
       return React.createElement('div', { className: 'dshModes', 'data-dsh-workspace-dock': workspaceDockOpen ? '' : undefined },
         !state.workspacePath && document.documentElement.dataset.platform === 'darwin' && slots.entriesOfSlot &&
           React.createElement(BotSidebarToggle, { slots, shortcuts, t: botSidebarText }),
@@ -1595,7 +1672,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         showLegacyModePicker && React.createElement('header', { className: 'dshModesHeader' },
           React.createElement(ModeTabs, { mode, select: navigation.choose, t, onAnimate: setAnimateWork })),
         React.createElement('section', { id: 'dsh-panel-work', role: 'tabpanel', 'aria-label': t('work'), hidden: workspaceView || Boolean(state.remotePageId) || nativeChat, className: 'dshModeBody dshWorkContent', 'data-reveal-controls': animateWork, onTransitionEnd: event => { if (event.propertyName === 'clip-path') setAnimateWork(false) }, style: { '--dsh-work-rightbar-width': `${rightbarWidth ?? 0}px` } }, work, resizeHandle),
-        workspaceView && React.createElement(WorkspaceView, { navigation, path: state.workspacePath, t }),
+        workspaceView && React.createElement(WorkspaceView, { navigation, path: state.workspacePath, entries: state.workspaceEntries, t }),
         state.remotePageId && React.createElement('section', {
           ref: remoteSeat, id: 'dsh-panel-remote', role: 'tabpanel', 'aria-label': t('chat'),
           className: 'dshModeBody dshRemoteContent', 'data-dsh-remote-module': state.remotePageId
@@ -1882,7 +1959,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
     const WORKSPACE_CHROME_COPY = {
       zh: {
         home: '总览', chat: 'AI 对话', 'multi-agent-chat': '多代理协作', 'ai-chat': '代码工作台',
-        'ai-image-generation': '图像生成', 'ai-profile': 'AI 活动档案', 'project-board': '任务看板',
+        'ai-image-generation': '图像生成', 'project-board': '任务看板',
         plugins: '插件', knowledge: '知识空间', channel: '订阅', apps: '应用', skills: '工具与技能', square: '发现广场',
         lab: '组件实验室', charts: '数据图表', icons: '图标库', templates: '整页模板', admin: 'AI 管理后台',
         components: 'AI 组件目录', settings: '设置', model: '模型连接', harness: '任务执行台',
@@ -1890,11 +1967,12 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         'templates/hr': '人力资源', 'templates/medical-profile': '健康档案',
         toolbar: '桌面窗口工具栏', expand: '展开导航栏', collapse: '收起导航栏', workspace: '工作台',
         navigation: '工作台导航', quickNavigation: '工作台快捷导航', spaces: '工作空间',
-        dark: '切换深色模式', light: '切换浅色模式', native: '桌面会话与插件', unavailable: '工作台导航加载失败'
+        dark: '切换深色模式', light: '切换浅色模式', native: '桌面会话与插件', unavailable: '工作台导航加载失败',
+        loading: '正在打开工作台…'
       },
       en: {
         home: 'Overview', chat: 'AI chat', 'multi-agent-chat': 'Multi-agent chat', 'ai-chat': 'Code workspace',
-        'ai-image-generation': 'Image generation', 'ai-profile': 'AI activity', 'project-board': 'Task board',
+        'ai-image-generation': 'Image generation', 'project-board': 'Task board',
         plugins: 'Plugins', knowledge: 'Knowledge', channel: 'Subscriptions', apps: 'Apps', skills: 'Tools and skills', square: 'Discover',
         lab: 'Component lab', charts: 'Charts', icons: 'Icons', templates: 'Page templates', admin: 'AI administration',
         components: 'AI components', settings: 'Settings', model: 'Model connection', harness: 'Task console',
@@ -1902,7 +1980,8 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         'templates/hr': 'Human resources', 'templates/medical-profile': 'Health profile',
         toolbar: 'Desktop toolbar', expand: 'Expand navigation', collapse: 'Collapse navigation', workspace: 'Workspace',
         navigation: 'Workspace navigation', quickNavigation: 'Quick navigation', spaces: 'Workspace',
-        dark: 'Switch to dark mode', light: 'Switch to light mode', native: 'Desktop sessions and plugins', unavailable: 'Workspace navigation could not load'
+        dark: 'Switch to dark mode', light: 'Switch to light mode', native: 'Desktop sessions and plugins', unavailable: 'Workspace navigation could not load',
+        loading: 'Opening workspace…'
       }
     }
 
@@ -1914,15 +1993,18 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         let active = true
         import('/desktop-workspace/workspace-chrome.js').then(module => {
           if (active) setResult({ Chrome: module.createWorkspaceChrome(React) })
-        }, error => {
+        }).catch(error => {
           console.error('[desktop-workspace] Loading navigation failed', error)
           if (active) setResult({ failed: true })
         })
         return () => { active = false }
       }, [])
-      if (!workspacePath || !result) return null
-      if (result.failed) return React.createElement('button', { type: 'button', className: 'dshWorkspaceRecoveryButton',
-        title: t('unavailable'), onClick: navigation.openDesktop }, t('native'))
+      if (!workspacePath) return null
+      if (!result || result.failed) {
+        return React.createElement('div', { className: 'dshWorkspaceStartup' },
+          React.createElement('p', { role: result?.failed ? 'alert' : 'status' }, t(result?.failed ? 'unavailable' : 'loading')),
+          result?.failed && React.createElement(Button, { type: 'button', onClick: navigation.openDesktop }, t('native')))
+      }
       const modePicker = workspacePath === '/chat' && canPickMode(state)
         ? React.createElement(WorkspaceModePicker, { mode, select: navigation.choose, t: modeText })
         : null
@@ -2190,11 +2272,15 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
       ctx.slots.inject('conversation.input.decoration', () => ctx.slots.register({
         name: 'conversation.input.decoration', id: 'desktop-work-composer-decoration', inject: () => ({ navigation })
       }, WorkComposerDecoration))
+      ctx.slots.inject('conversation.input.model.picker', () => ctx.slots.register({
+        name: 'conversation.input.model.picker', id: 'desktop-work-model-picker',
+        inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS) })
+      }, WorkModelPickerSeat))
       ctx.slots.inject('conversation.session.header.toolbar', () => ctx.slots.register({
         name: 'conversation.session.header.toolbar', id: 'desktop-work-session-toolbar'
       }, WorkSessionToolbar))
       ctx.slots.inject('sidebar.workspaces.title', () => ctx.slots.register({ name: 'sidebar.workspaces.title', inject: () => ({ t: ctx.locale.bind(MODES_NS) }) }, ({ flat, t }) => t(flat ? 'all' : 'projects')))
-      ctx.slots.inject('desktop.mode.content', () => ctx.slots.register({ name: 'desktop.mode.content', id: 'desktop-chat-work', inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS), locale: ctx.locale, slots: ctx.slots, shortcuts: ctx.get?.('shortcuts'), botSidebarText: ctx.locale.bind(BOT_SIDEBAR_NS) }) }, DesktopModes))
+      ctx.slots.inject('desktop.mode.content', () => ctx.slots.register({ name: 'desktop.mode.content', id: 'desktop-chat-work', inject: () => ({ navigation, t: ctx.locale.bind(MODES_NS), locale: ctx.locale, slots: ctx.slots, shortcuts: ctx.get?.('shortcuts'), botSidebarText: ctx.locale.bind(BOT_SIDEBAR_NS) }) }, DesktopModeSeat))
       ctx.slots.inject('sidebar.workspaces.collection', () => ctx.slots.register({ name: 'sidebar.workspaces.collection', id: 'desktop-shared-collection', inject: () => ({ navigation, botNavigation, t: ctx.locale.bind(MODES_NS), deleteText: ctx.locale.bind(CLOUD_DELETE_NS) }) }, SharedCollection))
       return navigation
     }
@@ -2968,7 +3054,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         flex: 1 1 0;
         min-height: 0;
       }
-      body[data-dsh-desktop-ui="dsh"] .pI_x6G_centerCol {
+      body[data-dsh-desktop-ui="dsh"] .dshModes .pI_x6G_centerCol {
         background: var(--dsk-content-surface);
         border: 0;
         border-radius: var(--dsk-card-radius);
@@ -2991,7 +3077,7 @@ active = false; deletion.reset(); revision++; historyRequest++; unsubscribe(); u
         overflow: hidden;
       }
       html[data-platform="darwin"] body[data-dsh-desktop-ui="dsh"]
-      :is(.pI_x6G_frame > .pI_x6G_centerCol, .dshModes) {
+      .dshModes {
         position: relative;
         z-index: 1;
       }

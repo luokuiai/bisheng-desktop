@@ -19,8 +19,6 @@ import {
   RiCustomerServiceLine,
   RiGroupLine,
   RiHomeLine,
-  RiImageAiLine,
-  RiKanbanView2,
   RiMegaphoneLine,
   RiSearchLine,
   RiSettings4Line,
@@ -163,13 +161,11 @@ export type DashboardNavKey = string;
 /** The Pro dashboard's navigation, the default set. */
 export const DASHBOARD_NAV: DashboardNavItem[] = [
   { key: "home", label: "首页", icon: RiHomeLine, href: "/templates/dashboard", badge: 152 },
-  { key: "project-board", label: "任务看板", icon: RiKanbanView2, href: "/project-board" },
   { key: "marketing", label: "营销", icon: RiMegaphoneLine, href: "/templates/marketing" },
   { key: "hr", label: "人力资源", icon: RiGroupLine, href: "/templates/hr" },
   { key: "finance", label: "财务", icon: RiBankLine, href: "/templates/finance" },
   { key: "medical", label: "健康报告", icon: RiAsterisk, href: "/templates/medical-profile" },
-  { key: "ai-chat", label: "AI 对话", icon: RiChatAiLine, href: "/ai-chat" },
-  { key: "ai-image", label: "AI 图像生成", icon: RiImageAiLine, href: "/ai-image-generation" },
+  { key: "chat", label: "AI 对话", icon: RiChatAiLine, href: "/chat" },
   { key: "profile", label: "个人资料", icon: RiUserSmileLine, href: "/ai-profile" },
 ];
 

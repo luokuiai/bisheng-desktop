@@ -3,14 +3,13 @@ import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { WorkspaceProvider } from '../packages/dsh-desktop-client-ui/workspace/host/context'
-import { TaskComposer } from '../packages/dsh-desktop-client-ui/workspace/host/composer'
 import { ModelStatusPanel } from '../packages/dsh-desktop-client-ui/workspace/host/model-status'
 import { HarnessWorkspace } from '../packages/dsh-desktop-client-ui/workspace/app/harness/workspace'
 import { RightSidebarButton } from '../packages/dsh-desktop-client-ui/workspace/components/workspace/right-sidebar-control'
 import { ChatSidebar } from '../packages/dsh-desktop-client-ui/workspace/chat-sidebar'
+import { ChatSearch } from '../packages/dsh-desktop-client-ui/workspace/chat-controls'
 import HomePage from '../packages/dsh-desktop-client-ui/workspace/app/page'
 import TemplatesPage from '../packages/dsh-desktop-client-ui/workspace/app/templates/page'
-import SettingsPage from '../packages/dsh-desktop-client-ui/workspace/app/settings/page'
 import { PageBoundary } from '../packages/dsh-desktop-client-ui/workspace/host/page-boundary'
 import { inertWhen } from '../packages/dsh-desktop-client-ui/workspace/host/inert'
 import Links from '../packages/dsh-desktop-client-ui/workspace/host/link'
@@ -34,32 +33,69 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-async function mount(component, props) {
-  await act(async () => root.render(React.createElement(WorkspaceProvider, { path: '/', host, navigate },
+async function mount(component, props, entries) {
+  await act(async () => root.render(React.createElement(WorkspaceProvider, { path: '/', host, navigate, entries },
     React.createElement(component, props))))
 }
 
-it.each([['zh-CN', '开始对话', '6 个入口'], ['en', 'Start a chat', '6 destinations']])(
-  'shows only the chat action and six workspace cards on the overview in %s', async (locale, chatLabel, count) => {
+it.each([['zh-CN', '打开工作空间', 'AI 对话', '开始对话'], ['en', 'Open a workspace', 'AI chat', 'Start a conversation']])(
+  'offers a hero CTA and puts Chat, AI profile, and registered destinations below it in %s', async (locale, heading, chatLabel, startLabel) => {
     host.locale = locale
-    await mount(HomePage)
-    const [hero, workspaces] = container.querySelectorAll('main > section')
-    expect([...hero.querySelectorAll('a')].map(link => [link.getAttribute('href'), link.textContent.trim()]))
-      .toEqual([['/chat', chatLabel]])
-    expect(workspaces.querySelector('header').textContent).toContain(count)
-    expect([...workspaces.querySelectorAll('a')].map(link => link.getAttribute('href'))).toEqual([
-      '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/ai-profile', '/project-board'
-    ])
-    expect(container.querySelectorAll('main > section')).toHaveLength(2)
-    await act(async () => hero.querySelector('a').click())
+    const open = vi.fn()
+    const glyph = React.createElement('svg', { 'data-plugin-icon': '' })
+    await mount(HomePage, undefined, [{ id: 'panel:test', label: 'Registered workspace', glyph, open }])
+    const [hero, spaces] = container.querySelectorAll('main > section')
+    const links = hero.querySelectorAll('a')
+    expect(links).toHaveLength(1)
+    expect(links[0].textContent.trim()).toBe(startLabel)
+    expect(links[0].getAttribute('href')).toBe('/chat')
+    await act(async () => links[0].click())
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/chat')
+    navigate.mockClear()
+    expect(spaces.querySelector('h2').textContent).toBe(heading)
+    const [chat, profile, plugin] = spaces.querySelectorAll('button')
+    expect(chat.textContent).toContain(chatLabel)
+    expect(plugin.textContent).toBe('Registered workspace')
+    expect(plugin.querySelector('[data-plugin-icon]')).not.toBeNull()
+    await act(async () => profile.click())
+    expect(host.openCapability).toHaveBeenCalledWith('usage')
+    expect(navigate).not.toHaveBeenCalled()
+    await act(async () => chat.click())
     expect(navigate).toHaveBeenCalledWith('/chat')
+    await act(async () => plugin.click())
+    expect(open).toHaveBeenCalledOnce()
+    await mount(HomePage)
+    expect(container.querySelector('[data-workspace-card="panel:test"]')).toBeNull()
   })
+
+it('keeps quick-search shortcut metadata and restores focus after closing the pill field', async () => {
+  function Search() {
+    const [expanded, setExpanded] = React.useState(false)
+    const [query, setQuery] = React.useState('')
+    return React.createElement(ChatSearch, {
+      caption: 'Quick search', label: 'Search conversations', clearLabel: 'Clear',
+      placeholder: 'Search…', expanded, shortcut: 'Meta+K', query, maxLength: 64,
+      inputRef: null, onOpen: () => setExpanded(true),
+      onClose: () => { setExpanded(false); setQuery('') }, onChange: setQuery
+    })
+  }
+  await mount(Search)
+  const trigger = container.querySelector('button.dshChatSearchPill')
+  expect(trigger.textContent).toBe('Quick search')
+  expect(trigger.getAttribute('aria-keyshortcuts')).toBe('Meta+K')
+  await act(async () => trigger.click())
+  const input = container.querySelector('.dshChatSearchPill input')
+  expect(document.activeElement).toBe(input)
+  await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  expect(document.activeElement).toBe(container.querySelector('button.dshChatSearchPill'))
+})
 
 it('omits AI activity from the shared workspace sidebar', async () => {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
   await mount(ChatSidebar, { path: '/chat', host, navigate })
   const sidebar = container.querySelector('.dshWorkspaceChatSidebar')
-  expect(sidebar.querySelector('a[href="/project-board"]')).not.toBeNull()
+  expect(sidebar.querySelector('a[href="/chat"]')).not.toBeNull()
+  expect(sidebar.querySelector('a[href="/project-board"]')).toBeNull()
   expect(sidebar.querySelector('a[href="/ai-profile"]')).toBeNull()
 })
 
@@ -76,48 +112,10 @@ it('renders the shared flat destination list when the chat scene receives one', 
   expect(sidebar.querySelector('a[href="/knowledge"]').getAttribute('aria-current')).toBe('page')
 })
 
-it('keeps workbench links in the Harness document and forwards real settings actions', async () => {
-  await mount(SettingsPage)
-  await act(async () => container.querySelectorAll('button')[1].click())
-  expect(host.openCapability).toHaveBeenCalledWith('profile', undefined)
-  await act(async () => container.querySelector('a').click())
-  expect(navigate).toHaveBeenCalledWith('/model')
+it('keeps workbench links in the Harness document', async () => {
   await mount(Links, { href: '/charts?chart=funnel-chart-card#chart-preview', children: 'Chart' })
   await act(async () => container.querySelector('a').click())
   expect(navigate).toHaveBeenLastCalledWith('/charts?chart=funnel-chart-card#chart-preview')
-})
-
-it.each([['zh-CN', '打开桌面会话与插件'], ['en', 'Open desktop sessions and plugins']])(
-  'opens the desktop from Settings in %s', async (locale, label) => {
-    host.locale = locale
-    await mount(SettingsPage)
-    const action = [...container.querySelectorAll('button')].find(button => button.textContent === label)
-    expect(action).toBeDefined()
-    await act(async () => action.click())
-    expect(host.openCapability).toHaveBeenCalledWith('desktop', undefined)
-  })
-
-it('transfers a typed image prompt to the real task draft without inventing an image result', async () => {
-  await mount(TaskComposer, { name: 'image' })
-  const input = container.querySelector('input')
-  const submit = container.querySelector('[type=submit]')
-  expect(submit.disabled).toBe(true)
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '  forest at dusk  ')
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-  await act(async () => submit.click())
-  expect(host.openCapability).toHaveBeenCalledWith('image', { prompt: 'forest at dusk' })
-})
-
-it('restores the exact source text and opens the conflicting native blank when the template is revisited', async () => {
-  host.getTaskDraft = () => ({ prompt: 'a retained template task', error: 'Existing draft', sessionId: 'occupied-blank' })
-  await mount(TaskComposer, { name: 'code' })
-  expect(container.querySelector('input').value).toBe('a retained template task')
-  const alert = container.querySelector('[role=alert]')
-  expect(alert.textContent).toContain('Existing draft')
-  await act(async () => alert.querySelector('button').click())
-  expect(host.openTask).toHaveBeenCalledWith('occupied-blank')
 })
 
 it('renders connection failures, retries with current model metadata and aborts stale requests', async () => {
@@ -170,13 +168,12 @@ it('applies and releases the real DOM inert boundary in React 18', async () => {
   expect(container.querySelector('aside').hasAttribute('inert')).toBe(false)
 })
 
-it('keeps all four interactive template previews available when business plugins are installed', async () => {
+it('omits the removed page previews from the template catalogue', async () => {
   await mount(TemplatesPage)
   for (const slug of ['multi-agent-chat', 'ai-chat', 'ai-image-generation', 'project-board']) {
-    const href = `/${slug}?preview=1`
-    await act(async () => container.querySelector(`a[href="${href}"]`).click())
-    expect(navigate).toHaveBeenLastCalledWith(href)
+    expect(container.querySelector(`a[href^="/${slug}"]`)).toBeNull()
   }
+  expect(container.querySelector('a[href="/templates/dashboard"]')).not.toBeNull()
 })
 
 it('retains the same focusable toolbar button ref across drawer open and close', async () => {

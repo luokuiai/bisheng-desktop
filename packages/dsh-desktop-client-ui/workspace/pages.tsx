@@ -17,12 +17,6 @@ const pages = {
   '/charts': lazy(() => import('./app/charts/page')),
   '/icons': lazy(() => import('./app/icons/page')),
   '/templates': lazy(() => import('./app/templates/page')),
-  '/ai-chat': lazy(() => import('./app/ai-chat/page')),
-  '/ai-image-generation': lazy(() => import('./app/ai-image-generation/page')),
-  '/ai-profile': lazy(() => import('./app/ai-profile/page')),
-  '/multi-agent-chat': lazy(() => import('./app/multi-agent-chat/page')),
-  '/project-board': lazy(() => import('./app/project-board/page')),
-  '/settings': lazy(() => import('./app/settings/page')),
   '/model': lazy(() => import('./app/model/page')),
   '/harness': lazy(() => import('./app/harness/page')),
 }

@@ -24,7 +24,9 @@ Harness 0.2.0-rc.2 的 `dsh-client-ui-input-trigger` 将 pointer hover 与 keybo
 
 `conversation.chat.runningStatus` 是会话作用域的单占用插槽，只在会话运行期间挂载。它从 `RunningStatus` 接收格式化后的实际用时和上游默认内容，保留上游的计时、停止清理与无障碍通知。桌面仅在 `/chat` 的原生工作界面挂载 Board UI 的 `AgentThinking`，资源未就绪及其他界面使用默认内容。减少动态效果时保留静态状态提示。上游提供等价渲染接缝后可移除此插槽补丁。
 
-权限、模型与推理强度、工作区和预设菜单继续由各自的上游组件管理，仅给上游渲染的菜单表面传入样式标记，供桌面 Work 场景共享 Board UI 外观。权限确认、选中项、键盘焦点和子菜单定位沿用上游逻辑。改动在已发现的客户端模块执行阶段生效，未增加加载入口、Profile 依赖或安装资源。上游能配置这些样式标记及 Todo 展开行为后可移除相应补丁。相关回归位于 `test/workspace-conversation.test.mjs` 与 `test/workspace-chrome.test.mjs`。
+`conversation.input.model.picker` 是会话作用域的单占用插槽。Work 从宿主已有 `/desktop-workspace` 资源加载 Board UI `ModelPicker`。模型目录和推理等级由原生 `ModelSelect` 注入。企业模型沿用账号页的 `服务商 / 模型` 展示约定，在第一个带空格的分隔符处分组，保留模型名内部的路径。无服务商前缀的条目归入「企业模型」。双栏省略搜索。Work 按 Agent Team 的 `local-` 路由前缀与 `default` / `CLI default` 目录条目识别并隐藏 CLI 代理路由。选择动作仍提交原生目录的路由和模型 ID。其他界面使用上游选择器。Work 仅在原目录没有 CLI 代理路由时允许使用上游选择器作为回退。上游提供等价的选择器接缝后移除此处 slot 补丁。
+
+权限、工作区和预设菜单继续由各自的上游组件管理。会话与工作区行菜单在 AI 对话中向侧栏内展开，移出时保持定位，仍支持选中项、点击外部或按 Esc 关闭。工作区视图选项沿用原分组、排序、筛选动作，以局部样式标记共享 Board UI 的菜单外观。改动在客户端模块执行阶段生效，复用现有资源入口和 React 实例。上游能配置对应菜单行为与样式，或提供 Todo 展开行为后，可移除相应补丁。相关回归位于 `test/workspace-conversation.test.mjs`、`test/desktop-modes-ui.test.mjs` 与 `test/workspace-chrome.test.mjs`。
 
 ### 原生语言同步（Harness 0.2.0-rc.2，2026-10-20）
 
@@ -464,23 +466,34 @@ Work 右栏由原生 `rightbar` 插槽及会话布局服务管理。普通展开
 
 `dsh-desktop-client-ui` 在 `shell.overlay` 提供 48px 工具栏、文字侧栏与 60px 快捷栏，在 `desktop.mode.content` 渲染总览与工作空间。工作台激活时让出 Harness 原有侧栏轨道，返回桌面会话和插件时恢复该轨道。侧栏按钮、快捷键及工作区右栏共用同一个窗口状态。工作台颜色随 Harness 活动主题变化，文字使用随包提供的 Inter 和系统中文字体。
 
+`desktop.mode.content` 将上游 `CenterColumn`、`RightbarColumn` 和原生定位的拖拽手柄作为 `fallback` 提供给宿主。工作台路由打开时使用新版内容区，返回经典界面时渲染同一份原生内容，避免经典右侧继续受工作台容器与右栏定位影响。此接缝只覆盖右侧内容区，左侧沿用现有侧栏贡献项。
+
+有工作台资源的页面从总览路由启动。客户端挂载后，通过 HTML 中已加载的工作台样式显示加载层，等同源 `/desktop-workspace/workspace-chrome.js` 可用后再呈现新版外壳。导入失败保留原始错误并提供进入原生桌面内容的入口。资源仍由当前宿主提供，普通 Profile 和 Safe Mode 的模块解析、HTML 引导及 bootstrap 顺序保持原样。行为回归见 `test/desktop-modes-ui.test.mjs`。
+
 `workspace/pages.tsx` 及同目录组件是页面的源码。`npm run workspace:prepare` 用 esbuild 拆分页面，编译 Tailwind 4、CSS Modules 和界面素材，写到受控的 `dsh-web-frontend/dist/desktop-workspace`。页面的 React、ReactDOM、JSX runtime 都从已激活的 Harness 客户端加载器取得。HTML 仅增加样式链接，原有 bootstrap 顺序与授权入口继续生效。拖拽、图表、图标、动效和无障碍控件依赖用于编译原型对应的交互组件，安装包仅分发构建后的浏览器代码与素材。字体与组件来源见 `packages/dsh-desktop-client-ui/workspace/NOTICE.md`。
 
-工作台路由保存在当前窗口。会话、模型目录、企业账号、设置和插件安装状态仍由对应服务持有。显示已注册的看板、图像和代码工作区时消费 `main` 的实际 key，多代理使用 `bot-return` 公布的 surface 与 actions。模板目录中的 `preview=1` 显式打开本地示例。客户端收到插件注册、卸载或切换时重新同步侧栏与正文。离开页面释放 portal、监听器和订阅。模型和企业服务不可用时保留配置与重试入口。
+工作台路由保存在当前窗口。右上角设置按钮直接打开设置弹窗的「常规」分区，保留当前页面。首页和 AI 对话展开时共用同一个侧栏轨道宽度，顶栏分隔线与轨道末端对齐。会话、模型目录、企业账号、设置和插件安装状态仍由对应服务持有。通过原生入口打开已注册的看板、图像和代码工作区时消费 `main` 的实际 key，多代理使用 `bot-return` 公布的 surface 与 actions。客户端收到插件注册、卸载或切换时重新同步侧栏与正文。离开页面释放 portal、监听器和订阅。模型和企业服务不可用时保留配置与重试入口。
+
+`dsh-client-ui-sidebar@0.2.1-rc.2` 的 `sidebar.content` 接缝转交原生侧栏的面板目录、图标渲染和打开动作。桌面在客户端 UI 挂载阶段将仍具有 `main` 入口的菜单贡献项同步到新版侧栏与首页「打开工作空间」。插件管理和自动化任务只出现在侧栏。活动面板卸载时返回总览。该接缝只读取活动客户端注册，沿用原有 Profile、包解析和启动流程。上游开放对应目录后可移除此补丁。行为回归见 `test/desktop-modes-ui.test.mjs`、`test/desktop-workspace-pages.test.mjs` 和 `test/workspace-chrome.test.mjs`。
+
+AI 对话通过 `sidebar.content.renderSettings` 保留设置组件的挂载，隐藏侧栏触发器。工具栏通过现有事件打开设置，弹框仍由同一设置组件挂载到 `body`。行为回归覆盖展开和收起侧栏时打开「常规」并返回原对话。
+
+首页保留横幅的「开始对话」作为 AI 对话的快捷入口。插件卡片通过独立的 Cordis 注入作用域从当前 Profile 的 `remote.pluginInventory` 读取简介，由 Harness 语言服务解析。目录服务不可用时继续展示页面和卡片标题。注册者标识可匹配包名时直接使用，旧版四个工作空间用已知注册 ID 关联包名。元数据刷新、连接重建和语言切换会更新简介，缺失简介时卡片仅展示标题。
 
 工作台正文与插件可直接消费 Harness 活动主题的 CSS 变量。背景使用 `--dsw-alias-bg-base`，主次文字使用 `--dsw-alias-label-primary`、`--dsw-alias-label-secondary`，选中态使用 `--dsw-alias-state-business-primary`。桌面文字栈通过 `--dsh-font-family-text-default` 提供本地 Inter、苹方和微软雅黑。
 
 | 工作区 | 宿主集成 |
 | --- | --- |
-| 代码工作台 `/ai-chat` | `main` 面板 `code-workbench-layout` |
-| 图像生成 `/ai-image-generation` | `main` 面板 `copylee-image-gen.paintings` |
-| 任务看板 `/project-board` | `main` 面板 `super-kanban` |
-| 多代理协作 `/multi-agent-chat` | `sidebar.footer.action` 的 `bot-return` 提供 surface 与切换方法，正文复用 Work 会话 |
-| 原桌面会话与插件 | 「设置 → 打开桌面会话与插件」恢复原桌面导航 |
+| 代码工作台 | `main` 面板 `code-workbench-layout` |
+| 图像生成 | `main` 面板 `copylee-image-gen.paintings` |
+| 任务看板 | `main` 面板 `super-kanban` |
+| 多代理协作 | `sidebar.footer.action` 的 `bot-return` 提供 surface 与切换方法，正文复用 Work 会话 |
 
 工作台挂载时，`body[data-dsh-workspace-scene]` 标记所有由该外壳管理的页面，`data-dsh-workspace-density` 取 `expanded` 或 `compact`。打开实际插件后另有 `data-dsh-workspace-native` 标记对应业务区。插件若需在工作台中收起重复的悬浮入口，应使用 scene 判断外壳是否存在。切回原桌面会移除这些标记，插件可恢复原有入口。
 
 总览式侧栏及收起后的快捷栏在底部提供 `[data-workspace-account-slot]`。工作台挂载、切换或离开该位置时通过 `luokui:workspace-account-slot-ready` 同步席位。`settings.launcher` 的桌面账号贡献项通过 React portal 将唯一触发器放入该位置，继续使用原生设置动作和账号状态。席位卸载后触发器回到原侧栏。
+
+账号菜单打开时刷新余额等账号状态。头像只在显示身份变化时读取详细资料，并让菜单与触发器共享图片失败回退。回归见 `test/desktop-settings-view.test.mjs`。
 
 工作台账号菜单和对话模板的「添加」菜单共用弹层样式和 150ms 动效。Harness `dsh-web-frontend@0.2.1-rc.2` 自带的共享 `Menu` 在关闭时立即卸载。构建时为实际运行的共享组件接入可选的 `animatePresence`，关闭时立即停止交互，等 CSS 退场动画结束后移除弹层。上游提供退场生命周期后可移除此接缝。
 

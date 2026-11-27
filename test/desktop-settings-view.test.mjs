@@ -9,13 +9,14 @@ import { JSDOM } from 'jsdom'
 import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, expect, it, vi } from 'vitest'
+import * as usageProfile from '../packages/dsh-desktop-client-ui/workspace/usage-profile'
 
 const source = await readFile(new URL('../packages/dsh-desktop-settings/client.js', import.meta.url), 'utf8')
 const usageData = ({ storage, ...summary }) => ({ summary: { status: 'ready', data: summary }, storage: { status: 'ready', data: storage } })
 let cleanup
 afterEach(async () => { await cleanup?.(); cleanup = undefined; vi.unstubAllGlobals() })
 
-async function fixture(language = 'zh', settingsProtocolVersion = 1, signedIn = true) {
+async function fixture(language = 'zh', settingsProtocolVersion = 1, signedIn = true, board = false) {
   const dom = new JSDOM('<html><head></head><body><div id="root"></div></body></html>', { url: 'http://localhost/' })
   vi.stubGlobal('window', dom.window)
   vi.stubGlobal('document', dom.window.document)
@@ -50,7 +51,29 @@ async function fixture(language = 'zh', settingsProtocolVersion = 1, signedIn = 
   dom.window.dshDesktop = { openPhonePairing: vi.fn(async () => {}), settingsInfo: async () => ({ desktopVersion: '1.0.1', harnessVersion: '0.2.0-rc.2' }), settingsAction: vi.fn(async () => {}) }
   dom.window.__ModuleLoader__ = { load: entry => { definition = entry } }
   const resize = vi.fn()
-  vm.runInNewContext(source, { window: dom.window, document: dom.window.document, AbortController, fetch: request, CustomEvent: dom.window.CustomEvent, ResizeObserver: class { observe = resize; disconnect = vi.fn() } })
+  const ResizeObserver = class { observe = resize; disconnect = vi.fn() }
+  if (board) {
+    const sheet = document.head.appendChild(document.createElement('link'))
+    sheet.href = '/desktop-workspace/workspace.css'
+    dom.window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} })
+    vi.stubGlobal('ResizeObserver', ResizeObserver)
+    const measure = dom.window.HTMLElement.prototype.getBoundingClientRect
+    dom.window.HTMLElement.prototype.getBoundingClientRect = function () {
+      return this.classList.contains('recharts-responsive-container')
+        ? new dom.window.DOMRect(0, 0, 520, 200)
+        : measure.call(this)
+    }
+  }
+  const client = board ? source
+    .replaceAll("import('/desktop-workspace/host-runtime.js')", 'loadHost()')
+    .replace("import('/desktop-workspace/usage-profile.js')", 'loadUsageProfile()')
+    : source
+  vm.runInNewContext(client, {
+    window: dom.window, document: dom.window.document, AbortController, fetch: request,
+    CustomEvent: dom.window.CustomEvent, ResizeObserver,
+    loadHost: async () => ({ bindHost() {} }),
+    loadUsageProfile: async () => usageProfile
+  })
   const plugin = definition.factory(id => {
     if (id === 'react') return React
     if (id === 'react-dom') return { createPortal }
@@ -85,7 +108,7 @@ async function fixture(language = 'zh', settingsProtocolVersion = 1, signedIn = 
 }
 
 it.each(['zh', 'en'])('renders the enterprise identity, metrics, rolling heatmap and trend (%s)', async language => {
-  const f = await fixture(language)
+  const f = await fixture(language, 1, true, true)
   const totals = { total_tokens: 1200, input_tokens: 1000, output_tokens: 200, message_count: 12, missing_usage_count: 1 }
   const end = Date.parse('2026-11-26T00:00:00+08:00')
   const points = Array.from({ length: 40 }, (_, index) => {
@@ -110,12 +133,11 @@ it.each(['zh', 'en'])('renders the enterprise identity, metrics, rolling heatmap
   expect(document.querySelector('.dshUsageHandle').textContent).toBe('@临时访客')
   expect(document.querySelector('.dshUsageAvatar img').getAttribute('src')).toBe('https://example.test/avatar.png')
   expect(document.querySelector('.dshUsageCover').getAttribute('aria-hidden')).toBe('true')
-  expect(document.querySelector('.dshUsageCover img').getAttribute('src').startsWith('data:image/')).toBe(true)
+  expect(document.querySelector('.dshUsageCover img').getAttribute('src')).toBe('/desktop-workspace/templates/ai-profile-cover.png')
   expect(document.querySelector('[data-usage-contribution]').textContent).toContain('480')
   expect([...document.querySelectorAll('[data-usage-metric]')].map(node => node.dataset.usageMetric)).toEqual(language === 'zh'
-    ? ['累计词元', '峰值词元', '最长任务', '最长连续记录']
-    : ['Total tokens', 'Peak tokens', 'Longest task', 'Longest streak'])
-  expect(document.querySelector('[data-usage-metric]:nth-child(3)').textContent).toContain('—')
+    ? ['累计词元', '峰值词元', '最长连续记录']
+    : ['Total tokens', 'Peak tokens', 'Longest streak'])
   expect(document.querySelectorAll('.dshUsageHeatmap [data-date]')).toHaveLength(266)
   expect(document.querySelector('.dshUsageHeatmap').style.getPropertyValue('--dsh-usage-columns')).toBe('38')
   expect(document.querySelector('.dshUsageStorage').textContent).toContain('51.2 MB')
@@ -132,6 +154,8 @@ it.each(['zh', 'en'])('renders the enterprise identity, metrics, rolling heatmap
   await click(modes()[2])
   expect(document.querySelectorAll('.dshUsageHeatmap [data-date]')).toHaveLength(266)
   const observed = document.querySelector('.dshUsageHeatmap [data-state="observed"]')
+  expect(observed.classList.contains('animate-cell-pop')).toBe(true)
+  expect(observed.getAttribute('data-tier')).toBe('5')
   await act(async () => observed.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })))
   expect(document.querySelector('[role=tooltip]').textContent).toContain(language === 'zh' ? '1,200 Token' : '1,200 tokens')
   expect(document.querySelector('[role=tooltip]').textContent).toContain(language === 'zh' ? '12 条消息' : '12 messages')
@@ -143,11 +167,36 @@ it.each(['zh', 'en'])('renders the enterprise identity, metrics, rolling heatmap
   expect(observed.getAttribute('aria-label')).toContain('12')
   await act(async () => observed.focus())
   expect(document.querySelector('[role=tooltip]').textContent).toContain('12')
-  expect(document.querySelector('[data-usage-trend] svg')).not.toBeNull()
+  const trend = document.querySelector('[data-usage-trend]')
+  expect(trend.querySelector('.animate-chart-reveal')).not.toBeNull()
+  expect(trend.textContent).toContain(language === 'zh' ? '1,200' : '1.2K')
+  expect(trend.querySelector('svg')).not.toBeNull()
+  expect(trend.textContent).not.toContain('+9.4%')
   expect(surface).not.toHaveBeenCalled()
   await act(async () => f.update({ epoch: 2, connected: false }))
   expect(document.querySelector('[data-usage-identity]')).toBeNull()
   expect(document.body.textContent).toContain(language === 'zh' ? '登录企业账号后可查看' : 'Sign in to view')
+})
+
+it.each([false, true])('omits unavailable metrics and preserves a measured zero (daily buckets=%s)', async hasPoint => {
+  const f = await fixture('zh', 1, true, true)
+  const totals = { total_tokens: null, input_tokens: null, output_tokens: null, message_count: 0, missing_usage_count: 0 }
+  const points = hasPoint ? [{ ...totals, start_at: '2026-11-26T00:00:00+08:00', end_at: '2026-11-27T00:00:00+08:00' }] : []
+  window.dshEnterpriseChat.usage = async () => usageData({ totals, storage: null, points })
+  const entry = f.registrations.find(row => row.options.id === 'desktop-usage')
+  await f.mount(entry.Component, entry.options.inject())
+  expect(document.querySelector('[data-usage-trend]')).toBeNull()
+  expect(document.querySelector('.dshUsageStorage')).toBeNull()
+  expect(document.querySelector('.dshUsageMetricSwitch')).toBeNull()
+  expect([...document.querySelectorAll('[data-usage-metric]')].map(node => node.textContent))
+    .toEqual(hasPoint ? ['0 天最长连续记录'] : [])
+  if (hasPoint) {
+    expect(document.querySelector('.dshUsageHeatmap [data-state="observed"]').getAttribute('aria-label')).toBe('2026-11-26 · 0 条消息')
+    expect(document.querySelector('.dshUsageHeatmap [data-state="outside"]').getAttribute('aria-label')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  } else {
+    expect(document.querySelector('.dshUsageHeatmap')).toBeNull()
+    expect(document.body.textContent).toContain('暂无用量记录')
+  }
 })
 
 it.each(['zh', 'en'])('degrades a missing profile to initials without an organization row (%s)', async language => {
@@ -160,7 +209,7 @@ it.each(['zh', 'en'])('degrades a missing profile to initials without an organiz
   expect(document.querySelector('.dshUsageAvatar img')).toBeNull()
   expect(document.querySelector('.dshUsageAvatar').textContent).toBe('张三')
   expect(document.querySelector('.dshUsageHandle')).toBeNull()
-  expect(document.querySelector('.dshUsageHeatmap')).not.toBeNull()
+  expect(document.querySelector('.dshUsageHeatmap')).toBeNull()
   expect(document.body.textContent).not.toContain(language === 'zh' ? '剩余积分' : 'Credits remaining')
 })
 
@@ -942,6 +991,56 @@ it('shows the account avatar when available and falls back to the app logo', asy
   expect(image().getAttribute('src')).toBe(second)
   await setAvatar(undefined)
   expect(image().getAttribute('src')).toBe(logo)
+})
+
+it('loads the enterprise profile photo when the workspace account has no login avatar', async () => {
+  const f = await fixture()
+  const profilePhoto = 'https://example.test/employee-avatar.png'
+  window.dshEnterpriseChat.profile = vi.fn(async () => ({ avatar: profilePhoto }))
+  const seat = document.body.appendChild(document.createElement('div'))
+  seat.dataset.workspaceAccountSlot = 'expanded'
+  await f.render('settings.launcher', { wide: false })
+  const image = () => seat.querySelector('.dshAccountTrigger .dshAccountAvatar img')
+  expect(image().getAttribute('src')).toBe(profilePhoto)
+  const triggerImage = image()
+  const menuImage = () => seat.querySelector('.dshAccountMenuIdentity .dshAccountAvatar img')
+  for (let index = 0; index < 3; index++) {
+    await click(seat.querySelector('.dshAccountTrigger'))
+    expect(menuImage().getAttribute('src')).toBe(profilePhoto)
+    expect(image()).toBe(triggerImage)
+    await click(seat.querySelector('.dshAccountTrigger'))
+    expect(image()).toBe(triggerImage)
+  }
+  expect(window.dshEnterpriseChat.profile).toHaveBeenCalledOnce()
+  await click(seat.querySelector('.dshAccountTrigger'))
+  await act(async () => menuImage().dispatchEvent(new window.Event('error')))
+  const fallback = image()
+  expect(fallback.getAttribute('src')).toBe('/dsh-desktop-logo-light.png')
+  await click(seat.querySelector('.dshAccountTrigger'))
+  await click(seat.querySelector('.dshAccountTrigger'))
+  expect(image()).toBe(fallback)
+  expect(menuImage().getAttribute('src')).toBe('/dsh-desktop-logo-light.png')
+})
+
+it('discards a previous profile response and tries the login avatar before the default logo', async () => {
+  const f = await fixture()
+  const previous = Promise.withResolvers()
+  const profileAvatar = 'https://example.test/current-profile.png'
+  const loginAvatar = 'https://example.test/current-login.png'
+  window.dshEnterpriseChat.profile = vi.fn()
+    .mockReturnValueOnce(previous.promise)
+    .mockResolvedValue({ avatar: profileAvatar })
+  await f.render('settings.launcher', { wide: true })
+  expect(window.dshEnterpriseChat.profile).toHaveBeenCalledOnce()
+  f.setAccount({ connected: true, user: { id: 'next-account', display_name: '李四', avatar_url: loginAvatar } })
+  await act(async () => window.dispatchEvent(new window.CustomEvent('dsh-desktop:enterprise-account-changed')))
+  await act(async () => previous.resolve({ avatar: 'https://example.test/previous-avatar.png' }))
+  const image = () => document.querySelector('.dshAccountTrigger .dshAccountAvatar img')
+  expect(image().getAttribute('src')).toBe(profileAvatar)
+  await act(async () => image().dispatchEvent(new window.Event('error')))
+  expect(image().getAttribute('src')).toBe(loginAvatar)
+  await act(async () => image().dispatchEvent(new window.Event('error')))
+  expect(image().getAttribute('src')).toBe('/dsh-desktop-logo-light.png')
 })
 
 it('shows reported approvals on the account entry and the approvals action', async () => {

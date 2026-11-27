@@ -6,6 +6,7 @@ import * as jsx from 'react/jsx-runtime'
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import { afterEach, expect, it, vi } from 'vitest'
+import { WorkModelPicker } from '../packages/dsh-desktop-client-ui/workspace/work-model-picker'
 import { readTranscript, recentRows, submitSuggestion, WorkHistory, WorkSpeech } from '../packages/dsh-desktop-client-ui/workspace/static/work-conversation.js'
 
 function store(value) {
@@ -137,6 +138,93 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   vi.useRealTimers()
+})
+
+it('uses catalog routes and efforts, retains failed selections, and dismisses the Work picker from the keyboard', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  vi.stubGlobal('CSS', { escape: value => value })
+  const host = document.body.appendChild(document.createElement('div'))
+  root = createRoot(host)
+  const routes = [
+    { id: 'first', name: 'First provider', models: [
+      { id: 'shared', name: 'First model' }, { id: 'extra-a', name: 'Model A' },
+      { id: 'extra-b', name: 'Model B' }, { id: 'extra-c', name: 'Model C' }
+    ] },
+    { id: 'second', name: 'Second provider', models: [{ id: 'shared', name: 'Second model', reasoning: { defaultEffort: 'medium' } }] }
+  ]
+  const current = { provider: 'first', model: 'shared' }
+  const reload = vi.fn()
+  const select = vi.fn()
+    .mockResolvedValueOnce({ ok: false, error: { code: 'unavailable', message: 'Try again' } })
+    .mockResolvedValue({ ok: true })
+  const props = {
+    groups: routes.map(provider => ({ ...provider, provider })), current, disabled: false, busy: false,
+    label: 'Select model', caption: 'First model', providersLabel: 'Providers', enterpriseModelsLabel: 'Enterprise models', effortLabel: 'Reasoning',
+    searchLabel: 'Search', emptyLabel: 'No matches', efforts: [{ effort: 'high', label: 'High' }],
+    retryLabel: 'Retry', reload, select, formatError: error => error.message
+  }
+  const render = (extra = {}) => act(async () => root.render(React.createElement(WorkModelPicker, { ...props, ...extra })))
+  const button = name => [...document.querySelectorAll('[role=dialog] button')].find(item => item.textContent === name)
+  const click = target => act(async () => target.click())
+  await render()
+  const trigger = host.querySelector('button')
+  await click(trigger)
+  expect(reload).toHaveBeenCalledOnce()
+  expect(document.querySelector('[role=dialog] input[type=search]')).toBeNull()
+  expect(button('First model').getAttribute('aria-pressed')).toBe('true')
+  expect(button('Second model')).toBeUndefined()
+  await click(button('Second provider'))
+  expect(button('Second model').getAttribute('aria-pressed')).toBe('false')
+  await click(button('Second model'))
+  expect(select).toHaveBeenLastCalledWith({ provider: 'second', model: 'shared', reasoningEffort: 'medium' })
+  expect(document.querySelector('[role=alert]').textContent).toBe('Try again')
+  await click(button('Second model'))
+  expect(document.querySelector('[role=dialog]')).toBeNull()
+  await click(trigger)
+  await click(button('High'))
+  expect(select).toHaveBeenLastCalledWith({ ...current, reasoningEffort: 'high' })
+  await click(trigger)
+  const dialog = document.querySelector('[role=dialog]')
+  await act(async () => dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  expect(document.querySelector('[role=dialog]')).toBeNull()
+  await render({ disabled: true })
+  expect(trigger.disabled).toBe(true)
+})
+
+it('groups one enterprise tenant by the advertised providers, keeping transport routes and model slashes intact', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  vi.stubGlobal('CSS', { escape: value => value })
+  const host = document.body.appendChild(document.createElement('div'))
+  root = createRoot(host)
+  const provider = { id: 'bisheng-enterprise', name: '默认租户' }
+  const selectedName = 'ChatGPT / la/auto/gpt-6.1-terra'
+  const select = vi.fn().mockResolvedValue({ ok: true })
+  await act(async () => root.render(React.createElement(WorkModelPicker, {
+    groups: [{ ...provider, provider, models: [
+      { id: 'gpt-route', name: selectedName },
+      { id: 'deepseek-route', name: 'DeepSeek / deepseek/v3' },
+      { id: 'routed-model', name: 'openrouter/vendor/model' }
+    ] }],
+    current: { provider: provider.id, model: 'gpt-route' },
+    disabled: false, busy: false, label: 'Select model', caption: `${selectedName} · High`,
+    providersLabel: 'Providers', enterpriseModelsLabel: 'Enterprise models', effortLabel: 'Reasoning',
+    searchLabel: 'Search', emptyLabel: 'No matches', efforts: [], retryLabel: 'Retry', reload() {}, select
+  })))
+  const trigger = host.querySelector('button')
+  expect(trigger.textContent).toBe('la/auto/gpt-6.1-terra · High')
+  await act(async () => trigger.click())
+  const providers = [...document.querySelectorAll('[aria-label=Providers] button')]
+  expect(providers.map(button => button.textContent)).toEqual(['ChatGPT', 'DeepSeek', 'Enterprise models'])
+  expect(document.querySelector('[role=group][aria-label=ChatGPT] button').getAttribute('aria-pressed')).toBe('true')
+  await act(async () => providers.find(button => button.textContent === 'Enterprise models').click())
+  expect(document.querySelector('[role=group][aria-label="Enterprise models"] button').textContent).toBe('openrouter/vendor/model')
+  await act(async () => providers.find(button => button.textContent === 'DeepSeek').click())
+  const deepseek = document.querySelector('[role=group][aria-label=DeepSeek] button')
+  expect(deepseek.textContent).toBe('deepseek/v3')
+  await act(async () => deepseek.click())
+  expect(select).toHaveBeenCalledExactlyOnceWith({ provider: provider.id, model: 'deepseek-route', reasoningEffort: undefined })
 })
 
 it('passes turn elapsed time to the running-status slot while announcing the running state only once', async () => {

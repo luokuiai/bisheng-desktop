@@ -14,13 +14,13 @@ export function useCapability() {
     alive.current = true
     return () => { alive.current = false }
   }, [])
-  async function open(name: Capability, prompt?: string) {
+  async function open(name: Capability) {
     if (pending.current) return
     pending.current = true
     setBusy(true)
     setError('')
     try {
-      await host.openCapability(name, prompt ? { prompt } : undefined)
+      await host.openCapability(name)
     } catch (cause) {
       if (alive.current) setError(cause instanceof Error ? cause.message : t('openError'))
     } finally {

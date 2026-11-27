@@ -1,6 +1,6 @@
 import { IntentLink as Link } from "@/components/workspace/intent-link";
 import {
-  RiArrowRightUpLine, RiBankLine, RiBarChartBoxLine, RiChatAiLine, RiDashboardLine,
+  RiArrowRightUpLine, RiBankLine, RiChatAiLine, RiDashboardLine,
   RiGroupLine, RiHeartPulseLine, RiImageAiLine, RiKanbanView2, RiMegaphoneLine, RiRobot2Line,
 } from "@remixicon/react";
 import { WorkspaceFrame } from "@/components/workspace/chrome";
@@ -11,7 +11,7 @@ import { cx } from "@/utils/cx";
 const icons = {
   dashboard: RiDashboardLine, marketing: RiMegaphoneLine, finance: RiBankLine, hr: RiGroupLine,
   "medical-profile": RiHeartPulseLine, "ai-chat": RiChatAiLine, "multi-agent-chat": RiRobot2Line,
-  "ai-image-generation": RiImageAiLine, "ai-profile": RiBarChartBoxLine, "project-board": RiKanbanView2,
+  "ai-image-generation": RiImageAiLine, "project-board": RiKanbanView2,
 };
 
 export default function TemplatesPage() {

@@ -11,9 +11,9 @@ window.__ModuleLoader__.load({
         accountMenu: '账号菜单', enterpriseAccount: '企业账号', signedOut: '未登录', deviceOnly: '本机模式', signInHint: '登录后可使用企业功能', identityLoading: '正在读取账号…', identityError: '暂时无法读取账号', settings: '设置', accountSettings: '账号设置', approvals: '消息', approvalsPending: '待处理审批', phone: '连接手机', login: '登录企业账号', logout: '退出登录', logoutBody: '退出后需要重新登录企业账号。本机设置、已安装插件和本地数据保留。', logoutFailed: '退出登录未完成，请重试。', cancel: '取消', again: '重试', close: '关闭', loggingOut: '正在退出登录…',
         creditsRemaining: '剩余积分', creditsUnavailable: '积分暂不可用',
         activity: '活动', less: '少', more: '多', totalTokens: '累计 Token', totalMessages: '累计消息',
-        contributionTitle: '今年的贡献', contributionUnit: '次', metricTotalTokens: '累计词元', metricPeakTokens: '峰值词元', metricLongestTask: '最长任务', metricStreak: '最长连续记录', days: '{count} 天',
-        modeWeek: '每周', modeMonth: '每月', modeYear: '每年', heatmapAria: '用量活动热力图', heatmapTile: '{time} · {tokens} Token · {messages} 条消息',
-        trendTitle: '词元', trendEmpty: '暂无词元数据', trendAria: '词元趋势', today: '今天',
+        contributionTitle: '今年的贡献', contributionUnit: '次', metricTotalTokens: '累计词元', metricPeakTokens: '峰值词元', metricStreak: '最长连续记录', days: '{count} 天',
+        modeWeek: '每周', modeMonth: '每月', modeYear: '每年', heatmapAria: '用量活动热力图', heatmapTokens: '{count} Token', heatmapMessages: '{count} 条消息',
+        trendTitle: '词元', trendAria: '词元趋势', today: '今天',
         tokenWan: '{value}万', tokenYi: '{value}亿', numberLocale: 'zh-CN', modelUsage: '模型用量', tokens: 'Token 用量', messages: '消息数', storage: '个人存储空间', unlimited: '不限', storageValue: '已使用 {used} / {limit}', breakdown: '输入 {input} Token · 输出 {output} Token', missingUsage: '{count} 条记录缺少 Token 用量', usageError: '用量统计加载失败，请重试。', storageError: '存储空间加载失败，请重试。', noUsage: '暂无用量记录', unavailable: '—',
         loading: '正在加载...',
         generalPreferences: '外观与语言', generalInteraction: '交互',
@@ -23,9 +23,9 @@ window.__ModuleLoader__.load({
         accountMenu: 'Account menu', enterpriseAccount: 'Enterprise account', signedOut: 'Not signed in', deviceOnly: 'Device only', signInHint: 'Sign in to use enterprise features', identityLoading: 'Loading account…', identityError: 'Account unavailable', settings: 'Settings', accountSettings: 'Account settings', approvals: 'Messages', approvalsPending: 'Pending approvals', phone: 'Connect phone', login: 'Sign in', logout: 'Log out', logoutBody: 'You will need to sign in again. Device settings, installed plugins and local data are kept.', logoutFailed: 'Logout did not complete. Try again.', cancel: 'Cancel', again: 'Retry', close: 'Close', loggingOut: 'Logging out…',
         creditsRemaining: 'Credits remaining', creditsUnavailable: 'Credits unavailable',
         activity: 'Activity', less: 'Less', more: 'More', totalTokens: 'Total tokens', totalMessages: 'Total messages',
-        contributionTitle: "This year's contributions", contributionUnit: 'times', metricTotalTokens: 'Total tokens', metricPeakTokens: 'Peak tokens', metricLongestTask: 'Longest task', metricStreak: 'Longest streak', days: '{count} days',
-        modeWeek: 'Weekly', modeMonth: 'Monthly', modeYear: 'Yearly', heatmapAria: 'Usage activity heatmap', heatmapTile: '{time} · {tokens} tokens · {messages} messages',
-        trendTitle: 'Tokens', trendEmpty: 'No token data yet', trendAria: 'Token trend', today: 'Today',
+        contributionTitle: "This year's contributions", contributionUnit: 'times', metricTotalTokens: 'Total tokens', metricPeakTokens: 'Peak tokens', metricStreak: 'Longest streak', days: '{count} days',
+        modeWeek: 'Weekly', modeMonth: 'Monthly', modeYear: 'Yearly', heatmapAria: 'Usage activity heatmap', heatmapTokens: '{count} tokens', heatmapMessages: '{count} messages',
+        trendTitle: 'Tokens', trendAria: 'Token trend', today: 'Today',
         tokenWan: '{value} ten thousand', tokenYi: '{value} hundred million', numberLocale: 'en-US', modelUsage: 'Model usage', tokens: 'Token usage', messages: 'Messages', storage: 'Personal storage', unlimited: 'Unlimited', storageValue: 'Used {used} / {limit}', breakdown: 'Input {input} tokens · Output {output} tokens', missingUsage: '{count} records are missing token usage', usageError: 'Usage statistics failed to load. Please retry.', storageError: 'Storage failed to load. Please retry.', noUsage: 'No usage recorded', unavailable: '—',
         loading: 'Loading...',
         generalPreferences: 'Appearance and language', generalInteraction: 'Interaction',
@@ -33,6 +33,27 @@ window.__ModuleLoader__.load({
       }
     }
     const openAccount = () => window.dispatchEvent(new CustomEvent('dsh-desktop:open-settings-section', { detail: { id: 'enterprise-account' } }))
+
+    let usageProfileRequest
+    function useUsageProfile() {
+      const [components, setComponents] = useState()
+      useEffect(() => {
+        if (!document.querySelector('link[href="/desktop-workspace/workspace.css"]')) return
+        let active = true
+        usageProfileRequest ??= import('/desktop-workspace/host-runtime.js')
+          .then(runtime => {
+            runtime.bindHost(require)
+            return import('/desktop-workspace/usage-profile.js')
+          })
+          .catch(error => {
+            usageProfileRequest = undefined
+            console.error('[desktop-settings] Could not load the usage profile', error)
+          })
+        void usageProfileRequest.then(next => { if (active) setComponents(next) })
+        return () => { active = false }
+      }, [])
+      return components
+    }
 
     let controlsRequest
     function useBoardControls() {
@@ -213,13 +234,15 @@ window.__ModuleLoader__.load({
     }
     function sumCurrentYearMessages(points, now = Date.now()) {
       const year = new Date(now + USAGE_SHANGHAI_OFFSET_MS).getUTCFullYear()
-      return points.reduce((total, point) => new Date(Date.parse(point.start_at) + USAGE_SHANGHAI_OFFSET_MS).getUTCFullYear() === year ? total + point.message_count : total, 0)
+      const current = points.filter(point => new Date(Date.parse(point.start_at) + USAGE_SHANGHAI_OFFSET_MS).getUTCFullYear() === year)
+      return current.length ? current.reduce((total, point) => total + point.message_count, 0) : null
     }
     function peakTokens(points) {
       const values = points.map(point => point.total_tokens).filter(value => value != null)
       return values.length ? Math.max(...values) : null
     }
     function longestMessageStreak(points) {
+      if (!points.length) return null
       const dates = [...new Set(points.filter(point => point.message_count > 0).map(point => usageDateKey(point.start_at)))]
         .sort()
         .map(date => Date.parse(`${date}T00:00:00+08:00`))
@@ -240,7 +263,7 @@ window.__ModuleLoader__.load({
         const time = Date.parse(`${point.date}T00:00:00+08:00`)
         return time > end - 60 * USAGE_DAY_MS && time <= end - 30 * USAGE_DAY_MS
       })
-      if (!current.length || !previous.length) return null
+      if (new Set(current.map(point => point.date)).size !== 30 || new Set(previous.map(point => point.date)).size !== 30) return null
       const currentTotal = current.reduce((sum, point) => sum + point.value, 0)
       const previousTotal = previous.reduce((sum, point) => sum + point.value, 0)
       return previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal) * 100 : null
@@ -268,43 +291,58 @@ window.__ModuleLoader__.load({
       const compact = value < 1000 ? exact : new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 2 }).format(value)
       return { compact, exact }
     }
-    function usageDateLabel(iso, locale) {
-      return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(Date.parse(iso) + USAGE_SHANGHAI_OFFSET_MS))
+    function usageDateLabel(input, locale) {
+      const time = typeof input === 'number' ? input : Date.parse(input)
+      return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(time + USAGE_SHANGHAI_OFFSET_MS)
     }
     function usageTrendPoints(points, locale) {
-      return points.map(point => ({ label: usageDateLabel(point.start_at, locale), value: point.total_tokens, total_tokens: point.total_tokens, message_count: point.message_count, start_at: point.start_at, end_at: point.end_at }))
+      const series = []
+      let previousEnd
+      for (const point of points) {
+        const start = Date.parse(point.start_at)
+        if (previousEnd != null && start > previousEnd) {
+          series.push({ label: usageDateLabel(previousEnd, locale), value: null })
+        }
+        series.push({ label: usageDateLabel(start, locale), value: point.total_tokens })
+        previousEnd = Date.parse(point.end_at)
+      }
+      return series
     }
     function usageTrendBounds(data, points, locale, todayLabel) {
       const start = points[0]?.start_at ?? data?.start_at
-      const end = points.at(-1)?.end_at ?? data?.end_at
-      const endIsToday = end ? Math.abs(Date.now() - Date.parse(end)) < USAGE_DAY_MS : false
+      const end = points.at(-1)?.start_at ?? data?.end_at
+      const endIsToday = end && usageDateKey(end) === usageDateKey(Date.now())
       return {
         startLabel: start ? usageDateLabel(start, locale) : '',
         endLabel: !end ? '' : endIsToday ? todayLabel : usageDateLabel(end, locale)
       }
     }
 
-    function UsageIdentityCard({ identity, profile, t, children }) {
+    function UsageIdentityCard({ name, initials, department, avatar, contribution, stats, children }) {
       const [coverFailed, setCoverFailed] = useState(false)
-      const [avatarFailed, setAvatarFailed] = useState(false)
-      const name = identity?.username || identity?.display_name || identity?.id || ''
-      const handle = (profile?.department_name || '').trim().replace(/^@/, '')
-      const avatar = profile?.avatar
+      const [failedAvatar, setFailedAvatar] = useState()
       return h('section', { className: 'dshUsageIdentity', 'data-usage-identity': '' },
         h('div', { className: `dshUsageCover${coverFailed ? ' dshUsageCoverFallback' : ''}`, 'aria-hidden': 'true' },
           !coverFailed && h('img', { src: USAGE_COVER_DATA_URI, alt: '', onError: () => setCoverFailed(true) })),
         h('div', { className: 'dshUsageIdentityBody' },
           h('span', { className: 'dshUsageAvatar' },
-            avatar && !avatarFailed
-              ? h('img', { src: avatar, alt: '', onError: () => setAvatarFailed(true) })
-              : h('span', { 'aria-hidden': 'true' }, usageInitials(name))),
+            avatar && avatar !== failedAvatar
+              ? h('img', { src: avatar, alt: '', referrerPolicy: 'no-referrer', onError: () => setFailedAvatar(avatar) })
+              : h('span', { 'aria-hidden': 'true' }, initials)),
           h('div', { className: 'dshUsageIdentityCopy' },
-            h('p', { className: 'dshUsageName', 'data-usage-display-name': '' }, name || t('unavailable')),
-            handle && h('p', { className: 'dshUsageHandle' }, `@${handle}`)),
+            h('p', { className: 'dshUsageName', 'data-usage-display-name': '' }, name),
+            department && h('p', { className: 'dshUsageHandle' }, `@${department}`)),
+          contribution && h('div', { 'data-usage-contribution': '' },
+            h('p', { className: 'dshUsageCaption' }, contribution.label),
+            h('p', { className: 'dshUsageContributionCount' }, `${contribution.count.toLocaleString(contribution.locale)} ${contribution.unit}`)),
+          stats.length > 0 && h('div', { className: 'dshUsageTiles', 'data-usage-metrics': '' },
+            ...stats.map(({ label, value, title }) => h('div', { key: label, className: 'dshUsageTile', 'data-usage-metric': label, title: title ?? value },
+              h('p', { className: 'dshUsageTileValue' }, value),
+              h('p', { className: 'dshUsageTileLabel' }, label)))),
           children))
     }
 
-    function UsageActivity({ layout, mode, onMode, metric, onMetric, t, breakdown, labelFor, controls }) {
+    function UsageActivity({ layout, mode, onMode, metric, onMetric, t, breakdown, labelFor, controls, profileComponents, hasTokens }) {
       const scroll = useRef(null)
       useEffect(() => {
         const node = scroll.current
@@ -313,6 +351,9 @@ window.__ModuleLoader__.load({
       const modeLabels = { week: t('modeWeek'), month: t('modeMonth'), year: t('modeYear') }
       const metricLabels = { tokens: t('tokens'), messages: t('messages') }
       const Button = controls?.Button ?? 'button'
+      const Grid = profileComponents?.ContributionGridSurface ?? 'div'
+      const cellStyle = (row, column, tier, motion) => profileComponents?.contributionCellPresentation(row, column, tier, motion)
+        ?? { className: 'dshUsageCell', 'data-level': tier }
       const renderChoices = (labels, selected, onChange) => Object.entries(labels).map(([key, label]) =>
         h(Button, {
           key, type: 'button', 'aria-pressed': selected === key, onClick: () => onChange(key),
@@ -323,77 +364,35 @@ window.__ModuleLoader__.load({
         h('header', { className: 'dshUsageActivityHeader' },
           h('h3', null, t('activity')),
           h('div', { className: 'dshUsageSwitches' },
-            h('div', { className: 'dshUsageMetricSwitch', role: 'group' },
+            hasTokens && h('div', { className: 'dshUsageMetricSwitch', role: 'group' },
               ...renderChoices(metricLabels, metric, onMetric)),
             h('div', { className: 'dshUsageModeSwitch', role: 'group', 'aria-label': t('heatmapAria') },
               ...renderChoices(modeLabels, mode, onMode)))),
         h('div', { className: 'dshUsageHeatmapScroll', ref: scroll },
-          h('div', { className: 'dshUsageHeatmap', role: 'list', 'aria-label': t('heatmapAria'), style: { '--dsh-usage-columns': layout.columns } },
-            ...layout.cells.map(cell => h('div', { key: cell.key, role: 'listitem', style: { gridRow: cell.row + 1, gridColumn: cell.column + 1 } },
-              h(Tooltip, { label: labelFor(cell), side: 'top', portal: true },
-                h('button', { type: 'button', className: 'dshUsageCell', 'data-level': cell.level, 'data-state': cell.state, 'data-date': cell.date, tabIndex: cell.state === 'observed' ? 0 : -1, 'aria-label': labelFor(cell) })))))),
+          h(Grid, { className: `dshUsageHeatmap${profileComponents ? ' dshUsageBoardGrid' : ''}`, role: 'list', 'aria-label': t('heatmapAria'), style: { '--dsh-usage-columns': layout.columns } },
+            ...layout.cells.map(cell => {
+              const label = labelFor(cell)
+              return h('div', { key: cell.key, role: 'listitem', style: { gridRow: cell.row + 1, gridColumn: cell.column + 1 } },
+                h(Tooltip, { label, side: 'top', portal: true },
+                  h('button', {
+                    ...cellStyle(cell.row, cell.column, cell.level, true),
+                    type: 'button', 'data-state': cell.state, 'data-date': cell.date,
+                    tabIndex: cell.state === 'observed' ? 0 : -1, 'aria-label': label
+                  })))
+            }))),
         empty && h('p', { className: 'dshUsageNote', role: 'status' }, t('noUsage')),
         h('div', { className: 'dshUsageHeatmapFooter' },
-          h('div', { className: 'dshUsageLegend', 'aria-hidden': 'true' },
+          h(Grid, { className: 'dshUsageLegend', 'aria-hidden': 'true' },
             h('span', null, t('less')),
-            ...[0, 1, 2, 3, 4, 5].map(level => h('span', { key: level, className: 'dshUsageCell', 'data-level': level })),
+            ...[0, 1, 2, 3, 4, 5].map(level => h('span', { key: level, ...cellStyle(0, level, level, false) })),
             h('span', null, t('more'))),
-          h('p', { className: 'dshUsageNote', style: { visibility: metric === 'tokens' ? 'visible' : 'hidden' }, 'aria-hidden': metric !== 'tokens' },
+          breakdown && h('p', { className: 'dshUsageNote', style: { visibility: metric === 'tokens' ? 'visible' : 'hidden' }, 'aria-hidden': metric !== 'tokens' },
             breakdown)))
-    }
-
-    function UsageTrendCard({ points, totalLabel, data, locale, t }) {
-      const gradientId = React.useId().replace(/:/g, '')
-      const [active, setActive] = useState(null)
-      const width = 600, height = 200, padTop = 27, padBottom = 2
-      const numeric = points.map(point => point.value).filter(value => value != null)
-      const maximum = Math.max(0, ...numeric)
-      const hasData = numeric.length > 0
-      const coordinate = points.map((point, index) => ({
-        x: points.length <= 1 ? width / 2 : (index / (points.length - 1)) * width,
-        y: point.value == null || maximum <= 0 ? height - padBottom : height - padBottom - (point.value / maximum) * (height - padTop - padBottom),
-        value: point.value
-      }))
-      const segments = []
-      let index = 0
-      while (index < coordinate.length) {
-        const zero = coordinate[index].value === 0
-        let end = index
-        while (end + 1 < coordinate.length && (coordinate[end + 1].value === 0) === zero) end += 1
-        segments.push({ key: `${zero ? 'idle' : 'run'}-${index}`, dashed: zero, points: coordinate.slice(Math.max(0, index - (zero ? 0 : 1)), Math.min(coordinate.length, end + (zero ? 0 : 2))) })
-        index = end + 1
-      }
-      const areaPath = coordinate.length ? `M ${coordinate[0].x} ${height - padBottom} ${coordinate.map(point => `L ${point.x} ${point.y}`).join(' ')} L ${coordinate.at(-1).x} ${height - padBottom} Z` : ''
-      const delta = formatDeltaPercent(tokenDeltaPercent(points))
-      const activePoint = active != null ? points[active] : null
-      const bounds = usageTrendBounds(data, points, locale, t('today'))
-      return h('section', { className: 'dshUsageTrend', 'data-usage-trend': '' },
-        h('div', { className: 'dshUsageTrendHead' },
-          h('p', { className: 'dshUsageTrendLabel' }, activePoint?.label ?? t('trendTitle')),
-          h('div', { className: 'dshUsageTrendValue' },
-            h('p', null, activePoint?.value != null ? formatTokenAmount(activePoint.value, locale, t).compact : totalLabel),
-            delta && h('span', { className: 'dshUsageDelta' }, delta))),
-        hasData
-          ? h(React.Fragment, null,
-            h('div', { className: 'dshUsageChart', style: { height } },
-              h('svg', { viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': t('trendAria'), onPointerLeave: () => setActive(null) },
-                h('defs', null, h('linearGradient', { id: gradientId, x1: '0', y1: '0', x2: '0', y2: '1' },
-                  h('stop', { offset: '0%', stopColor: 'var(--dsw-alias-state-business-primary)', stopOpacity: '0.32' }),
-                  h('stop', { offset: '100%', stopColor: 'var(--dsw-alias-state-business-primary)', stopOpacity: '0' }))),
-                areaPath && h('path', { d: areaPath, fill: `url(#${gradientId})`, stroke: 'none' }),
-                ...segments.map(segment => h('polyline', { key: segment.key, points: segment.points.map(point => `${point.x},${point.y}`).join(' '), fill: 'none', stroke: segment.dashed ? 'var(--dsw-alias-border-l2)' : 'var(--dsw-alias-state-business-primary)', strokeWidth: '2', strokeDasharray: segment.dashed ? '5 5' : undefined, vectorEffect: 'non-scaling-stroke' })),
-                active != null && coordinate[active] && h(React.Fragment, null,
-                  h('line', { x1: coordinate[active].x, x2: coordinate[active].x, y1: padTop, y2: height - padBottom, stroke: 'var(--dsw-alias-border-l2)', strokeDasharray: '4 4', vectorEffect: 'non-scaling-stroke' }),
-                  h('circle', { cx: coordinate[active].x, cy: coordinate[active].y, r: '5', fill: 'var(--dsw-alias-state-business-primary)', stroke: 'var(--dsw-alias-bg-layer-2)', strokeWidth: '3', vectorEffect: 'non-scaling-stroke' })),
-                ...coordinate.map((point, item) => h('rect', { key: item, x: point.x - (width / Math.max(1, coordinate.length)) / 2, y: 0, width: width / Math.max(1, coordinate.length), height, fill: 'transparent', onPointerEnter: () => setActive(item) })))),
-            h('div', { className: 'dshUsageTrendAxis' },
-              h('p', null, bounds.startLabel),
-              h('p', null, bounds.endLabel)))
-          : h('p', { className: 'dshUsageNote', role: 'status' }, t('trendEmpty')))
     }
 
     function Usage({ t, identity, profile, models, controls }) {
       const Button = controls?.Button ?? 'button'
+      const profileComponents = useUsageProfile()
       const [state, setState] = useState({ phase: 'loading' })
       const [metric, setMetric] = useState('tokens')
       const [mode, setMode] = useState('year')
@@ -452,41 +451,57 @@ window.__ModuleLoader__.load({
       else if (!data) content = column(failure('usageError'))
       else {
         const points = Array.isArray(data.points) ? data.points : []
-        const layout = buildHeatmapLayout(points, mode, metric)
-        const totalToken = formatTokenAmount(data.totals.total_tokens, locale, t)
+        const { total_tokens: total, input_tokens: input, output_tokens: output, missing_usage_count: missing } = data.totals
         const peak = peakTokens(points)
         const streak = longestMessageStreak(points)
+        const count = sumCurrentYearMessages(points)
+        const activityMetric = peak == null ? 'messages' : metric
+        const layout = buildHeatmapLayout(points, mode, activityMetric)
+        const countFormatter = new Intl.NumberFormat(locale)
         const labelFor = cell => {
           const tokens = cell.point?.total_tokens
-          return t('heatmapTile', {
-            time: cell.date,
-            tokens: tokens == null ? t('unavailable') : new Intl.NumberFormat(locale).format(tokens),
-            messages: cell.point?.message_count ?? 0
-          })
+          return [
+            cell.date,
+            tokens != null && t('heatmapTokens', { count: countFormatter.format(tokens) }),
+            cell.point && t('heatmapMessages', { count: countFormatter.format(cell.point.message_count) })
+          ].filter(Boolean).join(' · ')
         }
-        const breakdown = t('breakdown', { input: formatTokenAmount(data.totals.input_tokens, locale, t).compact, output: formatTokenAmount(data.totals.output_tokens, locale, t).compact })
-        content = column(h(React.Fragment, null,
-          h(UsageIdentityCard, { identity, profile: identityProfile, t },
-            h('div', { className: 'dshUsageContribution', 'data-usage-contribution': '' },
-              h('p', { className: 'dshUsageCaption' }, t('contributionTitle')),
-              h('div', { className: 'dshUsageContributionValue' },
-                h('p', { className: 'dshUsageContributionCount' }, `${sumCurrentYearMessages(points).toLocaleString(locale)} ${t('contributionUnit')}`))),
-            h('div', { className: 'dshUsageTiles', 'data-usage-metrics': '' },
-              ...[[t('metricTotalTokens'), totalToken.compact, totalToken.exact], [t('metricPeakTokens'), peak == null ? t('unavailable') : formatTokenAmount(peak, locale, t).compact], [t('metricLongestTask'), t('unavailable')], [t('metricStreak'), t('days', { count: streak })]].map(([label, value, title], index) =>
-                h('div', { key: index, className: 'dshUsageTile', 'data-usage-metric': label, title: title ?? value },
-                  h('p', { className: 'dshUsageTileValue' }, value),
-                  h('p', { className: 'dshUsageTileLabel' }, label)))),
-            h(UsageActivity, { layout, mode, onMode: setMode, metric, onMetric: setMetric, t, breakdown, labelFor, controls })),
-          h(UsageTrendCard, { points: usageTrendPoints(points, locale), totalLabel: totalToken.compact, data, locale, t }),
-          data.totals.missing_usage_count > 0 && h('p', { className: 'dshUsageNote dshUsageWarning', role: 'status' }, t('missingUsage', { count: data.totals.missing_usage_count }))))
+        const formatTokens = value => formatTokenAmount(value, locale, t).compact
+        const breakdown = input != null && output != null ? t('breakdown', { input: formatTokens(input), output: formatTokens(output) }) : null
+        const stats = [
+          total != null && { label: t('metricTotalTokens'), value: formatTokens(total), title: countFormatter.format(total) },
+          peak != null && { label: t('metricPeakTokens'), value: formatTokens(peak), title: countFormatter.format(peak) },
+          streak != null && { label: t('metricStreak'), value: t('days', { count: streak }) }
+        ].filter(Boolean)
+        const name = identity?.username || identity?.display_name || identity?.id || t('unavailable')
+        const Identity = profileComponents?.AiProfileCard ?? UsageIdentityCard
+        const Trend = profileComponents?.TokensChartCard
+        const trend = peak != null && Trend && h('div', { 'data-usage-trend': '' }, h(Trend, {
+          title: t('trendTitle'), chartLabel: t('trendAria'), series: usageTrendPoints(points, locale),
+          total: total ?? null, change: formatDeltaPercent(tokenDeltaPercent(points)),
+          formatValue: formatTokens, ...usageTrendBounds(data, points, locale, t('today'))
+        }))
+        content = h('div', { className: `dshUsageColumn${profileComponents ? ' dshSettingsControl' : ''}` },
+          h(Identity, {
+            name, initials: usageInitials(name), avatar: identityProfile?.avatar,
+            department: identityProfile?.department_name?.trim().replace(/^@/, ''),
+            contribution: count == null ? undefined : { label: t('contributionTitle'), count, unit: t('contributionUnit'), locale },
+            stats
+          }, points.length > 0 && h(UsageActivity, {
+            layout, mode, onMode: setMode, metric: activityMetric, onMetric: setMetric,
+            t, breakdown, labelFor, controls, profileComponents, hasTokens: peak != null
+          })),
+          !points.length && !stats.length && h('p', { className: 'dshUsageNote', role: 'status' }, t('noUsage')),
+          trend,
+          missing > 0 && h('p', { className: 'dshUsageNote dshUsageWarning', role: 'status' }, t('missingUsage', { count: missing })))
       }
       return h('section', { className: 'dshSettingsSection dshUsage', 'aria-busy': state.phase === 'loading' },
         content,
         state.phase === 'ready' && (storage?.status === 'error'
           ? failure('storageError')
-          : storage?.status === 'ready' && h('div', { className: 'dshUsageColumn' },
-            h('div', { className: 'dshUsageStorage' }, h('span', null, t('storage')), h('span', null, quota ? t('storageValue', { used: size(quota.used, unit), limit: quota.limit === -1 ? t('unlimited') : size(quota.limit, unit) }) : t('unavailable'))),
-            quota && quota.limit !== -1 && h('progress', { className: 'dshUsageProgress', value: quota.limit > 0 ? Math.min(1, quota.used / quota.limit) : 1, max: 1, 'aria-label': t('storage') }))),
+          : quota && h('div', { className: 'dshUsageColumn' },
+            h('div', { className: 'dshUsageStorage' }, h('span', null, t('storage')), h('span', null, t('storageValue', { used: size(quota.used, unit), limit: quota.limit === -1 ? t('unlimited') : size(quota.limit, unit) }))),
+            quota.limit !== -1 && h('progress', { className: 'dshUsageProgress', value: quota.limit > 0 ? Math.min(1, quota.used / quota.limit) : 1, max: 1, 'aria-label': t('storage') }))),
         models && h('div', { className: 'dshUsageColumn dshUsageModels' }, models))
     }
 
@@ -629,11 +644,40 @@ window.__ModuleLoader__.load({
         present && h(ApprovalsPanel, { onClose: dismiss, t, controls, exiting }))
     }
 
-    function AccountAvatar({ avatarUrl }) {
-      const [failed, setFailed] = useState(false)
+    function useAccountAvatar(account) {
+      const identity = account?.connected
+        ? JSON.stringify([account.base, account.tenant?.id, account.user?.id ?? account.user?.username ?? account.user?.display_name])
+        : null
+      const [profileAvatar, setProfileAvatar] = useState(null)
+      useEffect(() => {
+        setProfileAvatar(null)
+        const bridge = window.dshEnterpriseChat
+        if (!identity || !bridge?.profile) return
+        let disposed = false
+        const update = url => {
+          if (!disposed) setProfileAvatar({ identity, url })
+        }
+        void bridge.profile().then(profile => update(profile?.avatar), () => update(null))
+        return () => { disposed = true }
+      }, [identity])
+      const profileUrl = profileAvatar?.identity === identity ? profileAvatar.url : undefined
+      const loginUrl = identity ? account.user?.avatar_url : undefined
+      const [failures, setFailures] = useState(null)
+      const failedUrls = failures?.identity === identity ? failures.urls : []
+      const source = [profileUrl, loginUrl].find(url => url && !failedUrls.includes(url))
+      return {
+        source,
+        onError: () => setFailures(previous => ({
+          identity,
+          urls: [...new Set([...(previous?.identity === identity ? previous.urls : []), source])]
+        }))
+      }
+    }
+
+    function AccountAvatar({ source, onError }) {
       return h('span', { className: 'dshAccountAvatar', 'aria-hidden': 'true' },
-        avatarUrl && !failed
-          ? h('img', { src: avatarUrl, width: 28, height: 28, alt: '', referrerPolicy: 'no-referrer', style: { borderRadius: '50%', objectFit: 'cover' }, onError: () => setFailed(true) })
+        source
+          ? h('img', { key: source, src: source, width: 28, height: 28, alt: '', referrerPolicy: 'no-referrer', style: { borderRadius: '50%', objectFit: 'cover' }, onError })
           : h('img', { src: '/dsh-desktop-logo-light.png', width: 20, height: 20, alt: '' }))
     }
 
@@ -732,7 +776,7 @@ window.__ModuleLoader__.load({
       const name = [identity.account?.user?.display_name, identity.account?.user?.username, identity.account?.user?.id].find(value => typeof value === 'string' && value.trim())
       const label = name || t(identity.account ? 'signedOut' : identity.error ? 'identityError' : 'identityLoading')
       const connected = identity.account?.connected === true
-      const avatarUrl = connected ? identity.account?.user?.avatar_url : undefined
+      const avatar = useAccountAvatar(identity.account)
       const quota = identity.account?.usage
       const credits = !identity.error && quota && quota.source !== 'unavailable' && quota.quota_state !== 'unavailable'
         && Number.isFinite(quota.limit) && Number.isFinite(quota.used)
@@ -774,10 +818,14 @@ window.__ModuleLoader__.load({
       // The sidebar menu does not cover the native Chat view or own its presentation.
       const launcher = h('div', { className: launcherClass, 'data-dsh-account-launcher': '' },
         h(Menu, { open: menuOpen, animatePresence: Boolean(workspace), onClose: () => { if (!busy) setMenuOpen(false) }, side: 'top', align: 'start', portal: true, autoFocus: true, className: 'dshAccountMenuAnchor', listClassName: `dshAccountMenu${menuStyle}`,
-          anchor: h('button', { ref: trigger, type: 'button', className: `dshAccountTrigger${wide ? '' : ' dshAccountTriggerRail'}`, 'aria-label': triggerLabel, title: wide ? undefined : label, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, disabled: settingsOpen || busy, onClick: () => { setMenuOpen(previous => !previous); setActionError(false); void identity.refresh() } },
-            h('span', { className: 'dshAccountAvatarWrap' }, h(AccountAvatar, { key: avatarUrl, avatarUrl }), badge),
+          anchor: h('button', { ref: trigger, type: 'button', className: `dshAccountTrigger${wide ? '' : ' dshAccountTriggerRail'}`, 'aria-label': triggerLabel, title: wide ? undefined : label, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, disabled: settingsOpen || busy, onClick: () => {
+            setMenuOpen(!menuOpen)
+            setActionError(false)
+            if (!menuOpen) void identity.refresh()
+          } },
+            h('span', { className: 'dshAccountAvatarWrap' }, h(AccountAvatar, avatar), badge),
             wide && h('span', { className: 'dshAccountTriggerCopy' }, h('span', null, label)), wide && h(IconChevronDownOutlineRegular)) },
-          h('div', { className: 'dshAccountMenuIdentity', 'data-dsh-sidebar-account-menu': '' }, h(AccountAvatar, { key: avatarUrl, avatarUrl }), h('div', null, h('strong', null, label), h('small', null, t(connected ? 'enterpriseAccount' : 'signInHint'))),
+          h('div', { className: 'dshAccountMenuIdentity', 'data-dsh-sidebar-account-menu': '' }, h(AccountAvatar, avatar), h('div', null, h('strong', null, label), h('small', null, t(connected ? 'enterpriseAccount' : 'signInHint'))),
             connected && h('div', { className: 'dshAccountMenuCredits', role: 'status' }, h('strong', null, credits ?? '—'), h('small', null, t(credits === null ? 'creditsUnavailable' : 'creditsRemaining')))),
           h(MenuItemButton, { icon: h(IconSettingsOutlineRegular), shortcut: settingsShortcut, disabled: busy, onSelect: () => { setMenuOpen(false); openSettings() } }, t('settings')),
           connected && h(MenuItemButton, { icon: h(AccountMenuIcon, { kind: 'account' }), disabled: busy, onSelect: openAccountSettings }, t('accountSettings')),
@@ -846,7 +894,7 @@ window.__ModuleLoader__.load({
             background:var(--dsw-alias-bg-layer-2);
           }
           [data-dsh-settings-overlay]>[data-dsh-settings-section]{
-            width:871px;
+            width:920px;
             max-width:calc(100vw - 32px);
             height:min(614px,calc(100dvh - 2 * max(16px,var(--dsh-frame-overlay-top,16px))));
             overflow:visible;
@@ -990,22 +1038,20 @@ window.__ModuleLoader__.load({
           .dshUsage{min-width:0}
           .dshUsageColumn{display:flex;flex-direction:column;gap:16px;width:100%;max-width:680px;margin:0 auto;min-width:0}
           .dshUsageIdentity{position:relative;overflow:hidden;border:1px solid var(--dsw-alias-border-l2);border-radius:24px;background:var(--dsw-alias-bg-layer-2)}
-          .dshUsageCover{position:absolute;inset:0 0 auto;height:165px;overflow:hidden;border-radius:23px 23px 0 0;background:var(--dsw-alias-interactive-bg-hover)}
-          .dshUsageCover img{display:block;width:100%;height:165px;object-fit:cover;object-position:50% 45%}
+          .dshUsageIdentity .dshUsageCover{position:absolute;inset:0 0 auto;height:165px;overflow:hidden;border-radius:23px 23px 0 0;background:var(--dsw-alias-interactive-bg-hover)}
+          .dshUsageIdentity .dshUsageCover img{display:block;width:100%;height:165px;object-fit:cover;object-position:50% 45%}
           .dshUsageCoverFallback{background:linear-gradient(120deg,var(--dsw-alias-state-business-primary),var(--dsw-alias-bg-layer-2))}
           .dshUsageIdentityBody{position:relative;display:flex;flex-direction:column;gap:15px;padding:124px 16px 16px}
-          .dshUsageAvatar{display:flex;align-items:center;justify-content:center;width:80px;height:80px;border-radius:50%;overflow:hidden;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:30px;font-weight:500;line-height:42px}
-          .dshUsageAvatar img{width:100%;height:100%;object-fit:cover}
+          .dshUsageIdentity .dshUsageAvatar{display:flex;align-items:center;justify-content:center;width:80px;height:80px;border-radius:50%;overflow:hidden;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);font-size:30px;font-weight:500;line-height:42px}
+          .dshUsageIdentity .dshUsageAvatar img{width:100%;height:100%;object-fit:cover}
           .dshUsageIdentityCopy{display:flex;flex-direction:column;gap:4px;min-width:0}
           .dshUsageName{margin:0;font-size:20px;line-height:26px;font-weight:500;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-          .dshUsageHandle{margin:0;font-size:11px;line-height:16px;font-weight:500;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .dshUsageIdentity .dshUsageHandle{margin:0;font-size:11px;line-height:16px;font-weight:500;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
           .dshUsageCaption{margin:0 0 2px;font-size:14px;line-height:20px;font-weight:500;color:var(--dsw-alias-label-secondary)}
-          .dshUsageContributionValue{display:flex;align-items:center;gap:8px}
           .dshUsageContributionCount{margin:0;font-size:24px;line-height:34px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary)}
-          .dshUsageDelta{border-radius:999px;padding:2px 8px;font-size:12px;line-height:16px;font-weight:500;color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 12%,transparent)}
-          .dshUsageTiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+          .dshUsageTiles{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px}
           .dshUsageTile{display:flex;flex-direction:column;align-items:flex-start;min-width:0;padding:10px;border-radius:16px;background:var(--dsw-alias-interactive-bg-hover)}
-          .dshUsageTileValue{width:100%;margin:0;font-size:14px;line-height:20px;font-weight:500;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .dshUsageIdentity .dshUsageTileValue{width:100%;margin:0;font-size:14px;line-height:20px;font-weight:500;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
           .dshUsageTileLabel{width:100%;margin:0;font-size:13px;line-height:18px;font-weight:500;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
           .dshUsageActivity{display:flex;flex-direction:column;gap:6px;min-width:0}
           .dshUsageActivityHeader{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:6px 2px 0}
@@ -1016,6 +1062,9 @@ window.__ModuleLoader__.load({
           .dshUsageSwitches button[aria-pressed=true]:not(.dshSettingsControl *){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);font-weight:500}
           .dshUsageHeatmapScroll{overflow-x:auto;padding-bottom:4px}
           .dshUsageHeatmap{display:grid;gap:4px;width:max-content;grid-template-columns:repeat(var(--dsh-usage-columns,38),13px);grid-template-rows:repeat(7,13px)}
+          [data-usage-activity=year] .dshUsageBoardGrid{width:100%;grid-template-columns:repeat(var(--dsh-usage-columns),minmax(10px,1fr));grid-template-rows:repeat(7,auto)}
+          .dshUsageBoardGrid .contribution-cell{display:block;border:0;padding:0}
+          .dshUsageBoardGrid .contribution-cell:not([data-state=observed]){opacity:.45}
           .dshUsage .dshUsageHeatmap .dshUsageCell{box-sizing:border-box;width:13px;height:13px;border:0;padding:0;border-radius:3px;background:var(--dsw-alias-interactive-bg-hover);outline:none;cursor:default;transition:transform .12s ease}
           .dshUsage .dshUsageCell[data-level='1']{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 22%,var(--dsw-alias-interactive-bg-hover))}
           .dshUsage .dshUsageCell[data-level='2']{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 40%,var(--dsw-alias-interactive-bg-hover))}
@@ -1028,22 +1077,13 @@ window.__ModuleLoader__.load({
           .dshUsageHeatmapFooter{display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;margin-top:10px}
           .dshUsageLegend{display:flex;align-items:center;gap:4px;margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary)}
           .dshUsageLegend .dshUsageCell{box-sizing:border-box;width:9px;height:9px;border:0;border-radius:3px;background:var(--dsw-alias-interactive-bg-hover)}
+          .dshUsageLegend .contribution-cell{width:9px;height:9px}
           .dshUsageNote{margin:0;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary)}
-          .dshUsageTrend{display:flex;flex-direction:column;border-radius:20px;background:var(--dsw-alias-interactive-bg-hover);padding:12px 0}
-          .dshUsageTrendHead{position:relative;z-index:1;display:flex;flex-direction:column;gap:2px;margin-bottom:-32px;padding:4px 16px 0}
-          .dshUsageTrendLabel{margin:0;font-size:14px;line-height:20px;font-weight:500;color:var(--dsw-alias-label-secondary)}
-          .dshUsageTrendValue{display:flex;align-items:center;gap:8px;min-width:0}
-          .dshUsageTrendValue p{margin:0;font-size:20px;line-height:26px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-          .dshUsageChart{width:100%}
-          .dshUsageChart svg{display:block;width:100%;height:100%;overflow:visible}
-          .dshUsageTrendAxis{display:flex;justify-content:space-between;gap:8px;padding:8px 16px 4px;font-size:11px;line-height:15px;letter-spacing:.2px;color:var(--dsw-alias-label-tertiary)}
-          .dshUsageTrendAxis p{margin:0}
           .dshUsageStorage{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:14px;padding-top:4px}
           .dshUsageStorage>span:last-child{color:var(--dsw-alias-label-secondary)}
           .dshUsageProgress{width:100%;height:6px;margin-top:10px;accent-color:var(--dsw-alias-state-business-primary)}
           .dshUsageModels{min-width:0}
-          @media(min-width:640px){.dshUsageTiles{display:flex}.dshUsageTile{flex:1}}
-          @media(max-width:639px){.dshUsageCover,.dshUsageCover img{height:120px}.dshUsageIdentityBody{padding-top:96px}}
+          @media(max-width:639px){.dshUsageIdentity .dshUsageCover,.dshUsageIdentity .dshUsageCover img{height:120px}.dshUsageIdentityBody{padding-top:96px}}
           @media(prefers-reduced-motion:reduce){.dshUsageCell{transition:none}.dshUsageCell:hover{transform:none}}
           .dshSettingsSection{color:var(--dsw-alias-label-primary)}.dshSettingsSection h2{font-size:18px;font-weight:600;margin:0 0 20px}.dshSettingsRemote{height:max(360px,calc(min(800px,100vh - 80px) - 220px));position:relative;min-width:0}
           .dshSettingsLoading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;height:100%;color:var(--dsw-alias-label-secondary);font-size:14px;text-align:center}

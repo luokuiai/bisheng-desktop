@@ -1,16 +1,20 @@
-import { usePageText } from "@/host/context"
-import { IntentLink as Link } from "@/components/workspace/intent-link";
-import { RiArrowRightLine, RiArrowRightUpLine } from "@remixicon/react";
+import { usePageText, useWorkspace } from "@/host/context"
+import { RiArrowRightLine, RiChat3Line, RiBarChartBoxLine } from "@remixicon/react";
 import { WorkspaceWordmark } from "@/components/workspace/brand";
 import { WorkspaceFrame } from "@/components/workspace/chrome";
 import { HeroAgents } from "@/components/workspace/hero-agents";
-import { workspaceRoutes } from "@/components/workspace/navigation";
-import { cx } from "@/utils/cx";
+import { IntentLink } from "@/components/workspace/intent-link";
 
-const linkArrowClass = "size-4 text-foreground-icon-tertiary group-hover:text-foreground-icon-primary";
+const SIDEBAR_ONLY_ENTRIES = new Set(['panel:plugins', 'panel:schedules'])
 
 export default function Home() {
   const t = usePageText()
+  const { host, navigate, entries = [] } = useWorkspace()
+  const spaces = [
+    { id: 'ai-chat', label: t('aiChat'), description: t('aiChatDescription'), glyph: <RiChat3Line />, open: () => navigate('/chat') },
+    { id: 'ai-profile', label: t('aiProfile'), description: t('aiProfileDescription'), glyph: <RiBarChartBoxLine />, open: () => host.openCapability('usage') },
+    ...entries.filter(entry => !SIDEBAR_ONLY_ENTRIES.has(entry.id)),
+  ]
   return (
     <WorkspaceFrame active="home">
       <main className="mx-auto flex w-full max-w-[1336px] flex-col gap-8 px-5 py-7 sm:px-8 lg:px-9 lg:py-9">
@@ -21,32 +25,25 @@ export default function Home() {
             <h1 id="workspace-title" className="text-display-4-semibold lg:text-display-3-semibold">{t('welcome')}</h1>
             <p className="max-w-[370px] text-headline-regular text-accent-100">{t('welcomeHelp')}</p>
             <div className="pt-2">
-              <Link href="/chat" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-accent-500 px-4 text-body-semibold text-text-white transition-colors duration-150 hover:bg-accent-600 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-200">
+              <IntentLink href="/chat" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-accent-500 px-4 text-body-semibold text-text-white transition-colors duration-150 hover:bg-accent-600 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent-200 motion-reduce:transition-none">
                 {t('startChat')} <RiArrowRightLine aria-hidden="true" className="size-4" />
-              </Link>
+              </IntentLink>
             </div>
           </div>
         </section>
-
         <section aria-labelledby="spaces-title" className="flex flex-col gap-4">
-          <header className="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="spaces-title" className="text-title-1-semibold">{t('openSpaces')}</h2>
-            <span className="text-caption-1-medium text-text-tertiary">{workspaceRoutes.length} {t('destinations')}</span>
-          </header>
+          <h2 id="spaces-title" className="text-title-1-semibold">{t('openSpaces')}</h2>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {workspaceRoutes.map(({ id, href, icon: Icon, tone }) => (
-              <Link key={id} href={href} className="group flex min-h-[148px] flex-col gap-3 rounded-3xl border border-border-button-default bg-background-primary-default p-5 transition-colors duration-150 hover:border-border-button-hover hover:bg-background-primary-hover focus-visible:outline-2 focus-visible:outline-border-focus-ring">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={cx("grid size-9 place-items-center rounded-xl", tone)}><Icon aria-hidden="true" className="size-[19px]" /></span>
-                  <span className="flex items-center gap-2 text-caption-1-medium text-text-tertiary">
-                    {t(`entry_${id}_category`)}<RiArrowRightUpLine aria-hidden="true" className={linkArrowClass} />
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <h3 className="text-title-3-semibold">{t(`entry_${id}_label`)}</h3>
-                  <p className="text-body-regular text-text-secondary">{t(`entry_${id}_description`)}</p>
-                </div>
-              </Link>
+            {spaces.map(({ id, label, description, glyph, open }) => (
+              <button key={id} type="button" data-workspace-card={id} onClick={open}
+                aria-haspopup={id === 'ai-profile' ? 'dialog' : undefined}
+                className="flex min-h-[136px] cursor-pointer flex-col items-start gap-3 rounded-3xl border border-border-button-default bg-background-primary-default p-5 text-start transition-colors duration-150 hover:border-border-button-hover hover:bg-background-primary-hover focus-visible:outline-2 focus-visible:outline-border-focus-ring motion-reduce:transition-none">
+                <span aria-hidden="true" className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent-600 [&_svg]:size-[19px]">{glyph}</span>
+                <span className="flex flex-col gap-1">
+                  <span className="text-title-3-semibold">{label}</span>
+                  {description && <span className="text-body-regular text-text-secondary">{description}</span>}
+                </span>
+              </button>
             ))}
           </div>
         </section>

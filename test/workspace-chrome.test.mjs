@@ -8,6 +8,7 @@ import { buildDestinations, createWorkspaceChrome, sidebarShortcut, workspaceSce
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root, container
 const theme = { subscribe: () => () => {}, snapshot: () => 'light', set: vi.fn() }
+const pluginEntry = { id: 'panel:plugins', kind: 'panel', route: '/plugins', panelId: 'plugins', icon: 'plugins', label: 'Plugins' }
 beforeEach(() => {
   vi.stubGlobal('localStorage', globalThis.jsdom.window.localStorage)
   window.localStorage.removeItem('dsh-desktop:workspace:compact')
@@ -23,16 +24,17 @@ afterEach(async () => {
 })
 
 it('opens directory links, switches to the persistent rail and transfers focus on keyboard collapse', async () => {
-  const navigation = { navigate: vi.fn(), openDesktop: vi.fn() }
+  const snapshot = { workspaceEntries: [pluginEntry] }
+  const navigation = { navigate: vi.fn(), snapshot: () => snapshot, host: { openCapability: vi.fn() } }
   const Chrome = createWorkspaceChrome(React, vi.fn())
   const render = () => act(async () => root.render(React.createElement(Chrome, { path: '/', navigation, theme, t: key => key })))
   await render()
   const account = container.querySelector('[data-workspace-account-slot="expanded"]')
   expect(account).not.toBeNull()
   expect(container.querySelector('.dshWorkspaceLibrary')).toBeNull()
-  const link = container.querySelector('.dshWorkspaceDirectory [data-workspace-route="/project-board"]')
+  const link = container.querySelector('.dshWorkspaceDirectory [data-workspace-route="/plugins"]')
   link.click()
-  expect(navigation.navigate).toHaveBeenCalledWith('/project-board')
+  expect(navigation.navigate).toHaveBeenCalledWith('/plugins')
   link.focus()
   await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backslash', metaKey: true, cancelable: true })))
   const toggle = container.querySelector('[data-workspace-sidebar-toggle]')
@@ -54,7 +56,8 @@ it('opens directory links, switches to the persistent rail and transfers focus o
   expect(document.body.dataset.dshWorkspaceDensity).toBe('compact')
   expect(container.querySelector('[title="native"]')).toBeNull()
   container.querySelector('[title="settings"]').click()
-  expect(navigation.navigate).toHaveBeenLastCalledWith('/settings')
+  expect(navigation.host.openCapability).toHaveBeenCalledExactlyOnceWith('settings')
+  expect(navigation.navigate).toHaveBeenLastCalledWith('/chat')
   container.querySelector('[title="dark"]').click()
   expect(theme.set).toHaveBeenCalledWith('dark')
 })
@@ -62,16 +65,16 @@ it('opens directory links, switches to the persistent rail and transfers focus o
 it('shows one flat list of workbench and native panel entries in the expanded sidebar and shortcut rail', async () => {
   const Chrome = createWorkspaceChrome(React, vi.fn())
   const navigate = vi.fn()
+  const openCapability = vi.fn()
   const entries = ['knowledge', 'channel', 'apps', 'capabilities', 'square']
     .map(id => ({ id, label: id, path: `/${id}`, active: false, primary: true }))
-  const snapshot = { connected: true, navigation: { entries } }
+  const snapshot = { connected: true, navigation: { entries }, workspaceEntries: [pluginEntry] }
   await act(async () => root.render(React.createElement(Chrome, {
-    path: '/', navigation: { navigate, subscribe: () => () => {}, snapshot: () => snapshot }, theme, t: key => key
+    path: '/', navigation: { navigate, host: { openCapability }, subscribe: () => () => {}, snapshot: () => snapshot }, theme, t: key => key
   })))
   for (const surface of ['.dshWorkspaceDirectory', '.dshWorkspaceRail']) {
     expect([...container.querySelectorAll(`${surface} [data-workspace-route]`)].map(button => button.dataset.workspaceRoute))
-      .toEqual(['/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
-        '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'])
+      .toEqual(['/', '/chat', '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'])
   }
   const first = container.querySelector('.dshWorkspaceDirectory nav').firstElementChild
   expect(first.dataset.workspaceRoute).toBe('/')
@@ -84,7 +87,8 @@ it('shows one flat list of workbench and native panel entries in the expanded si
   expect(navigate).toHaveBeenCalledWith('/')
   expect(container.querySelector('.dshWorkspaceNavGroup')).toBeNull()
   container.querySelector('.dshWorkspaceToolbar [title="settings"]').click()
-  expect(navigate).toHaveBeenCalledWith('/settings')
+  expect(openCapability).toHaveBeenCalledExactlyOnceWith('settings')
+  expect(navigate).toHaveBeenCalledExactlyOnceWith('/')
 })
 
 it('leaves AI Chat navigation to the native sidebar and keeps a route back to Overview', async () => {
@@ -233,20 +237,18 @@ it('keeps one toolbar and one right-side portal when the native plugin replaces 
 it('merges the authorized enterprise entries after the new workbench entries without groups', () => {
   const entries = ['square', 'apps', 'channel', 'knowledge', 'capabilities']
     .map(id => ({ id, label: `label:${id}`, path: `/${id}`, active: false, primary: true }))
-  expect(buildDestinations({ entries }).map(item => item.route)).toEqual([
-    '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
-    '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'
+  expect(buildDestinations({ entries, workspaceEntries: [pluginEntry] }).map(item => item.route)).toEqual([
+    '/', '/chat', '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'
   ])
   expect(buildDestinations({ entries: [] }).map(item => item.route)).toEqual([
-    '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
-    '/plugins'
+    '/', '/chat'
   ])
   expect(buildDestinations({
-    entries: entries.filter(entry => entry.id === 'knowledge')
+    entries: entries.filter(entry => entry.id === 'knowledge'), workspaceEntries: [pluginEntry]
   }).map(item => item.route)).toEqual([
-    '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board', '/plugins', '/knowledge'
+    '/', '/chat', '/plugins', '/knowledge'
   ])
-  expect(buildDestinations({ entries, hasPanel: () => false }).map(item => item.route))
+  expect(buildDestinations({ entries }).map(item => item.route))
     .not.toContain('/plugins')
 })
 

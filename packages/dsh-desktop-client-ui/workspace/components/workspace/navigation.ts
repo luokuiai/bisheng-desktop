@@ -1,10 +1,6 @@
 import {
   RiBarChartBoxLine,
   RiChatAiLine,
-  RiCodeSSlashLine,
-  RiGroupLine,
-  RiImageAiLine,
-  RiKanbanView2,
   RiLayoutGridLine,
   RiLayoutMasonryLine,
   RiShapesLine,
@@ -17,31 +13,6 @@ export const workspaceRoutes = [
     id: "chat", href: "/chat", label: "AI 对话", icon: RiChatAiLine,
     description: "与助手进行流式对话，管理会话历史，随时暂停回复。",
     category: "对话", tone: "bg-accent-500/10 text-accent-500",
-  },
-  {
-    id: "agents", href: "/multi-agent-chat", label: "多代理协作", icon: RiGroupLine,
-    description: "创建专属代理、编辑动态头像，在单聊或群组中协作。",
-    category: "协作", tone: "bg-chart-1/15 text-chart-1-active",
-  },
-  {
-    id: "code", href: "/ai-chat", label: "代码工作台", icon: RiCodeSSlashLine,
-    description: "体验编码代理的会话、变更审阅和可调宽度的代码面板。",
-    category: "模板", tone: "bg-chart-5/15 text-chart-5-active",
-  },
-  {
-    id: "image", href: "/ai-image-generation", label: "图像生成", icon: RiImageAiLine,
-    description: "体验示例图像从提示词到生成、反馈与作品画廊的流程。",
-    category: "模板", tone: "bg-chart-3/15 text-chart-3-active",
-  },
-  {
-    id: "profile", href: "/ai-profile", label: "AI 活动档案", icon: RiBarChartBoxLine,
-    description: "浏览贡献热力图、代理活动及 词元使用趋势。",
-    category: "用量", tone: "bg-chart-4/15 text-chart-4-active",
-  },
-  {
-    id: "project-board", href: "/project-board", label: "任务看板", icon: RiKanbanView2,
-    description: "跟踪代理相关工单，拖动流转状态，查看工单的 词元用量。",
-    category: "协作", tone: "bg-chart-2/15 text-chart-2-active",
   },
 ] as const;
 

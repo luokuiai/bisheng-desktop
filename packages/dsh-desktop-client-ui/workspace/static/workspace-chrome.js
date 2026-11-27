@@ -2,13 +2,8 @@
 // surfaces share Harness's React instance and navigation controller.
 const localEntries = [
   { id: '/', kind: 'local', route: '/', icon: 'home' },
-  { id: '/chat', kind: 'local', route: '/chat', icon: 'chat' },
-  { id: '/multi-agent-chat', kind: 'local', route: '/multi-agent-chat', icon: 'multi-agent-chat' },
-  { id: '/ai-chat', kind: 'local', route: '/ai-chat', icon: 'ai-chat' },
-  { id: '/ai-image-generation', kind: 'local', route: '/ai-image-generation', icon: 'ai-image-generation' },
-  { id: '/project-board', kind: 'local', route: '/project-board', icon: 'project-board' }
+  { id: '/chat', kind: 'local', route: '/chat', icon: 'chat' }
 ]
-const pluginEntry = { id: 'plugins', kind: 'panel', route: '/plugins', panelId: 'plugins', icon: 'plugins' }
 // The original platform menu keeps its published order. Entries are emitted
 // only after the enterprise document authorizes them for the current account.
 const remoteEntries = [
@@ -20,7 +15,7 @@ const remoteEntries = [
   { moduleIds: ['capabilities', 'skills'], icon: 'skills', labelKey: 'skills' },
   { moduleIds: ['square'], icon: 'square' }
 ]
-const pageSidebars = new Set(['/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/ai-profile', '/project-board', '/components'])
+const pageSidebars = new Set(['/components'])
 const nativeSurfaces = new Map([
   ['/ai-chat', 'code'], ['/ai-image-generation', 'image'], ['/project-board', 'board'], ['/multi-agent-chat', 'agents']
 ])
@@ -54,9 +49,9 @@ const EMPTY_SNAPSHOT = () => EMPTY_STATE
  * The caller renders this list as-is: no group headings and no replacement of
  * either set by the other.
  */
-export function buildDestinations({ entries = [], hasPanel } = {}) {
+export function buildDestinations({ entries = [], workspaceEntries = [] } = {}) {
   const destinations = localEntries.map(entry => ({ ...entry }))
-  if (hasPanel ? hasPanel('plugins') : true) destinations.push({ ...pluginEntry })
+  destinations.push(...workspaceEntries)
   for (const { moduleIds, icon, labelKey } of remoteEntries) {
     const entry = moduleIds.map(moduleId => entries.find(item => item?.id === moduleId)).find(Boolean)
     // An absent report is not authorization. Remote menus appear only after
@@ -125,9 +120,9 @@ export function createWorkspaceChrome(React) {
   function RouteButton({ destination, active, t, navigate, openRemote, compact = false, branded = false }) {
     const label = destination.label || t(destination.labelKey || pageKey(destination.route))
     const dest = destination.route
-    const open = () => destination.kind === 'remote'
+    const open = destination.open ?? (() => destination.kind === 'remote'
       ? (openRemote ? openRemote(destination.moduleId) : navigate(dest))
-      : navigate(dest)
+      : navigate(dest))
     return h('button', {
       type: 'button', className: 'dshWorkspaceRoute', 'data-workspace-route': dest,
       'data-workspace-kind': destination.kind,
@@ -135,7 +130,7 @@ export function createWorkspaceChrome(React) {
       onClick: open
     }, branded
       ? h(React.Fragment, null, h('img', { src: mark, alt: '' }), h('strong', null, 'LUOKUI-AI'))
-      : h(React.Fragment, null, h(Icon, { name: destination.icon }), !compact && h('span', null, label)))
+      : h(React.Fragment, null, destination.glyph ?? h(Icon, { name: destination.icon }), !compact && h('span', null, label)))
   }
 
   // The Harness host and template builds can use different React majors.
@@ -164,7 +159,7 @@ export function createWorkspaceChrome(React) {
     const state = React.useSyncExternalStore(navigation.subscribe ?? EMPTY_SUBSCRIBE, navigation.snapshot ?? EMPTY_SNAPSHOT)
     const destinations = buildDestinations({
       entries: state.connected ? state.navigation?.entries : undefined,
-      hasPanel: navigation.hasPanel
+      workspaceEntries: state.workspaceEntries
     })
     const activeId = (state.remotePageId && 'remote:' + state.remotePageId) ||
       (state.mode === 'work' && state.activePanelId &&
@@ -272,7 +267,7 @@ export function createWorkspaceChrome(React) {
           sessionToolbar && h('div', { 'data-workspace-session-toolbar': '' }),
           h('div', { className: 'dshWorkspaceTools' },
             h('span', { 'data-workspace-actions-slot': '', className: 'dshWorkspacePortal dshWorkspaceActions' }),
-            tool('settings', t('settings'), () => navigate('/settings')),
+            tool('settings', t('settings'), () => navigation.host.openCapability('settings')),
             tool(dark ? 'sun' : 'moon', t(dark ? 'light' : 'dark'), () => theme.set(dark ? 'light' : 'dark')),
             h('span', { 'data-workspace-right-sidebar-slot': '' })))),
       scene !== 'chat' && h(DirectoryNav, { compact: true, destinations, activeId, t, navigate, openRemote, navRef: railRef, inactive: !compact }),

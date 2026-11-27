@@ -1,5 +1,5 @@
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js
-index c38bfbb..3f5a3f0 100644
+index c38bfbb..cf0f1be 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js
 +++ b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js
 @@ -719,6 +719,11 @@ window.__ModuleLoader__.load({
@@ -151,6 +151,15 @@ index c38bfbb..3f5a3f0 100644
  			const triggerLabel = effortLabel === void 0 ? modelLabel : `${modelLabel} · ${effortLabel}`;
  			const triggerAria = waiting ? t("trigger.loading") : currentChoice === void 0 ? t("trigger.selectAria") : effortLabel === void 0 ? t("trigger.aria", { model: modelLabel }) : t("trigger.ariaEffort", {
  				model: modelLabel,
+@@ -1479,7 +1522,7 @@ window.__ModuleLoader__.load({
+ 					itemRefs.current[at] = node;
+ 				};
+ 			};
+-			return (0, react_jsx_runtime.jsxs)("div", {
++			const fallback = (0, react_jsx_runtime.jsxs)("div", {
+ 				ref: rootRef,
+ 				className: ModelSelect_module_css_default.root,
+ 				onKeyDown: onRootKeyDown,
 @@ -1526,7 +1569,7 @@ window.__ModuleLoader__.load({
  					open && (0, react_dom.createPortal)((0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.MenuSurface, {
  						ref: menuRef,
@@ -160,7 +169,43 @@ index c38bfbb..3f5a3f0 100644
  						style: menuPos ?? MEASURE_STYLE,
  						role: pane === "model" ? "group" : "menu",
  						"aria-label": t("menu.aria"),
-@@ -1747,6 +1790,9 @@ window.__ModuleLoader__.load({
+@@ -1727,6 +1770,26 @@ window.__ModuleLoader__.load({
+ 					}, toast.seq)
+ 				]
+ 			});
++			return renderSlot("conversation.input.model.picker", {
++				fallback,
++				groups,
++				current: state.current,
++				disabled: locked === true,
++				busy,
++				caption: triggerLabel,
++				label: triggerAria,
++				providersLabel: t("providers.label"),
++				effortLabel: t("menu.effort"),
++				searchLabel: t("search.placeholder"),
++				emptyLabel: t("search.empty"),
++				efforts: effortChoices,
++				currentEffort: effectiveEffort,
++				catalogWarning: state.failures.length > 0 ? t("providers.partial") : void 0,
++				retryLabel: t("action.reload"),
++				reload,
++				select,
++				formatError: (error) => error === void 0 ? t("providers.selectionError") : error.code === "session/writer-held" ? t("error.sessionInUse") : t("error.action", { message: `${error.code}: ${error.message}` })
++			}, { fallback });
+ 		}
+ 		//#endregion
+ 		//#region lib/types/client/locales.js
+@@ -1741,12 +1804,18 @@ window.__ModuleLoader__.load({
+ 		*/
+ 		/** Simplified Chinese dictionary (the key-set source of truth). */
+ 		const zh = {
++			"providers.label": "模型服务商",
++			"providers.partial": "部分模型服务商暂不可用",
++			"providers.selectionError": "无法切换模型，请重试",
+ 			"provider.account": "DeepSeek 账号",
+ 			"command.label": "模型",
+ 			"command.description": "选择本会话使用的模型",
  			"option.loadError": "目录加载失败：{message}",
  			"trigger.fallback": "请选择模型",
  			"trigger.loading": "正在加载模型…",
@@ -170,7 +215,7 @@ index c38bfbb..3f5a3f0 100644
  			"trigger.selectAria": "请选择模型",
  			"trigger.aria": "选择模型，当前 {model}",
  			"trigger.ariaEffort": "选择模型，当前 {model}，推理等级 {effort}",
-@@ -1762,7 +1808,7 @@ window.__ModuleLoader__.load({
+@@ -1762,17 +1831,23 @@ window.__ModuleLoader__.load({
  			"search.placeholder": "搜索模型…",
  			"search.clear": "清除搜索",
  			"search.empty": "没有匹配的模型。",
@@ -179,7 +224,13 @@ index c38bfbb..3f5a3f0 100644
  			"empty.efforts": "当前模型未提供推理等级。"
  		};
  		/** English dictionary, checked complete against the zh key set. */
-@@ -1773,6 +1819,9 @@ window.__ModuleLoader__.load({
+ 		const en = {
++			"providers.label": "Model providers",
++			"providers.partial": "Some model providers are unavailable",
++			"providers.selectionError": "Could not change the model. Try again.",
+ 			"provider.account": "DeepSeek Account",
+ 			"command.label": "Model",
+ 			"command.description": "Select the model for this conversation",
  			"option.loadError": "Catalog failed to load: {message}",
  			"trigger.fallback": "Select model",
  			"trigger.loading": "Loading models…",
@@ -189,7 +240,7 @@ index c38bfbb..3f5a3f0 100644
  			"trigger.selectAria": "Select model",
  			"trigger.aria": "Select model, current {model}",
  			"trigger.ariaEffort": "Select model, current {model}, reasoning effort {effort}",
-@@ -1788,7 +1837,7 @@ window.__ModuleLoader__.load({
+@@ -1788,7 +1863,7 @@ window.__ModuleLoader__.load({
  			"search.placeholder": "Search models…",
  			"search.clear": "Clear search",
  			"search.empty": "No matching models.",
@@ -198,7 +249,7 @@ index c38bfbb..3f5a3f0 100644
  			"empty.efforts": "This model provides no reasoning effort levels."
  		};
  		//#endregion
-@@ -1800,7 +1849,7 @@ window.__ModuleLoader__.load({
+@@ -1800,7 +1875,7 @@ window.__ModuleLoader__.load({
  		/** Flatten the directory into popup rows; failure rows are listed for visibility but never selectable. */
  		function optionsOf(directory, t) {
  			const rows = [];
@@ -207,13 +258,31 @@ index c38bfbb..3f5a3f0 100644
  				const name = group.id === "deepseek-account" ? t("provider.account") : group.name;
  				for (const model of group.models) rows.push({
  					id: rowId(group.id, model.id),
-@@ -1932,4 +1981,4 @@ window.__ModuleLoader__.load({
- 	}
- });
-
--//# sourceMappingURL=client.js.map
+@@ -1903,7 +1978,10 @@ window.__ModuleLoader__.load({
+ 				scope.slots.inject("conversation.input.model", () => scope.slots.register({
+ 					name: "conversation.input.model",
+ 					locale: NS,
+-					children: { "conversation.input.model.label": {
++					children: { "conversation.input.model.picker": {
++						kind: "single",
++						scope: "session"
++					}, "conversation.input.model.label": {
+ 						kind: "single",
+ 						scope: "session",
+ 						inline: true
+diff --git a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/ModelSelect.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/ModelSelect.d.ts
+index e850cdf..4da91de 100644
+--- a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/ModelSelect.d.ts
++++ b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/ModelSelect.d.ts
+@@ -6,5 +6,5 @@ import type { ModelSelectInjected } from './slots.ts';
+  * store/verbs) + the standard locale seat.
+  * @returns the trigger and, while open, the two-level menu.
+  */
+-export declare function ModelSelect({ locked, available, directory, load, select, t, renderSlot }: ModelSelectInjected & Pick<PropsRuntime<'conversation.input.model'>, 'locked'> & PropsLocale<'model'> & Omit<PropsRenderSlots<'conversation.input.model.label'>, 'SessionProvider'>): import("react").JSX.Element | null;
+-//# sourceMappingURL=ModelSelect.d.ts.map
 \ No newline at end of file
-+//# sourceMappingURL=client.js.map
++export declare function ModelSelect({ locked, available, directory, load, select, t, renderSlot }: ModelSelectInjected & Pick<PropsRuntime<'conversation.input.model'>, 'locked'> & PropsLocale<'model'> & Omit<PropsRenderSlots<'conversation.input.model.label' | 'conversation.input.model.picker'>, 'SessionProvider'>): import("react").JSX.Element | null;
++//# sourceMappingURL=ModelSelect.d.ts.map
 diff --git a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/directory.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/directory.d.ts
 index 1483e59..26a3823 100644
 --- a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/directory.d.ts
@@ -227,3 +296,64 @@ index 1483e59..26a3823 100644
      private readonly unsubscribeCatalog;
      private readonly unsubscribeSelection;
      /**
+diff --git a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/index.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/index.d.ts
+--- a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/index.d.ts
++++ b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/index.d.ts
+@@ -4,5 +4,5 @@
+ export type { ModelDirectoryState } from './directory.ts';
+ export { ModelDirectoryResolver } from './service.ts';
+-export type { ModelLabelOwner, ModelSelectInjected } from './slots.ts';
++export type { ModelLabelOwner, ModelPickerOwner, ModelSelectInjected } from './slots.ts';
+ export type { ModelKey } from './locales.ts';
+ declare module '@deepseek-ai/dsh-client-ui-slots' {
+diff --git a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/slots.d.ts b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/slots.d.ts
+index 0d4c2de..bd36715 100644
+--- a/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/slots.d.ts
++++ b/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/types/client/slots.d.ts
+@@ -4,6 +4,27 @@ import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client';
+ import type { ModelCatalogModel, ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types';
+ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store';
+ import type { ModelDirectoryState } from './directory.ts';
++import type { ReactNode } from 'react';
++export interface ModelPickerOwner {
++    fallback: ReactNode;
++    groups: readonly (ModelProviderGroup & { provider: Pick<ModelProviderGroup, 'id' | 'name'> })[];
++    current: ModelSelection | null;
++    disabled: boolean;
++    busy: boolean;
++    caption: string;
++    label: string;
++    providersLabel: string;
++    effortLabel: string;
++    searchLabel: string;
++    emptyLabel: string;
++    efforts: readonly { effort?: string; label: string }[];
++    currentEffort?: string;
++    catalogWarning?: string;
++    retryLabel: string;
++    reload: () => void;
++    select: ModelSelectInjected['select'];
++    formatError: (error?: { code: string; message: string }) => string;
++}
+ /** Catalog data for a model name inside the composer's existing controls. */
+ export interface ModelLabelOwner {
+     /** Provider identity and localized display name; contains no connection configuration. */
+@@ -17,6 +38,11 @@ export interface ModelLabelOwner {
+ }
+ declare module '@deepseek-ai/dsh-client-ui-slots' {
+     interface SlotMap {
++        'conversation.input.model.picker': {
++            kind: 'single';
++            scope: 'session';
++            owner: ModelPickerOwner;
++        };
+         /**
+          * Non-interactive inline model label; selection controls remain owner-managed.
+          * Without a contribution, the composer displays the catalog name.
+@@ -54,4 +80,4 @@ export interface ModelSelectInjected {
+      */
+     select: (selection: ModelSelection) => Promise<RemoteResult<void> | undefined>;
+ }
+-//# sourceMappingURL=slots.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=slots.d.ts.map

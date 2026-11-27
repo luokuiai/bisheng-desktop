@@ -2,11 +2,10 @@
    layout only takes over while one of the workspace routes is selected. */
 body[data-dsh-workspace-scene] {
   --dsh-workspace-bar: calc(48px * var(--dsh-caption-scale, 1));
-  --dsh-workspace-wide: 276px;
+  --dsh-workspace-sidebar-width: 276px;
   --dsh-workspace-soft: color-mix(in srgb, var(--dsw-alias-label-primary) 3.2%, var(--dsw-alias-bg-base));
   --dsh-workspace-line: color-mix(in srgb, var(--dsw-alias-border-l2) 45%, transparent);
   --dsh-workspace-sidebar-inset: 12px;
-  --dsh-workspace-sidebar-width: calc(var(--dsh-workspace-wide) - var(--dsh-workspace-sidebar-inset));
   --dsh-workspace-track: var(--dsh-workspace-sidebar-width);
   --dsh-workspace-card-radius: 24px;
   --dsh-workspace-content-inset: 12px 12px 12px 8px;
@@ -14,7 +13,6 @@ body[data-dsh-workspace-scene] {
   --dsh-workspace-motion: 280ms ease-in-out;
 }
 body[data-dsh-workspace-scene=chat] {
-  --dsh-workspace-track: var(--dsh-workspace-wide);
   --dsh-workspace-card-surface: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-base));
 }
 body[data-dsh-workspace-scene=page] { --dsh-workspace-track: 0px; }
@@ -52,7 +50,7 @@ html body[data-dsh-workspace-scene=chat][data-dsh-workspace-density=expanded] :h
 html body[data-dsh-workspace-scene=chat][data-dsh-workspace-density=expanded] .pI_x6G_sidebarCol [data-dsh-sidebar-root] {
   display: flex !important;
   box-sizing: border-box;
-  width: min(100% - var(--dsh-workspace-sidebar-inset), var(--dsh-workspace-sidebar-width)) !important;
+  width: calc(100% - var(--dsh-workspace-sidebar-inset)) !important;
   height: calc(100% - 2 * var(--dsh-workspace-sidebar-inset));
   margin: var(--dsh-workspace-sidebar-inset) 0;
   margin-inline-start: var(--dsh-workspace-sidebar-inset);
@@ -85,12 +83,14 @@ body[data-dsh-workspace-scene=chat] .dshChatWorkspaceList [data-dsh-sidebar-sear
 .dshChatWorkspaceList [data-dsh-sidebar-search-header] > [data-dsh-sidebar-search-row] {
   grid-area: 1 / 1 / 2 / -1;
   min-width: 0;
+  margin-inline-end: calc(-1 * var(--dsh-session-list-scrollbar-offset));
 }
 .dshChatWorkspaceList [data-dsh-sidebar-search-header] > :first-child {
   grid-area: 2 / 1;
   max-width: none;
 }
 .dshChatWorkspaceList [data-dsh-sidebar-search-header] > [data-dsh-sidebar-header-actions] { grid-area: 2 / 2; }
+.dshChatSearch .dshChatSearchPill { border-radius: 999px; corner-shape: round; }
 .dshChatSearch button:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: -2px; }
 body[data-dsh-workspace-scene] [data-desktop-workspace-path]:not([data-desktop-workspace-path^="/templates/"]) [data-dsh-workspace-sidebar] {
   border-color: var(--dsh-workspace-line);
@@ -316,6 +316,29 @@ body[data-dsh-workspace-scene=chat] .dshWorkPicker :is([role="menuitem"],[role="
   --dsw-menu-surface-fill: transparent;
   --dsw-menu-backdrop-filter: none;
 }
+body[data-dsh-workspace-scene=chat] .dshWorkspaceSidebarPopup {
+  transform-origin: top right;
+}
+body[data-dsh-workspace-scene=chat] .dshWorkspaceSidebarPopup:dir(rtl) {
+  transform-origin: top left;
+}
+body[data-dsh-workspace-scene=chat] .dshWorkspaceViewOptions > [role="presentation"] > div[role="presentation"] {
+  padding: 4px 8px;
+  color: var(--dsw-alias-label-caption);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+body[data-dsh-workspace-scene=chat] .dshWorkspaceViewOptions [role="separator"] {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--dsw-alias-border-l2);
+}
+body[data-dsh-workspace-scene=chat] .dshWorkspaceViewOptions [role="menuitem"] > svg:last-child {
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-state-business-primary);
+}
 :is(.dshWorkspacePopup, body[data-dsh-workspace-scene=chat] :is([data-trigger-menu],.dshWorkPicker)) { transform-origin: bottom left; }
 :is(.dshWorkspacePopup, body[data-dsh-workspace-scene=chat] :is([data-trigger-menu],.dshWorkPicker)):dir(rtl),
 body[data-dsh-workspace-scene=chat] .dshWorkModelPicker { transform-origin: bottom right; }
@@ -373,9 +396,9 @@ body[data-dsh-workspace-scene=workspace][data-dsh-workspace-density=expanded] .d
 :is(.dshWorkspaceRail,.dshWorkspaceDirectory)[aria-hidden=true] { transform:translateX(-100%); visibility:hidden; }
 body[data-dsh-workspace-density=compact]:not([data-dsh-workspace-nav-motion]) .dshWorkspacePages [data-titlebar-sidebar=desktop] { display:none !important; }
 @media (max-width:1023px) {
-  body[data-dsh-workspace-scene] { --dsh-workspace-wide:clamp(156px,21vw,216px); }
+  body[data-dsh-workspace-scene] { --dsh-workspace-sidebar-width:clamp(156px,21vw,216px); }
   body[data-dsh-workspace-scene=page]:is([data-dsh-workspace-density=expanded],[data-dsh-workspace-nav-motion]) .dshWorkspacePages [data-titlebar-sidebar=desktop] {
-    display:flex; width:var(--dsh-workspace-wide);
+    display:flex; width:var(--dsh-workspace-sidebar-width);
   }
   body[data-dsh-workspace-scene=page]:is([data-dsh-workspace-density=expanded],[data-dsh-workspace-nav-motion]) .dshWorkspacePages .hidden:has(> [data-titlebar-sidebar=desktop]:only-child) { display:block; }
 }
@@ -388,10 +411,21 @@ body[data-dsh-workspace-density=compact]:not([data-dsh-workspace-nav-motion]) .d
   body[data-dsh-workspace-scene] { --dsh-workspace-motion:0s linear; }
   .dshWorkspaceDirectory .dshWorkspaceRoute { transition:none; }
 }
-.dshWorkspaceRecoveryButton {
-  position: fixed; top:48px; inset-inline-start:12px;
-  border-radius:8px; background:var(--dsw-alias-bg-base); color:var(--dsw-alias-label-primary);
+.dshWorkspaceStartup {
+  position:fixed;
+  inset:0;
+  z-index:100;
+  display:grid;
+  align-content:center;
+  justify-items:center;
+  gap:12px;
+  background:var(--dsw-alias-bg-base);
+  color:var(--dsw-alias-label-primary);
+  -webkit-app-region:drag;
 }
+.dshWorkspaceStartup button { -webkit-app-region:no-drag; }
+#root:has(.dshWorkspaceStartup) { visibility:hidden; }
+.dshWorkspaceStartup { visibility:visible; }
 
 body[data-dsh-workspace-scene] .dshWorkspacePages [data-dsh-workspace-nav-column] {
   margin-inline-end: var(--dsh-workspace-column-end);
