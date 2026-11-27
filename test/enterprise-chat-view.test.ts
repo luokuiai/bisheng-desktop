@@ -30,7 +30,10 @@ vi.mock('electron', async () => {
           url = fake.loadLanding ?? next
           this.webContents.emit('did-navigate', {}, url, 200, 'OK')
           this.webContents.emit('did-finish-load')
-        }) })
+        }), navigateInPage: (next: string) => {
+          url = next
+          this.webContents.emit('did-navigate-in-page', {}, url, true)
+        } })
         fake.views.push(this)
       }
     }
@@ -738,6 +741,58 @@ it('restricts settings navigation and rejects stale readiness after an identity 
     expect(f.host.snapshot()).toMatchObject({ connected: false, settingsReady: false })
     expect(f.host.snapshot().settingsSection).toBeUndefined()
   } finally { f.host.dispose() }
+})
+
+it('loads approvals directly once when the first SPA navigation is accepted without a ready report', async () => {
+  vi.useFakeTimers()
+  const f = fixture()
+  try {
+    f.host.present(f.owner, presentation)
+    await flush()
+    const view = fake.views[0], contents = view.webContents
+    const approvalsPath = '/workspace/settings/my-tasks'
+    const approvalsURL = `https://enterprise.example${approvalsPath}?dshSettings=1&embed=dsh&dshTheme=dark`
+    contents.executeJavaScript.mockImplementation(async (script: string) => {
+      if (script.includes('dsh:navigate')) {
+        expect(script).toContain('/settings/my-tasks?dshSettings=1')
+        contents.navigateInPage(approvalsURL)
+        return true
+      }
+    })
+    f.host.present(f.owner, { ...presentation, settings: 'my-tasks' })
+    await flush()
+    expect(contents.loadURL).toHaveBeenCalledTimes(1)
+    expect(view.setVisible).toHaveBeenLastCalledWith(false)
+    await elapse(3_000)
+    expect(contents.loadURL).toHaveBeenCalledTimes(2)
+    expect(contents.loadURL).toHaveBeenLastCalledWith(approvalsURL)
+    expect(f.host.snapshot().settingsReady).toBe(false)
+    contents.emit('ipc-message', { senderFrame: contents.mainFrame }, 'enterprise-chat:settings-ready', { section: 'my-tasks', path: approvalsPath })
+    expect(f.host.snapshot()).toMatchObject({ settingsSection: 'my-tasks', settingsReady: true })
+    expect(view.setVisible).toHaveBeenLastCalledWith(true)
+    await elapse(45_000)
+    expect(contents.loadURL).toHaveBeenCalledTimes(2)
+    expect(f.host.snapshot().settingsFailure).toBeUndefined()
+  } finally { f.host.dispose(); vi.useRealTimers() }
+})
+
+it('cancels pending SPA recovery when switching sections and honors the current ready report', async () => {
+  vi.useFakeTimers()
+  const f = fixture()
+  try {
+    f.host.present(f.owner, presentation)
+    await flush()
+    const contents = fake.views[0].webContents
+    contents.executeJavaScript.mockImplementation(async (script: string) => script.includes('/settings/my-tasks?') ? true : undefined)
+    f.host.present(f.owner, { ...presentation, settings: 'my-tasks' })
+    await flush()
+    f.host.present(f.owner, { ...presentation, settings: 'my-requests' })
+    await flush()
+    contents.emit('ipc-message', { senderFrame: contents.mainFrame }, 'enterprise-chat:settings-ready', { section: 'my-requests', path: '/workspace/settings/my-requests' })
+    await elapse(3_000)
+    expect(contents.loadURL).toHaveBeenCalledTimes(2)
+    expect(f.host.snapshot()).toMatchObject({ settingsSection: 'my-requests', settingsReady: true })
+  } finally { f.host.dispose(); vi.useRealTimers() }
 })
 
 it('hides settings when the ready document navigates away and requires a new report after reload', async () => {

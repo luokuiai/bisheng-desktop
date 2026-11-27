@@ -15,6 +15,7 @@ import type { EnterpriseWebSession } from './web-session'
 
 /** Remote Chat gets its own in-memory browser session and a presentation-only preload. */
 const DOCUMENT_LOAD_TIMEOUT_MS = 45_000
+const SETTINGS_SPA_READY_TIMEOUT_MS = 3_000
 const INITIAL_BACKOFF_MS = [2_000, 5_000, 10_000]
 const RENEWAL_BACKOFF_MS = [2_000, 5_000, 10_000, 30_000]
 const RETRYABLE_NETWORK_CODES = new Set([
@@ -109,6 +110,8 @@ export class EnterpriseChatView {
   private settingsReady = false
   private settingsFailure?: 'load' | 'unsupported'
   private settingsTimer?: NodeJS.Timeout
+  private settingsFallbackTimer?: NodeJS.Timeout
+  private settingsRequest = 0
   private appearance?: string
   private webCredential?: EnterpriseWebSession
   private hostedApp: HostedAppView
@@ -362,51 +365,64 @@ export class EnterpriseChatView {
       this.settingsReturnRoute = current.pathname + current.search
     }
     const route = section ? `/workspace/settings/${section}?dshSettings=1` : this.settingsReturnRoute ?? '/workspace/c/new'
+    const request = ++this.settingsRequest
+    const isCurrent = () => epoch === this.generation && view === this.view && request === this.settingsRequest
     this.settingsSection = section
     this.note(`[enterprise-settings] navigate section=${section ?? 'return'}`)
     this.settingsReady = false
     this.settingsFailure = undefined
     clearTimeout(this.settingsTimer)
+    clearTimeout(this.settingsFallbackTimer)
     if (section) {
       this.settingsTimer = setTimeout(() => {
-        if (epoch !== this.generation || section !== this.settingsSection || this.settingsReady) return
+        if (!isCurrent() || this.isSettingsReady()) return
         this.settingsFailure = 'unsupported'
         this.note('[enterprise-settings] content_ready_timeout')
         this.layout(); this.notify()
       }, DOCUMENT_LOAD_TIMEOUT_MS)
     }
     this.layout(); this.notify()
-    try {
-      await this.navigate(route)
-      if (epoch !== this.generation || view !== this.view || section !== this.settingsSection) return
-      if (!section) { this.settingsReturnRoute = undefined; this.state = { phase: 'ready' } }
-      this.layout(); this.notify()
-    } catch (error) {
-      if (epoch !== this.generation || view !== this.view || section !== this.settingsSection) return
+    const failed = (error: unknown) => {
+      if (!isCurrent()) return
       clearTimeout(this.settingsTimer)
       this.settingsFailure = 'load'
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code).slice(0, 80) : 'transport'
       this.note(`[enterprise-settings] navigation_failed code=${code}`)
       this.layout(); this.notify()
     }
+    try {
+      const needsDocumentFallback = await this.navigate(route)
+      if (!isCurrent()) return
+      if (section && needsDocumentFallback && !this.isSettingsReady()) {
+        this.settingsFallbackTimer = setTimeout(() => {
+          if (!isCurrent() || this.isSettingsReady()) return
+          this.note('[enterprise-settings] reload_after_missing_ready')
+          void this.navigate(route, true).catch(failed)
+        }, SETTINGS_SPA_READY_TIMEOUT_MS)
+      }
+      if (!section) { this.settingsReturnRoute = undefined; this.state = { phase: 'ready' } }
+      this.layout(); this.notify()
+    } catch (error) {
+      failed(error)
+    }
   }
 
-  private async navigate(route: string): Promise<void> {
+  private async navigate(route: string, reload = false): Promise<boolean> {
     const view = this.view, origin = this.origin, epoch = this.generation
     if (!view || !origin) throw new Error('Enterprise page unavailable.')
     const current = new URL(view.webContents.getURL())
     current.searchParams.delete('embed')
     current.searchParams.delete('dshTheme')
     current.searchParams.delete('dshLocale')
-    if (current.pathname + current.search === route) return
     const request = ++this.navigationRequest
-    const accepted = await view.webContents.executeJavaScript(`(() => {
+    if (!reload && current.pathname + current.search === route) return true
+    const accepted = !reload && await view.webContents.executeJavaScript(`(() => {
       const event = new CustomEvent('dsh:navigate', { detail: { path: ${JSON.stringify(route.slice('/workspace'.length))} }, cancelable: true });
       window.dispatchEvent(event);
       return event.defaultPrevented;
     })()`)
-    if (request !== this.navigationRequest || epoch !== this.generation || this.view !== view) return
-    if (accepted === true) return
+    if (request !== this.navigationRequest || epoch !== this.generation || this.view !== view) return false
+    if (accepted === true) return true
     this.state = { phase: 'loading' }
     this.layout()
     try {
@@ -423,6 +439,7 @@ export class EnterpriseChatView {
       }
       throw error
     }
+    return false
   }
 
   private layout(): void {
@@ -589,10 +606,11 @@ export class EnterpriseChatView {
           if (channel === 'enterprise-chat:settings-ready') {
             try {
               const section = parseEnterpriseSettingsSection(report.section)
-              if (section !== this.settingsSection || url.pathname !== `/workspace/settings/${section}`) return
+              if (section !== this.settingsSection || url.pathname !== `/workspace/settings/${section}` || url.searchParams.get('dshSettings') !== '1') return
               this.settingsReady = true
               this.settingsFailure = undefined
               clearTimeout(this.settingsTimer)
+              clearTimeout(this.settingsFallbackTimer)
               this.layout(); this.notify()
             } catch { this.note('[enterprise-settings] invalid_ready_report') }
             return
@@ -845,6 +863,7 @@ export class EnterpriseChatView {
     this.modalOpen = false
     this.dialogViewport = undefined
     clearTimeout(this.settingsTimer)
+    clearTimeout(this.settingsFallbackTimer)
     this.settingsSection = undefined
     this.settingsReturnRoute = undefined
     this.settingsReady = false
