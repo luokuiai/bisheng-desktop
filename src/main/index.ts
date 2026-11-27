@@ -164,6 +164,7 @@ import { registerDesktopNotificationBridge } from './desktop-notification'
 import { configureNotificationIdentity } from './notification-identity'
 import {
   raiseWindowWithoutStealingFocus,
+  restoreMaximizedWindowOnFirstPaint,
   type WindowFocusIntent
 } from './window-raise'
 import {
@@ -1055,7 +1056,7 @@ function createWindow(): BrowserWindow {
   }
   windowStateManager.track(window)
   if (windowStateManager.getState().isMaximized) {
-    window.maximize()
+    restoreMaximizedWindowOnFirstPaint(window)
   }
   window.on('close', (event) => {
     desktopStorageManager?.flushSync()
@@ -3408,7 +3409,6 @@ async function bootstrap(): Promise<void> {
       console.warn(`[desktop-storage] error during ${context}:`, error)
     }
   })
-  createWindow()
   runtime = new HarnessRuntime({
     // A packaged app's stdout may be a closed pipe; only mirror logs in development.
     echoLogs: !app.isPackaged,
@@ -3458,6 +3458,8 @@ async function bootstrap(): Promise<void> {
       }
     }
   })
+  registerHarnessHandlers()
+  createWindow()
   try {
     enterpriseDesktop = await startEnterpriseDesktop({
       desktopVersion: app.getVersion(),
@@ -3480,7 +3482,6 @@ async function bootstrap(): Promise<void> {
   }
   if (enterpriseDesktop) enterpriseChat = new EnterpriseChatView(enterpriseDesktop, (line) => runtime.note(line), () => mainWindow)
   app.once('before-quit', () => enterpriseChat?.dispose())
-  registerHarnessHandlers()
   mobileBridge = new LanMobileBridge({
     harnessUrl: () => runtime.snapshot().url,
     harnessAuthToken: () => runtime.snapshot().authToken,

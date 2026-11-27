@@ -7,7 +7,19 @@ interface RaiseableWindow {
   focus(): void
 }
 
+interface RestorableMaximizedWindow {
+  once(event: 'ready-to-show', listener: () => void): void
+  isDestroyed(): boolean
+  maximize(): void
+}
+
 export type WindowFocusIntent = 'automatic' | 'user'
+
+export function restoreMaximizedWindowOnFirstPaint(window: RestorableMaximizedWindow): void {
+  window.once('ready-to-show', () => {
+    if (!window.isDestroyed()) window.maximize()
+  })
+}
 
 /**
  * Surface a window without letting an automatic macOS transition activate the
