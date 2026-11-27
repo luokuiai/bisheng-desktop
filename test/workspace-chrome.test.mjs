@@ -57,8 +57,11 @@ it('opens directory links, switches to the persistent rail and transfers focus o
 it('shows one flat list of workbench and native panel entries in the expanded sidebar and shortcut rail', async () => {
   const Chrome = createWorkspaceChrome(React, vi.fn())
   const navigate = vi.fn()
+  const entries = ['knowledge', 'channel', 'apps', 'capabilities', 'square']
+    .map(id => ({ id, label: id, path: `/${id}`, active: false, primary: true }))
+  const snapshot = { connected: true, navigation: { entries } }
   await act(async () => root.render(React.createElement(Chrome, {
-    path: '/', navigation: { navigate }, theme, t: key => key
+    path: '/', navigation: { navigate, subscribe: () => () => {}, snapshot: () => snapshot }, theme, t: key => key
   })))
   for (const surface of ['.dshWorkspaceDirectory', '.dshWorkspaceRail']) {
     expect([...container.querySelectorAll(`${surface} [data-workspace-route]`)].map(button => button.dataset.workspaceRoute))
@@ -145,20 +148,20 @@ it('keeps one toolbar and one right-side portal when the native plugin replaces 
 it('merges the authorized enterprise entries after the new workbench entries without groups', () => {
   const entries = ['square', 'apps', 'channel', 'knowledge', 'capabilities']
     .map(id => ({ id, label: `label:${id}`, path: `/${id}`, active: false, primary: true }))
-  expect(buildDestinations({ entries, navigationReported: true }).map(item => item.route)).toEqual([
+  expect(buildDestinations({ entries }).map(item => item.route)).toEqual([
     '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
     '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'
   ])
-  expect(buildDestinations({ entries: [], navigationReported: false }).map(item => item.route)).toEqual([
+  expect(buildDestinations({ entries: [] }).map(item => item.route)).toEqual([
     '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board',
-    '/plugins', '/knowledge', '/channel', '/apps', '/capabilities', '/square'
+    '/plugins'
   ])
   expect(buildDestinations({
-    entries: entries.filter(entry => entry.id === 'knowledge'), navigationReported: true
+    entries: entries.filter(entry => entry.id === 'knowledge')
   }).map(item => item.route)).toEqual([
     '/', '/chat', '/multi-agent-chat', '/ai-chat', '/ai-image-generation', '/project-board', '/plugins', '/knowledge'
   ])
-  expect(buildDestinations({ entries, navigationReported: true, hasPanel: () => false }).map(item => item.route))
+  expect(buildDestinations({ entries, hasPanel: () => false }).map(item => item.route))
     .not.toContain('/plugins')
 })
 
@@ -167,12 +170,12 @@ it('maps the capabilities entry to tools and skills without duplicating the lega
     { id: 'skills', label: '旧技能入口', path: '/skills', active: false, primary: true },
     { id: 'capabilities', label: '工具与技能', path: '/capabilities', active: false, primary: true }
   ]
-  const destinations = buildDestinations({ entries, navigationReported: true })
+  const destinations = buildDestinations({ entries })
   expect(destinations.filter(item => item.kind === 'remote')).toEqual([
     expect.objectContaining({ moduleId: 'capabilities', route: '/capabilities', label: '工具与技能' })
   ])
 
-  const fallback = buildDestinations({ entries, navigationReported: true }).find(item => item.moduleId === 'capabilities')
+  const fallback = buildDestinations({ entries }).find(item => item.moduleId === 'capabilities')
   expect(fallback?.labelKey).toBe('skills')
 
   const Chrome = createWorkspaceChrome(React, vi.fn())
@@ -186,6 +189,19 @@ it('maps the capabilities entry to tools and skills without duplicating the lega
   })))
   const route = container.querySelector('.dshWorkspaceDirectory [data-workspace-route="/capabilities"]')
   expect(route?.textContent).toContain('工具与技能')
+})
+
+it('hides enterprise entries when logged out even if a stale navigation report exists', async () => {
+  const Chrome = createWorkspaceChrome(React, vi.fn())
+  const entries = ['knowledge', 'channel', 'apps', 'capabilities', 'square']
+    .map(id => ({ id, label: id, path: `/${id}`, active: false, primary: true }))
+  const snapshot = { connected: false, navigation: { entries } }
+  await act(async () => root.render(React.createElement(Chrome, {
+    path: '/',
+    navigation: { navigate: vi.fn(), subscribe: () => () => {}, snapshot: () => snapshot },
+    theme, t: key => key
+  })))
+  expect([...container.querySelectorAll('.dshWorkspaceDirectory [data-workspace-kind="remote"]')]).toHaveLength(0)
 })
 
 it('dispatches remote entries without navigating the local workspace route', async () => {

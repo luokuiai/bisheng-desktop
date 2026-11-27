@@ -54,18 +54,18 @@ const EMPTY_SNAPSHOT = () => EMPTY_STATE
  * The caller renders this list as-is: no group headings and no replacement of
  * either set by the other.
  */
-export function buildDestinations({ entries = [], navigationReported = false, hasPanel } = {}) {
+export function buildDestinations({ entries = [], hasPanel } = {}) {
   const destinations = localEntries.map(entry => ({ ...entry }))
   if (hasPanel ? hasPanel('plugins') : true) destinations.push({ ...pluginEntry })
   for (const { moduleIds, icon, labelKey } of remoteEntries) {
     const entry = moduleIds.map(moduleId => entries.find(item => item?.id === moduleId)).find(Boolean)
-    // Until the enterprise document reports its menu, keep every original
-    // entry visible. Once it does, only hide what this account cannot use.
-    if (navigationReported && !entry) continue
-    const moduleId = entry?.id ?? moduleIds[0]
+    // An absent report is not authorization. Remote menus appear only after
+    // the connected enterprise document publishes the current account's list.
+    if (!entry) continue
+    const moduleId = entry.id
     destinations.push({
       id: 'remote:' + moduleId, kind: 'remote', moduleId, icon, labelKey,
-      route: '/' + moduleId, ...(entry ? { label: entry.label } : {})
+      route: '/' + moduleId, label: entry.label
     })
   }
   return destinations
@@ -197,8 +197,7 @@ export function createWorkspaceChrome(React, loadPages) {
     const dark = React.useSyncExternalStore(theme.subscribe, theme.snapshot) === 'dark'
     const state = React.useSyncExternalStore(navigation.subscribe ?? EMPTY_SUBSCRIBE, navigation.snapshot ?? EMPTY_SNAPSHOT)
     const destinations = buildDestinations({
-      entries: state.navigation?.entries,
-      navigationReported: state.navigation !== undefined,
+      entries: state.connected ? state.navigation?.entries : undefined,
       hasPanel: navigation.hasPanel
     })
     const activeId = (state.remotePageId && 'remote:' + state.remotePageId) ||
