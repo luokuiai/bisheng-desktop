@@ -1,5 +1,28 @@
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { raiseWindowWithoutStealingFocus } from '../src/main/window-raise'
+import { raiseWindowWithoutStealingFocus, restoreMaximizedWindowOnFirstPaint } from '../src/main/window-raise'
+
+describe('restoreMaximizedWindowOnFirstPaint', () => {
+  it('restores the saved size once, after the first page can be shown', () => {
+    const window = Object.assign(new EventEmitter(), { isDestroyed: () => false, maximize: vi.fn() })
+
+    restoreMaximizedWindowOnFirstPaint(window)
+
+    expect(window.maximize).not.toHaveBeenCalled()
+    window.emit('ready-to-show')
+    window.emit('ready-to-show')
+    expect(window.maximize).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not show a destroyed window', () => {
+    const window = Object.assign(new EventEmitter(), { isDestroyed: () => true, maximize: vi.fn() })
+
+    restoreMaximizedWindowOnFirstPaint(window)
+    window.emit('ready-to-show')
+
+    expect(window.maximize).not.toHaveBeenCalled()
+  })
+})
 
 interface WindowDouble {
   isDestroyed: ReturnType<typeof vi.fn<() => boolean>>

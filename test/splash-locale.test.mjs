@@ -65,4 +65,11 @@ describe('startup splash language', () => {
     const main = readFileSync(new URL('../src/main/index.ts', import.meta.url), 'utf8')
     expect(/loadDesktopResource\(window, desktopResourcePath\('splash\.html'\),\s*\{\s*query:\s*\{[^}]*locale:\s*harnessLocale\(\)/u.test(main)).toBe(true)
   })
+
+  it('registers the synchronous storage handler before any startup window can load', () => {
+    const main = readFileSync(new URL('../src/main/index.ts', import.meta.url), 'utf8')
+    const bootstrap = main.slice(main.indexOf('async function bootstrap()'))
+    expect(main).toMatch(/function registerHarnessHandlers\(\)[\s\S]*?ipcMain\.on\('dsh:storage-load-sync'/u)
+    expect(bootstrap).toMatch(/registerHarnessHandlers\(\)\s+createWindow\(\)\s+try\s*\{\s*enterpriseDesktop = await startEnterpriseDesktop/u)
+  })
 })
