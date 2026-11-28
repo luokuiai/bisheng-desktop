@@ -220,7 +220,15 @@ index 4bfdd13..4c73583 100644
  		}
  		//#endregion
  		//#region lib/types/client/skeleton/ConversationHeader.js
-@@ -17989,7 +18033,7 @@ window.__ModuleLoader__.load({
+@@ -17943,6 +17987,7 @@ window.__ModuleLoader__.load({
+ 			const viewId = view ?? active?.id;
+ 			return (0, react_jsx_runtime.jsx)("div", {
+ 				className: ConversationRoot_module_css_default.viewArea,
++				"data-dsh-conversation-view": viewId,
+ 				children: viewId !== void 0 && renderSlot("conversation.view", {
+ 					inspectCall,
+ 					viewRequest,
+@@ -17989,7 +18034,7 @@ window.__ModuleLoader__.load({
  			const active = resolveActiveView(tabs, useStore((s) => s.view));
  			const ancestry = useSessions((s) => deriveAncestry(s, sessionId), equalBreadcrumbs);
  			const showTabs = !hideChrome && tabs.length > 1;
@@ -229,7 +237,7 @@ index 4bfdd13..4c73583 100644
  				className: ConversationRoot_module_css_default.titleRow,
  				children: [!hideChrome && (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsxs)("div", {
  					className: ConversationRoot_module_css_default.titleCluster,
-@@ -18040,7 +18084,8 @@ window.__ModuleLoader__.load({
+@@ -18040,7 +18085,8 @@ window.__ModuleLoader__.load({
  					"data-conversation-header-corner": "",
  					children: renderSlot("conversation.session.header.corner", {})
  				})]
@@ -239,7 +247,7 @@ index 4bfdd13..4c73583 100644
  				className: ConversationRoot_module_css_default.tabs,
  				role: "tablist",
  				"data-conversation-tabs": "",
-@@ -18700,13 +18745,16 @@ window.__ModuleLoader__.load({
+@@ -18700,13 +18746,16 @@ window.__ModuleLoader__.load({
  		}
  		//#endregion
  		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/InputBar.module.css.mjs
@@ -258,7 +266,7 @@ index 4bfdd13..4c73583 100644
  			document.head.appendChild(tag);
  		}
  		var InputBar_module_css_default = {
-@@ -18728,6 +18776,7 @@ window.__ModuleLoader__.load({
+@@ -18728,6 +18777,7 @@ window.__ModuleLoader__.load({
  			"pending": "uV2eYG_pending",
  			"placeholder": "uV2eYG_placeholder",
  			"primary": "uV2eYG_primary",
@@ -266,7 +274,7 @@ index 4bfdd13..4c73583 100644
  			"retry": "uV2eYG_retry",
  			"root": "uV2eYG_root",
  			"row": "uV2eYG_row",
-@@ -18754,7 +18803,7 @@ window.__ModuleLoader__.load({
+@@ -18754,7 +18804,7 @@ window.__ModuleLoader__.load({
  		* The no-session state renders the SAME div inert as the Workspace-picker
  		* trigger instead of a parallel tree.
  		*/
@@ -275,7 +283,7 @@ index 4bfdd13..4c73583 100644
  			const input = useInput((s) => s);
  			const notice = useNotices((s) => s);
  			const busyEnter = useBusyEnter((s) => s);
-@@ -18999,10 +19048,6 @@ window.__ModuleLoader__.load({
+@@ -18999,10 +19049,6 @@ window.__ModuleLoader__.load({
  								"data-composer-overlay": true,
  								children: renderSlot("conversation.input.overlay", {})
  							}),
@@ -286,7 +294,7 @@ index 4bfdd13..4c73583 100644
  							renderSlot("conversation.input.attachments", {
  								attachments,
  								canAcceptDrop,
-@@ -19014,25 +19059,36 @@ window.__ModuleLoader__.load({
+@@ -19014,25 +19060,36 @@ window.__ModuleLoader__.load({
  								onRetryFile: (id) => {
  									retryFileUpload?.(id);
  								},
@@ -337,7 +345,7 @@ index 4bfdd13..4c73583 100644
  							}),
  							(0, react_jsx_runtime.jsxs)("div", {
  								ref: rowRef,
-@@ -19160,8 +19216,7 @@ window.__ModuleLoader__.load({
+@@ -19160,8 +19217,7 @@ window.__ModuleLoader__.load({
  					}),
  					(0, react_jsx_runtime.jsxs)("div", {
  						className: InputBar_module_css_default.dock,
@@ -347,7 +355,7 @@ index 4bfdd13..4c73583 100644
  							useProjection,
  							t
  						})]
-@@ -19233,6 +19288,7 @@ window.__ModuleLoader__.load({
+@@ -19233,6 +19289,7 @@ window.__ModuleLoader__.load({
  		}
  		function TodoPanel({ todos, t }) {
  			const [collapsed, setCollapsed] = (0, react.useState)(true);
@@ -355,7 +363,7 @@ index 4bfdd13..4c73583 100644
  			if (todos.length === 0) return null;
  			return (0, react_jsx_runtime.jsx)("section", {
  				className: TodoPanel_module_css_default.root,
-@@ -19244,6 +19300,7 @@ window.__ModuleLoader__.load({
+@@ -19244,6 +19301,7 @@ window.__ModuleLoader__.load({
  						type: "button",
  						className: TodoPanel_module_css_default.header,
  						"aria-expanded": !collapsed,
@@ -363,7 +371,7 @@ index 4bfdd13..4c73583 100644
  						onClick: () => {
  							setCollapsed((v) => !v);
  						},
-@@ -19267,21 +19324,27 @@ window.__ModuleLoader__.load({
+@@ -19267,21 +19325,27 @@ window.__ModuleLoader__.load({
  								children: collapsed ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronUpOutlineRegular, {}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutlineRegular, {})
  							})
  						]
@@ -406,7 +414,7 @@ index 4bfdd13..4c73583 100644
  					})]
  				})
  			});
-@@ -19438,6 +19501,8 @@ window.__ModuleLoader__.load({
+@@ -19438,6 +19502,8 @@ window.__ModuleLoader__.load({
  		const inject = [
  			"slots",
  			"sessions",
@@ -415,7 +423,7 @@ index 4bfdd13..4c73583 100644
  			"fileUpload",
  			"uiSession",
  			"uiWorkspace",
-@@ -19751,6 +19816,7 @@ window.__ModuleLoader__.load({
+@@ -19751,6 +19817,7 @@ window.__ModuleLoader__.load({
  						kind: "list",
  						scope: "session"
  					},
@@ -423,7 +431,7 @@ index 4bfdd13..4c73583 100644
  					"conversation.hero.brand.mark": {
  						kind: "single",
  						scope: "root"
-@@ -19766,6 +19832,14 @@ window.__ModuleLoader__.load({
+@@ -19766,6 +19833,14 @@ window.__ModuleLoader__.load({
  					"conversation.hero.options": {
  						kind: "list",
  						scope: "session"
@@ -438,7 +446,7 @@ index 4bfdd13..4c73583 100644
  					}
  				},
  				slots: {
-@@ -19889,6 +19963,14 @@ window.__ModuleLoader__.load({
+@@ -19889,6 +19964,14 @@ window.__ModuleLoader__.load({
  						kind: "list",
  						scope: "session"
  					},
@@ -453,7 +461,7 @@ index 4bfdd13..4c73583 100644
  					"conversation.input.permission": {
  						kind: "single",
  						scope: "session"
-@@ -19840,6 +19922,7 @@ window.__ModuleLoader__.load({
+@@ -19840,6 +19923,7 @@ window.__ModuleLoader__.load({
  				name: "conversation.session.header",
  				locale: NS,
  				children: {
@@ -461,7 +469,7 @@ index 4bfdd13..4c73583 100644
  					"conversation.session.header.lineage": {
  						kind: "single",
  						scope: "session"
-@@ -19925,6 +20008,7 @@ window.__ModuleLoader__.load({
+@@ -19925,6 +20009,7 @@ window.__ModuleLoader__.load({
  						removeAttachment: void 0,
  						resolveDraftAttachments: void 0,
  						retryFileUpload: void 0,
@@ -469,7 +477,7 @@ index 4bfdd13..4c73583 100644
  						toggleCommandMenu: void 0,
  						stop: void 0,
  						hooks: {
-@@ -19991,6 +20075,11 @@ window.__ModuleLoader__.load({
+@@ -19991,6 +20076,11 @@ window.__ModuleLoader__.load({
  						retryFileUpload: (id) => {
  							if (sessions.binding(sessionId) !== void 0) conversation.retryFileUpload(sessionId, id);
  						},
@@ -481,7 +489,7 @@ index 4bfdd13..4c73583 100644
  						toggleCommandMenu: inputTriggers === void 0 ? void 0 : (selection) => {
  							shell.dismissPopup();
  							const snapshot = shell.snapshot;
-@@ -20023,10 +20112,7 @@ window.__ModuleLoader__.load({
+@@ -20023,10 +20113,7 @@ window.__ModuleLoader__.load({
  				yield slots.register({
  					name: "main",
  					key: "conversation",
@@ -493,7 +501,7 @@ index 4bfdd13..4c73583 100644
  				}, ConversationPanel);
  				yield registerConversationRoot();
  				yield registerConversationContent();
-@@ -20062,4 +20148,4 @@ window.__ModuleLoader__.load({
+@@ -20062,4 +20149,4 @@ window.__ModuleLoader__.load({
  	}
  });
 

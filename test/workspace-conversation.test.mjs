@@ -140,6 +140,63 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
+it('hides the Work composer on the rendered trajectory view and restores the same draft on return', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  const source = await readFile('node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js', 'utf8')
+  const start = source.indexOf('function resolveActiveView(')
+  const end = source.indexOf('//#region lib/types/client/skeleton/ConversationSession.js', start)
+  const Views = runInNewContext(`${source.slice(start, end)}\nDefaultConversationViews`, {
+    react: React, react_jsx_runtime: jsx, ConversationRoot_module_css_default: { viewArea: 'viewArea' }
+  })
+  const style = document.createElement('style')
+  style.textContent = await readFile('packages/dsh-desktop-client-ui/workspace/static/work-conversation.css', 'utf8')
+  document.head.append(style)
+  document.body.dataset.dshWorkspaceScene = 'chat'
+  const host = document.body.appendChild(document.createElement('section'))
+  host.id = 'dsh-panel-work'
+  root = createRoot(host)
+  const tabs = [{ id: 'chat' }, { id: 'trajectory' }]
+  const props = {
+    useConversationViews: select => select(tabs),
+    useInspectCall: select => select(undefined),
+    useSession: select => select({ blank: false }),
+    useConversation: select => select({}),
+    inputActions: { persistDraft() {} },
+    actions: {},
+    bindDraftPersistence: () => () => {},
+    renderSlot: (_name, _owner, { only }) => only
+  }
+  const render = selected => act(async () => root.render(
+    jsx.jsxs('div', { 'data-conversation-scroll': '', children: [
+      jsx.jsx('div', { 'data-slot': 'conversation.session', children:
+        jsx.jsx(Views, { ...props, useStore: select => select({ view: selected }) }) }),
+      jsx.jsx('div', { 'data-composer-seat': '', children: jsx.jsx('textarea', {}) })
+    ] })
+  ))
+  try {
+    await render('chat')
+    const composer = host.querySelector('[data-composer-seat]')
+    const editor = composer.querySelector('textarea')
+    editor.value = 'Unsaved draft'
+    expect(getComputedStyle(composer).display).not.toBe('none')
+
+    await render('trajectory')
+    expect(host.querySelector('[data-slot="conversation.session"]').textContent).toBe('trajectory')
+    expect(getComputedStyle(composer).display).toBe('none')
+    delete document.body.dataset.dshWorkspaceScene
+    expect(getComputedStyle(composer).display).not.toBe('none')
+    document.body.dataset.dshWorkspaceScene = 'chat'
+
+    await render('chat')
+    expect(getComputedStyle(composer).display).not.toBe('none')
+    expect(host.querySelector('textarea')).toBe(editor)
+    expect(editor.value).toBe('Unsaved draft')
+  } finally {
+    style.remove()
+    delete document.body.dataset.dshWorkspaceScene
+  }
+})
+
 it('uses catalog routes and efforts, retains failed selections, and dismisses the Work picker from the keyboard', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })

@@ -462,6 +462,8 @@ AI 对话通过 `sidebar.content` 复用新会话操作与 `sidebar.workspaces`�
 
 Work 右栏由原生 `rightbar` 插槽及会话布局服务管理。普通展开占用独立列，折叠、拖宽和全屏沿用原生状态。`dsh-client-ui-conversation@0.2.1-rc.2` 提供单占用会话插槽 `conversation.session.header.toolbar`，将会话标题、模式和操作移入 Work 顶部工具栏，「对话／轨迹」保留在内容区。没有桌面挂载点时使用原生行。上游提供等价标题行位置配置后可移除该补丁段。顶部模式切换与经典界面共用新会话判定，Work 在本地提交后隐藏，企业 Chat 根据导航和 landing 状态隐藏。
 
+Work 的「轨迹」视图以 `DefaultConversationViews` 实际渲染的视图 ID 为准。会话补丁将该 ID 标在视图容器，Work 样式据此隐藏同一滚动区的输入栏，切回「对话」时恢复可见性。编辑器保持挂载，保留草稿和附件。上游提供等价的视图标记或输入栏可见性配置后移除该兼容段。回归见 `test/workspace-conversation.test.mjs`。
+
 `shell.overlay` 在 `/chat` 的窗口工具栏中挂载 Board UI Segment，默认显示工作。切换聊天沿用企业账号提示和原生内容区，回到工作时保留会话。快捷问题继续使用 `conversation.hero.brand.title`。空白工作会话的欢迎区与输入区居中成组排列，工作区及模式控件在输入框上方，PPT、Word 和 Excel 模板沿用输入区下方的原有挂载点。已开始的会话继续使用原有的底部输入区。此调整只改变现有客户端 UI 挂载，沿用当前 Profile、模块解析与企业登录桥。
 
 `dsh-client-ui-sidebar` 和 `dsh-client-ui-workspace` 的补丁分发侧栏内容与搜索触发器接缝。上游提供等价的侧栏呈现与搜索定制后移除对应补丁段。回归见 `test/desktop-modes-ui.test.mjs` 和 `test/workspace-chrome.test.mjs`。
