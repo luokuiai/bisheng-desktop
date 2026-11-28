@@ -69,6 +69,7 @@ export function createMarketController(ctx, accountController, options = {}) {
   let key, document = rememberedInstall(null)
   let account, capability, policy, lastError, failureCode, queue = Promise.resolve(), epoch = 0
   let online = false, cancellation = 0, operationGeneration = 0, cleaning = false
+  let pendingTick
   const running = new Map()
   const directory = home ? join(home, 'enterprise-market') : null
   const serialized = (task, cleanup = false) => {
@@ -340,14 +341,21 @@ export function createMarketController(ctx, accountController, options = {}) {
       publishState()
       }, true)
     },
-    tick: () => serialized(async () => {
-      if (!accountController.state().connected) {
-        epoch += 1; online = false
-        for (const record of document.installed) await stopRecord(record)
-        await save(); return
-      }
-      await synchronize()
-    })
+    tick() {
+      if (pendingTick?.generation === cancellation) return pendingTick.operation
+      const operation = serialized(async () => {
+        if (!accountController.state().connected) {
+          epoch += 1; online = false
+          for (const record of document.installed) await stopRecord(record)
+          await save(); return
+        }
+        await synchronize()
+      }).finally(() => {
+        if (pendingTick?.operation === operation) pendingTick = undefined
+      })
+      pendingTick = { generation: cancellation, operation }
+      return operation
+    }
   }
 }
 
@@ -375,10 +383,25 @@ export function applyEnterpriseMarket(ctx, accountController, options = {}) {
     if (Buffer.byteLength(body) > 70000) throw new Error('Plugin request exceeds 70 KiB.')
     return performMarketAction(ctx.get('pluginManager'), source, market, JSON.parse(body))
   })
-  const tick = async () => { await accountController.refreshState?.(); await market.tick() }
-  const timer = setInterval(() => { void tick().catch(() => undefined) }, 60_000)
+  let disposed = false
+  const reportFailure = error => {
+    if (!disposed) ctx.logger?.warn?.('Enterprise plugin sync failed: %s', error.message)
+  }
+  const restore = () => {
+    if (disposed) return
+    return market.tick().catch(reportFailure)
+  }
+  const tick = async () => {
+    await accountController.refreshState?.()
+    await restore()
+  }
+  const timer = setInterval(() => { void tick().catch(reportFailure) }, 60_000)
   timer.unref?.()
-  ctx.effect(() => () => { clearInterval(timer); return market.stop(false) }, 'enterprise-market lifecycle')
-  void tick().catch(() => undefined)
-  return market
+  ctx.effect(() => () => {
+    disposed = true
+    clearInterval(timer)
+    return market.stop()
+  }, 'enterprise-market lifecycle')
+  void tick().catch(reportFailure)
+  return Object.assign(market, { restore })
 }

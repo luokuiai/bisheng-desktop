@@ -7,7 +7,7 @@ import { skillContentHash } from '../packages/dsh-desktop-enterprise/work-skills
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { requestImageDimensions } from '@deepseek-ai/dsh-attachment'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { apply as applyEnterprise } from '../packages/dsh-desktop-enterprise/index.js'
 import { startEnterpriseCredentialBroker } from '../src/main/enterprise/credential-broker'
@@ -194,6 +194,49 @@ describe('enterprise adapter without a Broker', () => {
 })
 
 describe('enterprise adapter with a Broker', () => {
+  it('starts plugin authorization as soon as the account becomes connected', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'enterprise-market-login-'))
+    vi.stubEnv('DSH_HOME', directory)
+    process.env.DSH_DESKTOP_ENTERPRISE_BROKER_URL = 'http://127.0.0.1:43219'
+    process.env.DSH_DESKTOP_ENTERPRISE_BROKER_CAPABILITY = 'market-fixture-capability'
+    let state: Record<string, unknown> = { connected: false, revision: 1, models: [] }
+    let stateReads = 0
+    let capabilityChecks = 0
+    let finishCapability = () => {}
+    const capability = new Promise<void>(resolve => { finishCapability = resolve })
+    const broker = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname
+      if (path === '/v1/state') { stateReads++; return Response.json(state) }
+      if (path === '/v1/market') {
+        const request = JSON.parse(String(init?.body))
+        expect(request).toMatchObject({ path: '/api/v1/dsh/market/capabilities', connectionKey: 'fixture-account' })
+        capabilityChecks++
+        await capability
+        return Response.json({ status_code: 200, data: { enabled: false, contract_version: 2 } })
+      }
+      throw new Error(`Unexpected broker route: ${path}`)
+    })
+    adapterCleanups.push(async () => {
+      broker.mockRestore()
+      vi.unstubAllEnvs()
+      await rm(directory, { recursive: true, force: true })
+    })
+    try {
+      const routes = createPluginContext()
+      await waitFor(() => stateReads > 0)
+      expect(capabilityChecks).toBe(0)
+      state = { ...state, connectionKey: 'fixture-account', base: 'https://enterprise.example',
+        tenant: { id: 'tenant' }, user: { id: 'user' }, revision: 2 }
+      await invoke(routes, '/api/enterprise.state')
+      expect(capabilityChecks).toBe(0)
+      state = { ...state, connected: true, revision: 3 }
+      const replies = await Promise.all(Array.from({ length: 3 }, () => invoke(routes, '/api/enterprise.state')))
+      for (const reply of replies) await expect(reply.json()).resolves.toMatchObject({ connected: true })
+      await waitFor(() => capabilityChecks > 0, 1000)
+      expect(capabilityChecks).toBe(1)
+    } finally { finishCapability() }
+  })
+
   it('loads skill catalogs and complete bundles after consuming the owner capability', async () => {
     const home = await mkdtemp(join(tmpdir(), 'enterprise-skill-broker-'))
     const previousHome = process.env.DSH_HOME

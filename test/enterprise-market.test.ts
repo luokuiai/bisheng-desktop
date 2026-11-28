@@ -229,6 +229,19 @@ describe('account-bound lifecycle', () => {
     await market.act({ action: 'install', plugin_id: pluginId })
     expect(active.size).toBe(1)
   })
+  it('restores the installed generation once when account and periodic sync overlap', async () => {
+    const { market, request, active } = await fixture()
+    await market.act({ action: 'install', plugin_id: pluginId })
+    await market.stop()
+    expect(active.size).toBe(0)
+    request.mockClear()
+    const accountSync = market.tick()
+    const timerSync = market.tick()
+    await Promise.all([accountSync, timerSync])
+    expect(active.has('1.0.0')).toBe(true)
+    expect(market.state().installed[0]?.status).toBe('enabled')
+    expect(request.mock.calls.map(([path]) => path.split('/').at(-1))).toEqual(['capabilities', 'sync'])
+  })
   it('returns an empty catalog after logout and rejects a previous account response', async () => {
     const { market, request, swap, disconnect } = await fixture()
     let release!: () => void

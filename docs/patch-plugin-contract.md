@@ -325,6 +325,8 @@ Work 知识空间引用在原生输入的 `plain` 和 `claimed` 两个可编辑�
 
 加载阶段：企业插件仍从经校验的企业 generation 读取入口，并以该包解析客户端和 bundle；普通 Profile 不新增企业持久投影，Safe Mode 不加载此来源。实例激活失败保留原始诊断并走已有更新回退。Manager 必须保留来源报告的 `applied`，不能套用普通 Profile 的 `no-hmr`；来源清单不返回目录、配置或凭据。
 
+Harness 收到已连接的企业账号状态时，立即在后台校验市场授权并恢复已启用的插件。账号状态读取不等待插件加载。现有 60 秒轮询继续校验授权和重试，重叠的恢复任务合并。菜单仍由实际激活的插件注册。回归覆盖登录状态触发、并发状态读取、已安装 generation 恢复与账号断开。
+
 企业工作台仍通过 Broker 获取并核验临时 `.tgz`，安装改为 `pluginManager.installBundle`，启停与卸载使用既有 Manager 路径。临时文件保持到整个操作结束，再释放。回移植 upstream V0.13.0 的 `expectedName` / `expectedVersion` / `replace` 接口形态与 verified backend 能力声明：安装后端在发布前校验包身份，Manager 在接受 bundle 前再次核对；不支持或拒绝校验时不得退回普通 pnpm。页面区分已应用、待重启、覆盖、失败及取消，不能把退出码 0 当成激活成功。
 
 升级到 upstream V0.13.0 时，用上游 verified-install 实现替换这部分回移植，保留企业授权来源接缝，除非上游已提供等价的账号范围生命周期 API。不得直接删除企业目录、授权与凭据撤销边界。企业旧 ZIP/npm 包和账号安装记录不迁移格式；本改动统一管理接口，不合并授权存储与普通 Profile 存储。

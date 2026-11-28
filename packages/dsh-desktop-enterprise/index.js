@@ -202,6 +202,7 @@ export function apply(ctx) {
   let workResources
   let workCapabilities
   let ingestEnterpriseState = () => undefined
+  let accountUpdate = Promise.resolve()
   const thirdPartyFlags = () => {
     const snap = capabilityPolicy?.snapshot()
     const connected = account.connected === true && snap?.connected === true && snap?.connectionKey === account.connectionKey
@@ -210,18 +211,34 @@ export function apply(ctx) {
       allowThirdPartyWorkbenches: connected && snap.allowThirdPartyWorkbenches === true
     }
   }
+  const applyAccountState = (state) => {
+    const update = accountUpdate.then(async () => {
+      if (Number.isInteger(state.revision) && state.revision < account.revision) return account
+      const identityChanged = account.connectionKey !== state.connectionKey
+      const signedOut = !state.connected && account.connected
+      const restore = state.connected && (identityChanged || !account.connected)
+      if (identityChanged || signedOut) {
+        await market?.stop()
+        await workbenches?.stop()
+        capabilityPolicy?.reset()
+        workResources?.clear()
+        workSkills?.clear()
+        workCapabilities?.clear()
+      }
+      account = state
+      ingestEnterpriseState(state)
+      if (restore) market?.restore()
+      return state
+    })
+    accountUpdate = update.catch(error => {
+      ctx.logger?.warn?.('Enterprise account update failed: %s', error.message)
+    })
+    return update
+  }
   const readBrokerState = async () => {
-    const state = broker ? await brokerJson('/v1/state') : disabledState()
-    if (account.connectionKey !== state.connectionKey) {
-      await market?.stop()
-      await workbenches?.stop()
-      capabilityPolicy?.reset()
-    }
-    if ((!state.connected && account.connected) || account.connectionKey !== state.connectionKey) { workResources?.clear(); workSkills?.clear(); workCapabilities?.clear() }
-    account = state
+    const state = await applyAccountState(broker ? await brokerJson('/v1/state') : disabledState())
     if (!state.connected) capabilityPolicy?.reset()
     else void capabilityPolicy?.refresh(state.connectionKey).catch(() => undefined)
-    ingestEnterpriseState(state)
     return { ...state, ...thirdPartyFlags() }
   }
   const marketRequest = async (path, body, binary = false) => {
@@ -376,15 +393,7 @@ export function apply(ctx) {
   })
   registerJsonRoute(connection, LOCAL_PATHS.manual, ['POST'], async (request) => {
     const body = await readJson(request)
-    const state = await brokerJson('/v1/login/manual', { identityTicket: String(body?.identityTicket ?? '') })
-    if (account.connectionKey !== state.connectionKey) {
-      await market?.stop()
-      await workbenches?.stop()
-      capabilityPolicy?.reset()
-    }
-    if ((!state.connected && account.connected) || account.connectionKey !== state.connectionKey) { workResources?.clear(); workSkills?.clear(); workCapabilities?.clear() }
-    account = state
-    ingestEnterpriseState(state)
+    const state = await applyAccountState(await brokerJson('/v1/login/manual', { identityTicket: String(body?.identityTicket ?? '') }))
     if (state.connected) await capabilityPolicy?.refresh(state.connectionKey).catch(() => undefined)
     return { ...state, ...thirdPartyFlags() }
   })
@@ -417,13 +426,7 @@ export function apply(ctx) {
   registerJsonRoute(connection, LOCAL_PATHS.logout, ['POST'], async (request) => {
     await readJson(request)
     if (!broker) return disabledState()
-    const state = await brokerJson('/v1/logout', {})
-    await market.stop()
-    await workbenches?.stop()
-    capabilityPolicy?.reset()
-    if ((!state.connected && account.connected) || account.connectionKey !== state.connectionKey) { workResources?.clear(); workSkills?.clear(); workCapabilities?.clear() }
-    account = state
-    ingestEnterpriseState(state)
+    const state = await applyAccountState(await brokerJson('/v1/logout', {}))
     return { ...state, allowThirdPartyPlugins: false, allowThirdPartyWorkbenches: false }
   })
   const llm = ctx.llm
