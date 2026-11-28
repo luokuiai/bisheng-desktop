@@ -43,7 +43,7 @@ type SettingsSwitchProps = {
 
 function SettingsSwitch({ label, checked, disabled, title, className, onChange }: SettingsSwitchProps) {
   return <div className="dshSettingsControl" title={title}>
-    <Switch aria-label={label} isSelected={checked} isDisabled={disabled} className={className} onChange={onChange} />
+    <Switch aria-label={label} data-window-drag-recall isSelected={checked} isDisabled={disabled} className={className} onChange={onChange} />
   </div>
 }
 

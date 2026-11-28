@@ -99,7 +99,7 @@ function managerFixture(board) {
       openInstall: install, refresh, setEnabled
     })))
   }
-  return { state, render, install, refresh, setEnabled }
+  return { state, render, install, refresh, setEnabled, openPackage: name => { view = { kind: 'package', name } } }
 }
 
 const labelled = label => container.querySelector(`[aria-label="${label}"]`)
@@ -154,6 +154,28 @@ it('keeps plugin switches controlled and blocks interaction while busy or locked
   await page.render()
   expect(toggle(optional).disabled).toBe(true)
   expect(toggle(optional).closest('[title]').title).toBe('reasonManagementRequired')
+})
+
+it('keeps the visible detail switch clickable inside the draggable header', async () => {
+  const page = managerFixture(true)
+  const name = `enterprise:${'a'.repeat(64)}:${'b'.repeat(32)}`
+  page.state.packages.push({ name, installed: true, removable: true, enabled: true, availability: 'profile', rows: [] })
+  page.openPackage(name)
+  await page.render()
+  const control = container.querySelector('[data-plugin-detail] [role="switch"]')
+  const label = control.closest('label')
+  expect(label.closest('[data-window-drag]')).not.toBeNull()
+  expect(label.hasAttribute('data-window-drag-recall')).toBe(true)
+  expect(control.checked).toBe(true)
+  await act(async () => control.click())
+  expect(page.setEnabled).toHaveBeenNthCalledWith(1, name, false)
+  expect(control.checked).toBe(true)
+
+  page.state.packages[2].enabled = false
+  await page.render()
+  expect(control.checked).toBe(false)
+  await act(async () => control.click())
+  expect(page.setEnabled).toHaveBeenNthCalledWith(2, name, true)
 })
 
 it('keeps the Harness controls usable without the optional Board UI renderer', async () => {

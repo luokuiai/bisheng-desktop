@@ -191,6 +191,8 @@ BoardUI 的设置原型、桌面设置与消息共用 `CloseButton`，用显式 
 
 独立的插件管理页通过 `dsh-client-ui-plugin-manager@0.2.1-rc.2` 的 `plugins.controls` slot 复用同一套 BoardUI 控件。添加插件及其菜单触发器、刷新和详情操作沿用原有回调、键盘交互及禁用条件，插件包和条目开关继续由管理页维护状态。资源不可用时回退到 Harness 控件。上游开放等价的组件覆盖接口后移除该接缝，行为回归见 `test/plugin-manager-controls.test.mjs`。
 
+插件详情页的标题区在 macOS 可拖动窗口。Board UI 开关在可见的外层标签上使用 Harness 的 `data-window-drag-recall`，让整个开关轨道都能接收点击。详情页回归覆盖开关的拖拽排除标记、企业插件启停回调与受控状态更新。
+
 设置与消息在进场和退场使用 BoardUI 的 300ms 缩放、淡入淡出与模糊曲线，遵循减少动态效果偏好。退场期间保留当前分区和焦点边界，停止弹窗内容交互并撤回原生视图，动画结束后才恢复背景。AI 接入和消息的原生视图在进场动画结束或取消后读取实际坐标。常规页隐藏 `current-version`，复用 Harness 外观卡片及其主题偏好，桌面通过常规项标记约束卡片的列宽和高度。回归见 `test/desktop-settings-view.test.mjs`。Harness 提供等价生命周期接缝后移除对应补丁。
 
 ### Agent preset configuration tooltips (Harness 0.2.1-rc.2, 2026-10-27)
