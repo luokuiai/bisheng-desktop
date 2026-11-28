@@ -4,7 +4,7 @@ import { useTemplateCopy } from "@/components/foundations/template-copy/template
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import Image from "@/host/image";
-import { RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiSearchLine } from "@remixicon/react";
+import { RiArrowDownSLine, RiSearchLine } from "@remixicon/react";
 import { motion } from "motion/react";
 import {
   Button as AriaButton,
@@ -16,7 +16,6 @@ import { EFFORT_LEVELS, EffortSlider } from "@/components/application/ai-chat/ai
 import { RadioDot } from "@/components/base/radio/radio";
 import { cx } from "@/utils/cx";
 import { useDismissOnOutsidePress, useTriggerToggle } from "@/utils/use-dismiss-on-outside-press";
-import { MENU_ITEM, MENU_ITEM_ACTIVE, MENU_ITEM_COMPACT, MENU_ITEM_INTERACTIVE, MENU_POPOVER_SURFACE } from "@/components/base/dropdown/menu-styles";
 
 /**
  * Figma sources: Board UI → "model selector" (node 4433:13541) and "model
@@ -385,7 +384,7 @@ function searchModels(providers: ModelProvider[], query: string) {
 /* --------------------------------------------------------------- surfaces */
 
 const POPOVER_MOTION = cx(
-  "transition duration-150 ease-out",
+  "transition duration-150 ease-out motion-reduce:transition-none",
   "data-[entering]:opacity-0 data-[entering]:scale-95 data-[entering]:blur-[2px]",
   "data-[exiting]:opacity-0 data-[exiting]:scale-95 data-[exiting]:blur-[2px]",
   "data-[placement=bottom]:origin-top-left rtl:data-[placement=bottom]:origin-top-right data-[placement=top]:origin-bottom-left rtl:data-[placement=top]:origin-bottom-right",
@@ -472,12 +471,15 @@ function ProviderLogo({
 interface EffortMenuProps {
   value: number;
   onChange: (effort: number) => void;
+  levels?: string[];
+  label?: string;
+  pending?: boolean;
   /** Shared with the picker so a press inside here keeps the picker open. */
   popoverRef: RefObject<HTMLElement>;
 }
 
 /** The "Medium ›" chip on the selected row and its 266px effort popover. */
-function EffortMenu({ value, onChange, popoverRef }: EffortMenuProps) {
+function EffortMenu({ value, onChange, levels, label = "推理强度", pending, popoverRef }: EffortMenuProps) {
   const localize = useTemplateCopy();
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -485,7 +487,9 @@ function EffortMenu({ value, onChange, popoverRef }: EffortMenuProps) {
   const allowOpenChange = useTriggerToggle(isOpen, triggerRef);
   // The chip widens with its label ("Medium" to "Very High"); see PICKER_WIDTH.
   const [openWidth, setOpenWidth] = useState(0);
-  const level = EFFORT_LEVELS[value] ?? EFFORT_LEVELS[DEFAULT_EFFORT];
+  const [preview, setPreview] = useState<number>();
+  const currentValue = preview ?? value;
+  const level = (levels ?? EFFORT_LEVELS)[currentValue];
 
   return localize((
     <AriaDialogTrigger
@@ -498,7 +502,7 @@ function EffortMenu({ value, onChange, popoverRef }: EffortMenuProps) {
     >
       <AriaButton
         ref={triggerRef}
-        aria-label={`推理强度：${level}`}
+        aria-label={`${label}：${level ?? ""}`}
         className="flex shrink-0 cursor-pointer items-center rounded-full bg-background-tertiary-default py-1 pe-1 ps-2 outline-none transition-colors duration-150 ease hover:bg-background-tertiary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring"
       >
         <span className="text-body-2-medium whitespace-nowrap text-text-secondary">{level}</span>
@@ -519,9 +523,9 @@ function EffortMenu({ value, onChange, popoverRef }: EffortMenuProps) {
         crossOffset={EFFORT_WIDTH - openWidth}
         className={EFFORT_POPOVER}
       >
-        <AriaDialog aria-label="推理强度" className="flex flex-col pt-1 outline-none">
+        <AriaDialog aria-label={label} className="flex flex-col pt-1 outline-none">
           <p className="-mb-0.5 ps-2 text-body-medium text-text-secondary">
-            推理强度 {/* Keyed on the value so each change remounts and blurs in. */}
+            {label} {/* Keyed on the value so each change remounts and blurs in. */}
             <motion.span
               key={level}
               initial={{ opacity: 0, filter: "blur(4px)" }}
@@ -538,7 +542,9 @@ function EffortMenu({ value, onChange, popoverRef }: EffortMenuProps) {
               <span>更深入</span>
             </div>
             <div className="px-2 pb-2">
-              <EffortSlider value={value} onChange={onChange} />
+              <EffortSlider value={currentValue} levels={levels} isDisabled={pending}
+                onChange={levels ? setPreview : onChange}
+                onChangeEnd={levels ? next => { setPreview(undefined); onChange(next); } : undefined} />
             </div>
           </div>
         </AriaDialog>
@@ -560,18 +566,22 @@ export interface ModelPickerProps {
   onEffortChange?: (effort: number) => void;
   providers?: ModelProvider[];
   className?: string;
-  columns?: {
-    label: string;
+  host?: {
+    triggerLabel: string;
+    title: string;
     caption: string;
     providersLabel: string;
+    searchLabel: string;
+    searchPlaceholder: string;
+    closeSearchLabel: string;
     emptyLabel: string;
     isDisabled?: boolean;
     pending?: boolean;
-    efforts: { id?: string; label: string; selected: boolean }[];
+    effortLevels: string[];
     effortLabel: string;
     onOpen: () => void;
     onModelSelect: (id: string) => Promise<boolean>;
-    onEffortSelect: (id?: string) => Promise<boolean>;
+    onEffortSelect: (index: number) => Promise<boolean>;
     footer?: ReactNode;
   };
 }
@@ -585,7 +595,7 @@ export function ModelPicker({
   onEffortChange,
   providers = MODEL_PROVIDERS,
   className,
-  columns,
+  host,
 }: ModelPickerProps) {
   const localize = useTemplateCopy();
   const [isOpen, setIsOpen] = useState(false);
@@ -629,7 +639,7 @@ export function ModelPicker({
   // popover element itself: React Aria focuses the dialog, and keys landing
   // there never pass through a handler nested inside it.
   useEffect(() => {
-    if (!isOpen || searching || columns) return;
+    if (!isOpen || searching) return;
     const popover = popoverRef.current;
     if (!popover) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -642,7 +652,7 @@ export function ModelPicker({
     };
     popover.addEventListener("keydown", onKeyDown);
     return () => popover.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, searching, columns]);
+  }, [isOpen, searching]);
 
   // The rail keeps the active provider's mark in view: instantly when the
   // panel opens, smoothly when a pick from search or a rail press lands on a
@@ -664,11 +674,12 @@ export function ModelPicker({
     const bottom = top + mark.offsetHeight;
     const inView = top >= rail.scrollTop && bottom <= rail.scrollTop + rail.clientHeight;
     if (!firstPaint && inView) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    rail.scrollTo({
-      top: Math.max(0, top - (rail.clientHeight - mark.offsetHeight) / 2),
-      behavior: firstPaint || reduceMotion ? "instant" : "smooth",
-    });
+    const centered = Math.max(0, top - (rail.clientHeight - mark.offsetHeight) / 2);
+    if (firstPaint || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      rail.scrollTop = centered;
+    } else {
+      rail.scrollTo({ top: centered, behavior: "smooth" });
+    }
   }, [isOpen, activeProviderId]);
 
   // The list's top edge softens once it has scrolled; a new lineup starts
@@ -694,72 +705,9 @@ export function ModelPicker({
     onEffortChange?.(next);
   };
 
-  if (columns) {
-    const models = activeProvider?.models ?? [];
-    const rowClass = cx(MENU_ITEM, MENU_ITEM_COMPACT, MENU_ITEM_INTERACTIVE, "text-body-medium");
-    const closeOnSuccess = (operation: Promise<boolean>) => {
-      void operation.then(success => {
-        if (success) setIsOpen(false);
-      });
-    };
-    return (
-      <AriaDialogTrigger isOpen={isOpen} onOpenChange={next => {
-        if (!allowOpenChange(next)) return;
-        if (next) {
-          setBrowsing(null);
-          columns.onOpen();
-        }
-        setIsOpen(next);
-      }}>
-        <AriaButton ref={triggerRef} aria-label={columns.label} isDisabled={columns.isDisabled}
-          aria-busy={columns.pending}
-          className={cx("flex h-8 min-w-0 max-w-[min(240px,40vw)] cursor-pointer items-center gap-1 rounded-xl px-2 text-body-medium text-text-secondary outline-none hover:bg-background-primary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring disabled:cursor-default", className)}>
-          <span className="min-w-0 truncate">{columns.caption}</span>
-          <RiArrowDownSLine aria-hidden className={cx("size-4 shrink-0 transition-transform motion-reduce:transition-none", isOpen && "rotate-180")} />
-        </AriaButton>
-        <AriaPopover ref={popoverRef} isNonModal placement="bottom start" offset={4}
-          className={cx("w-[365px] motion-reduce:transition-none", MENU_POPOVER_SURFACE)}>
-          <AriaDialog aria-label={columns.label} className="outline-none">
-            <div className="grid grid-cols-2">
-              <div role="group" aria-label={columns.providersLabel} className="flex max-h-60 min-w-0 flex-col gap-1 overflow-y-auto border-e border-border-button-default p-1.5">
-                {providers.map(provider =>
-                  <button key={provider.id} type="button" onPointerEnter={event => {
-                    if (event.pointerType === "mouse") setBrowsing(provider.id);
-                  }} onClick={() => setBrowsing(provider.id)}
-                    aria-pressed={provider.id === activeProviderId}
-                    className={cx(rowClass, provider.id === activeProviderId && MENU_ITEM_ACTIVE)}>
-                    <span className="min-w-0 flex-1 truncate" title={provider.name}>{provider.name}</span>
-                    <RiArrowRightSLine aria-hidden className="size-4 shrink-0 rtl:rotate-180" />
-                  </button>)}
-              </div>
-              <div ref={listRef} role="group" aria-label={activeProvider?.name} className="flex max-h-60 min-w-0 flex-col gap-1 overflow-y-auto p-1.5">
-                {models.length === 0 && <p role="status" className="p-2 text-body-2-medium text-text-secondary">{columns.emptyLabel}</p>}
-                {models.map(model =>
-                  <button key={model.id} type="button" aria-disabled={columns.pending}
-                    onClick={() => { if (!columns.pending) closeOnSuccess(columns.onModelSelect(model.id)); }} aria-pressed={model.id === modelId}
-                    className={cx(rowClass, model.id === modelId && MENU_ITEM_ACTIVE)}>
-                    <span className="min-w-0 flex-1 truncate" title={model.name}>
-                      {model.name}
-                    </span>
-                    {model.id === modelId && <RiCheckLine aria-hidden className="size-4 shrink-0 text-accent-500" />}
-                  </button>)}
-              </div>
-            </div>
-            {columns.efforts.length > 0 && <div role="group" aria-label={columns.effortLabel}
-              className="mt-1 flex flex-wrap gap-1 border-t border-border-button-default px-1.5 pt-2">
-              {columns.efforts.map(option =>
-                <button key={option.id ?? ""} type="button" aria-disabled={columns.pending}
-                  aria-pressed={option.selected} onClick={() => { if (!columns.pending) closeOnSuccess(columns.onEffortSelect(option.id)); }}
-                  className={cx("cursor-pointer rounded-lg px-2 py-1 text-body-2-medium text-text-secondary outline-none hover:bg-background-primary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring disabled:cursor-default", option.selected && MENU_ITEM_ACTIVE)}>
-                  {option.label}
-                </button>)}
-            </div>}
-            {columns.footer}
-          </AriaDialog>
-        </AriaPopover>
-      </AriaDialogTrigger>
-    );
-  }
+  const closeOnSuccess = async (operation: Promise<boolean>) => {
+    if (await operation) setIsOpen(false);
+  };
 
   return localize((
     <AriaDialogTrigger
@@ -769,6 +717,7 @@ export function ModelPicker({
         if (next) {
           setBrowsing(null);
           setOpenWidth(triggerRef.current?.getBoundingClientRect().width ?? 0);
+          host?.onOpen();
         }
         setQuery(null);
         setIsOpen(next);
@@ -776,13 +725,17 @@ export function ModelPicker({
     >
       <AriaButton
         ref={triggerRef}
+        aria-label={host?.triggerLabel}
+        aria-busy={host?.pending}
+        isDisabled={host?.isDisabled}
         className={cx(
           "flex h-8 shrink-0 cursor-pointer items-center justify-center gap-0.5 rounded-xl bg-background-primary-default py-1.5 pe-1 ps-2 outline-none transition-colors duration-150 ease hover:bg-background-primary-hover focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+          host && "min-w-0 max-w-[min(240px,40vw)] bg-transparent disabled:cursor-default",
           className,
         )}
       >
-        <span className="px-0.5 text-body-medium whitespace-nowrap text-text-secondary">
-          {selected.model?.name}
+        <span className={cx("px-0.5 text-body-medium whitespace-nowrap text-text-secondary", host && "min-w-0 truncate")}>
+          {host?.caption ?? selected.model?.name}
         </span>
         <RiArrowDownSLine
           className={cx(
@@ -801,14 +754,14 @@ export function ModelPicker({
         crossOffset={PICKER_WIDTH - openWidth}
         className={PICKER_POPOVER}
       >
-        <AriaDialog aria-label="模型" className="size-full outline-none">
+        <AriaDialog aria-label={host?.title ?? "模型"} className="size-full outline-none">
           <div className="size-full">
             {/* Provider rail: 42px wide, 3px in from the panel's edge top, left
               and bottom (2px inside its border), marks 36×30 six apart. */}
             <div
               ref={railRef}
               role="tablist"
-              aria-label="模型服务商"
+              aria-label={host?.providersLabel ?? "模型服务商"}
               aria-orientation="vertical"
               className={cx(
                 "absolute top-0.5 start-0.5 h-[276px] w-[42px] overflow-y-auto rounded-[17px] bg-composer-panel-rail-background p-[3px]",
@@ -817,7 +770,7 @@ export function ModelPicker({
             >
               <div className="flex w-9 flex-col gap-1.5">
                 {providers.map((provider) => {
-                  const active = provider.id === activeProvider.id;
+                  const active = provider.id === activeProviderId;
                   return (
                     <button
                       key={provider.id}
@@ -866,13 +819,13 @@ export function ModelPicker({
                       onBlur={() => {
                         if (!query) setQuery(null);
                       }}
-                      placeholder="搜索模型"
-                      aria-label="搜索模型"
+                      placeholder={host?.searchPlaceholder ?? "搜索模型"}
+                      aria-label={host?.searchPlaceholder ?? "搜索模型"}
                       className="h-5 min-w-0 flex-1 bg-transparent text-body-medium text-text-primary caret-accent-500 outline-none placeholder:text-text-tertiary"
                     />
                     <button
                       type="button"
-                      aria-label="关闭搜索"
+                      aria-label={host?.closeSearchLabel ?? "关闭搜索"}
                       onClick={() => setQuery(null)}
                       className="flex shrink-0 cursor-pointer items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                     >
@@ -884,14 +837,14 @@ export function ModelPicker({
                   </>
                 ) : (
                   <>
-                    <span className="text-body-medium text-text-tertiary">模型</span>
+                    <span className="truncate text-body-medium text-text-tertiary">{host?.title ?? "模型"}</span>
                     <button
                       type="button"
                       onClick={() => setQuery("")}
                       className="flex cursor-pointer items-center gap-[5px] rounded-sm opacity-50 outline-none transition-opacity duration-150 ease hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-border-focus-ring"
                     >
                       <span className="text-body-medium whitespace-nowrap text-text-secondary">
-                        快速搜索
+                        {host?.searchLabel ?? "快速搜索"}
                       </span>
                       <RiSearchLine
                         className="size-4 shrink-0 text-foreground-icon-secondary"
@@ -907,15 +860,15 @@ export function ModelPicker({
                 <div
                   ref={listRef}
                   role="radiogroup"
-                  aria-label={searching ? "匹配的模型" : `${activeProvider?.name ?? ""} 的模型`}
+                  aria-label={searching ? host?.searchPlaceholder ?? "匹配的模型" : host ? activeProvider?.name ?? host.title : `${activeProvider?.name ?? ""} 的模型`}
                   onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}
                   className={cx(
                     "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-1",
                     HIDDEN_SCROLLBAR,
                   )}
                 >
-                  {results && results.length === 0 && (
-                    <p className="px-2 py-2 text-body-medium text-text-tertiary">没有匹配的模型</p>
+                  {(results?.length === 0 || host && !results && !activeProvider?.models.length) && (
+                    <p role="status" className="px-2 py-2 text-body-medium text-text-tertiary">{host?.emptyLabel ?? "没有匹配的模型"}</p>
                   )}
                   {(
                     results ??
@@ -940,8 +893,13 @@ export function ModelPicker({
                           type="button"
                           role="radio"
                           aria-checked={checked}
+                          aria-disabled={host?.pending}
                           aria-label={`${provider.name} ${model.name}`}
                           onClick={() => {
+                            if (host) {
+                              if (!host.pending) void closeOnSuccess(host.onModelSelect(model.id));
+                              return;
+                            }
                             selectModel(model.id);
                             // A pick from search lands on that provider's lineup.
                             if (searching) {
@@ -960,11 +918,14 @@ export function ModelPicker({
                                 <span className="ms-1.5 text-text-tertiary">{provider.name}</span>
                               )}
                             </span>
-                            {checked && (
+                            {checked && (!host || host.effortLevels.length > 0) && (
                               <span className="pointer-events-auto flex shrink-0">
                                 <EffortMenu
                                   value={effortValue}
-                                  onChange={changeEffort}
+                                  onChange={host ? next => { if (!host.pending) void closeOnSuccess(host.onEffortSelect(next)); } : changeEffort}
+                                  levels={host?.effortLevels}
+                                  label={host?.effortLabel}
+                                  pending={host?.pending}
                                   popoverRef={effortPopoverRef}
                                 />
                               </span>
@@ -977,6 +938,7 @@ export function ModelPicker({
                   })}
                 </div>
               </div>
+              {host?.footer}
             </div>
           </div>
         </AriaDialog>

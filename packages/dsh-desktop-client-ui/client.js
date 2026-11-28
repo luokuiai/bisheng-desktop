@@ -130,7 +130,10 @@ window.__ModuleLoader__.load({
         !group.models.some(model => model.id === 'default' && model.name === 'CLI default'))
       const hasAgentRoutes = groups.length !== props.groups.length
       if (Picker && (hasAgentRoutes || groups.some(group => group.models.length > 0))) {
-        return React.createElement(Picker, { ...props, groups, enterpriseModelsLabel: t('workEnterpriseModels') })
+        return React.createElement(Picker, {
+          ...props, groups, enterpriseModelsLabel: t('workEnterpriseModels'),
+          title: t('workModelPickerTitle'), searchActionLabel: t('workModelSearch'), closeSearchLabel: t('workModelSearchClose')
+        })
       }
       return hasAgentRoutes ? null : fallback
     }
@@ -428,6 +431,9 @@ window.__ModuleLoader__.load({
         quickSearch: '快速搜索',
         workThinking: '思考中',
         workEnterpriseModels: '企业模型',
+        workModelPickerTitle: '模型选择',
+        workModelSearch: '搜索',
+        workModelSearchClose: '关闭搜索',
         workIntro: '对话使用已配置的模型。历史记录保存在当前工作区。',
         workAsk1: '介绍这个工作台能做什么',
         workAsk2: '用三句话写一份产品更新',
@@ -461,6 +467,9 @@ window.__ModuleLoader__.load({
         quickSearch: 'Quick search',
         workThinking: 'Thinking',
         workEnterpriseModels: 'Enterprise models',
+        workModelPickerTitle: 'Model selection',
+        workModelSearch: 'Search',
+        workModelSearchClose: 'Close search',
         workIntro: 'Chat with your configured model. History is saved in this workspace.',
         workAsk1: 'What can this workspace do?',
         workAsk2: 'Write a product update in three sentences',

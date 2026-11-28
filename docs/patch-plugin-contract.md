@@ -24,7 +24,7 @@ Harness 0.2.0-rc.2 的 `dsh-client-ui-input-trigger` 将 pointer hover 与 keybo
 
 `conversation.chat.runningStatus` 是会话作用域的单占用插槽，只在会话运行期间挂载。它从 `RunningStatus` 接收格式化后的实际用时和上游默认内容，保留上游的计时、停止清理与无障碍通知。桌面仅在 `/chat` 的原生工作界面挂载 Board UI 的 `AgentThinking`，资源未就绪及其他界面使用默认内容。减少动态效果时保留静态状态提示。上游提供等价渲染接缝后可移除此插槽补丁。
 
-`conversation.input.model.picker` 是会话作用域的单占用插槽。Work 从宿主已有 `/desktop-workspace` 资源加载 Board UI `ModelPicker`。模型目录和推理等级由原生 `ModelSelect` 注入。企业模型沿用账号页的 `服务商 / 模型` 展示约定，在第一个带空格的分隔符处分组，保留模型名内部的路径。无服务商前缀的条目归入「企业模型」。双栏省略搜索。Work 按 Agent Team 的 `local-` 路由前缀与 `default` / `CLI default` 目录条目识别并隐藏 CLI 代理路由。选择动作仍提交原生目录的路由和模型 ID。其他界面使用上游选择器。Work 仅在原目录没有 CLI 代理路由时允许使用上游选择器作为回退。上游提供等价的选择器接缝后移除此处 slot 补丁。
+`conversation.input.model.picker` 是会话作用域的单占用插槽。Work 从宿主已有 `/desktop-workspace` 资源加载 `luokuiai/luokuiai-ui` 的 `main` 提交 `602bde4` 中移植的 Board UI `ModelPicker`，使用原组件的服务商图标栏、模型单选列表、搜索和推理等级弹层。弹层标题使用本地化的「模型选择」，含当前模型的辅助说明用于触发按钮。模型目录和推理等级由原生 `ModelSelect` 注入，推理滑块在操作结束时提交所选等级。企业模型沿用账号页的 `服务商 / 模型` 展示约定，在第一个带空格的分隔符处分组，保留模型名内部的路径。无服务商前缀的条目归入「企业模型」。Work 按 Agent Team 的 `local-` 路由前缀与 `default` / `CLI default` 目录条目识别并隐藏 CLI 代理路由。选择动作提交原生目录的路由和模型 ID。其他界面使用上游选择器。Work 仅在原目录没有 CLI 代理路由时允许使用上游选择器作为回退。上游提供等价的选择器接缝后移除此处 slot 补丁。行为回归见 `test/workspace-conversation.test.mjs`。
 
 权限、工作区和预设菜单继续由各自的上游组件管理。会话与工作区行菜单在 AI 对话中向侧栏内展开，移出时保持定位，仍支持选中项、点击外部或按 Esc 关闭。工作区视图选项沿用原分组、排序、筛选动作，以局部样式标记共享 Board UI 的菜单外观。改动在客户端模块执行阶段生效，复用现有资源入口和 React 实例。上游能配置对应菜单行为与样式，或提供 Todo 展开行为后，可移除相应补丁。相关回归位于 `test/workspace-conversation.test.mjs`、`test/desktop-modes-ui.test.mjs` 与 `test/workspace-chrome.test.mjs`。
 

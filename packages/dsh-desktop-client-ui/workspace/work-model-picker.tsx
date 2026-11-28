@@ -3,9 +3,14 @@ import { createPortal } from 'react-dom'
 import { UNSAFE_PortalProvider } from 'react-aria'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { ModelPickerOwner } from '@deepseek-ai/dsh-client-ui-model-selection/client'
-import { ModelPicker, type ModelProvider } from '@/components/application/composer-panel/model-picker'
+import { MODEL_PROVIDERS, ModelPicker, type ModelProvider } from '@/components/application/composer-panel/model-picker'
 
-type WorkModelPickerProps = Omit<ModelPickerOwner, 'fallback'> & { enterpriseModelsLabel: string }
+type WorkModelPickerProps = Omit<ModelPickerOwner, 'fallback'> & {
+  title: string
+  searchActionLabel: string
+  closeSearchLabel: string
+  enterpriseModelsLabel: string
+}
 
 const ENTERPRISE_PROVIDER_ROUTE = 'bisheng-enterprise'
 
@@ -41,7 +46,12 @@ export function WorkModelPicker(props: WorkModelPickerProps) {
       const providerName = display ? display.provider || props.enterpriseModelsLabel : group.provider.name
       let provider = providers.get(providerId)
       if (!provider) {
-        provider = { id: providerId, name: providerName, logo: '', models: [] }
+        const brandName = providerName.trim().toLowerCase()
+        const brandId = brandName === 'chatgpt' ? 'openai' : brandName
+        const brand = MODEL_PROVIDERS.find(item =>
+          (!display && item.id === group.id) ||
+          item.id === brandId || item.name.toLowerCase() === brandName)
+        provider = { id: providerId, name: providerName, logo: brand?.logo ?? '/desktop-workspace/composer-panel/models/generic.svg', logoSize: brand?.logoSize, models: [] }
         providers.set(providerId, provider)
       }
       provider.models.push({ id, name: display?.name ?? model.name })
@@ -73,8 +83,11 @@ export function WorkModelPicker(props: WorkModelPickerProps) {
     {createPortal(<div ref={setPortal} className="dshWorkspacePortal" />, document.body)}
     <UNSAFE_PortalProvider getContainer={() => portal}>
       <ModelPicker providers={[...providers.values()]} value={value}
-        columns={{
-          caption: displayCaption, label, providersLabel, effortLabel, emptyLabel, isDisabled: disabled, pending: busy || pending,
+        effort={Math.max(0, efforts.findIndex(option => option.effort === currentEffort))}
+        host={{
+          title: props.title, caption: displayCaption, triggerLabel: label, providersLabel, effortLabel, emptyLabel,
+          searchLabel: props.searchActionLabel, searchPlaceholder: props.searchLabel, closeSearchLabel: props.closeSearchLabel,
+          isDisabled: disabled, pending: busy || pending,
           onOpen: () => {
             setError('')
             props.reload()
@@ -84,10 +97,12 @@ export function WorkModelPicker(props: WorkModelPickerProps) {
             const selection = routes.get(id)
             return selection ? submit(selection) : false
           },
-          efforts: efforts.map(option => ({ id: option.effort, label: option.label, selected: option.effort === currentEffort })),
-          onEffortSelect: async reasoningEffort => {
-            if (reasoningEffort === currentEffort) return true
-            return current ? submit({ ...current, reasoningEffort }) : false
+          effortLevels: efforts.map(option => option.label),
+          onEffortSelect: async index => {
+            const option = efforts[index]
+            if (!option || !current) return false
+            if (option.effort === currentEffort) return true
+            return submit({ ...current, reasoningEffort: option.effort })
           },
           footer: <>
             {props.catalogWarning && <div className="flex items-start gap-2 px-1.5 pt-2 text-body-2-medium text-text-secondary">

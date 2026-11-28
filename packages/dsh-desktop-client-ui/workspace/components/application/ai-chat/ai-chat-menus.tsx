@@ -527,34 +527,43 @@ const MAX_EFFORT_EFFECT: "flame" | "pixelation" = "flame";
  * the ticks are laid out to match. At max, a pixel-noise overlay flickers
  * across the track.
  */
-export function EffortSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+export function EffortSlider({ value, onChange, onChangeEnd, levels = EFFORT_LEVELS, isDisabled }: {
+  value: number;
+  onChange: (value: number) => void;
+  onChangeEnd?: (value: number) => void;
+  levels?: string[];
+  isDisabled?: boolean;
+}) {
   const localize = useTemplateCopy();
-  const isMax = value === EFFORT_LEVELS.length - 1;
+  const maximum = Math.max(1, levels.length - 1);
+  const isMax = value === maximum;
   // Fresh random impulse per tick each time the engine ignites: blown left by
   // the exhaust with random lift, tumble and stagger, like debris in the blast.
   const blast = useMemo(
     () =>
-      EFFORT_LEVELS.map(() => ({
+      Array.from({ length: levels.length }, () => ({
         x: -(70 + Math.random() * 130),
         y: (Math.random() - 0.5) * 70,
         rotate: (Math.random() - 0.5) * 720,
         delay: Math.random() * 0.3,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isMax],
+    [isMax, levels.length],
   );
   // Thumb center sits at `fraction` of the 21px-inset rail, so its right edge
   // is at fraction × (track − 21px) + 21px — expressed here in calc() so the
   // fill lands flush against the thumb at any rendered track width.
-  const fraction = value / (EFFORT_LEVELS.length - 1);
+  const fraction = value / maximum;
   return localize((
     <AriaSlider
       aria-label="推理强度"
       minValue={0}
-      maxValue={EFFORT_LEVELS.length - 1}
+      maxValue={maximum}
       step={1}
       value={value}
+      isDisabled={isDisabled || levels.length < 2}
       onChange={(v) => onChange(v as number)}
+      onChangeEnd={(v) => onChangeEnd?.(v as number)}
       className="w-full"
     >
       <div className="relative h-[27px] w-full overflow-hidden rounded-lg bg-background-secondary-default">
@@ -567,7 +576,7 @@ export function EffortSlider({ value, onChange }: { value: number; onChange: (v:
             to 30%. Insets keep tick centers on the thumb centers (10.5px +
             i × stop, ticks are 3px wide). */}
         <div className="absolute inset-x-[9px] top-[7px] flex h-[13px] items-center justify-between">
-          {EFFORT_LEVELS.map((level, index) => (
+          {levels.map((level, index) => (
             <motion.span
               key={level}
               animate={

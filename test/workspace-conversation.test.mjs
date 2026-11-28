@@ -217,29 +217,55 @@ it('uses catalog routes and efforts, retains failed selections, and dismisses th
     .mockResolvedValue({ ok: true })
   const props = {
     groups: routes.map(provider => ({ ...provider, provider })), current, disabled: false, busy: false,
-    label: 'Select model', caption: 'First model', providersLabel: 'Providers', enterpriseModelsLabel: 'Enterprise models', effortLabel: 'Reasoning',
-    searchLabel: 'Search', emptyLabel: 'No matches', efforts: [{ effort: 'high', label: 'High' }],
+    label: 'Select model, current First model with a long route name', title: 'Model selection', caption: 'First model',
+    providersLabel: 'Providers', enterpriseModelsLabel: 'Enterprise models', effortLabel: 'Reasoning',
+    searchActionLabel: 'Search', closeSearchLabel: 'Close search', searchLabel: 'Search models', emptyLabel: 'No matches',
+    efforts: [{ effort: 'low', label: 'Low' }, { effort: 'high', label: 'High' }], currentEffort: 'low',
     retryLabel: 'Retry', reload, select, formatError: error => error.message
   }
   const render = (extra = {}) => act(async () => root.render(React.createElement(WorkModelPicker, { ...props, ...extra })))
   const button = name => [...document.querySelectorAll('[role=dialog] button')].find(item => item.textContent === name)
+  const model = name => document.querySelector(`[role=radio][aria-label="${name}"]`)
   const click = target => act(async () => target.click())
   await render()
   const trigger = host.querySelector('button')
+  expect(trigger.getAttribute('aria-label')).toBe(props.label)
   await click(trigger)
   expect(reload).toHaveBeenCalledOnce()
-  expect(document.querySelector('[role=dialog] input[type=search]')).toBeNull()
-  expect(button('First model').getAttribute('aria-pressed')).toBe('true')
-  expect(button('Second model')).toBeUndefined()
-  await click(button('Second provider'))
-  expect(button('Second model').getAttribute('aria-pressed')).toBe('false')
-  await click(button('Second model'))
+  const picker = document.querySelector('[role=dialog]')
+  expect(picker.getAttribute('aria-label')).toBe('Model selection')
+  expect(picker.textContent).not.toContain(props.label)
+  expect(picker.querySelector('input')).toBeNull()
+  expect(model('First provider First model').getAttribute('aria-checked')).toBe('true')
+  expect(model('Second provider Second model')).toBeNull()
+  await click(button('Search'))
+  const search = picker.querySelector('input[aria-label="Search models"]')
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(search, 'Second')
+    search.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(model('First provider First model')).toBeNull()
+  expect(model('Second provider Second model')).not.toBeNull()
+  await click(picker.querySelector('[aria-label="Close search"]'))
+  const providerMark = document.querySelector('[role=tablist] [aria-label="Second provider"]')
+  expect(providerMark.textContent).toBe('')
+  expect(providerMark.querySelector('img').getAttribute('src')).toContain('/generic.svg')
+  await click(providerMark)
+  expect(providerMark.getAttribute('aria-selected')).toBe('true')
+  expect(model('Second provider Second model').getAttribute('aria-checked')).toBe('false')
+  await click(model('Second provider Second model'))
   expect(select).toHaveBeenLastCalledWith({ provider: 'second', model: 'shared', reasoningEffort: 'medium' })
   expect(document.querySelector('[role=alert]').textContent).toBe('Try again')
-  await click(button('Second model'))
+  await click(model('Second provider Second model'))
   expect(document.querySelector('[role=dialog]')).toBeNull()
   await click(trigger)
-  await click(button('High'))
+  await click(picker.ownerDocument.querySelector('[aria-label="Reasoning：Low"]'))
+  const slider = document.querySelector('[role=dialog][aria-label=Reasoning] input[type=range]')
+  expect(slider.max).toBe('1')
+  await act(async () => {
+    slider.focus()
+    slider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }))
+  })
   expect(select).toHaveBeenLastCalledWith({ ...current, reasoningEffort: 'high' })
   await click(trigger)
   const dialog = document.querySelector('[role=dialog]')
@@ -265,21 +291,27 @@ it('groups one enterprise tenant by the advertised providers, keeping transport 
       { id: 'routed-model', name: 'openrouter/vendor/model' }
     ] }],
     current: { provider: provider.id, model: 'gpt-route' },
-    disabled: false, busy: false, label: 'Select model', caption: `${selectedName} · High`,
+    disabled: false, busy: false, label: `Select model, current ${selectedName}`, title: 'Model selection', caption: `${selectedName} · High`,
     providersLabel: 'Providers', enterpriseModelsLabel: 'Enterprise models', effortLabel: 'Reasoning',
-    searchLabel: 'Search', emptyLabel: 'No matches', efforts: [], retryLabel: 'Retry', reload() {}, select
+    searchActionLabel: 'Search', closeSearchLabel: 'Close search', searchLabel: 'Search models',
+    emptyLabel: 'No matches', efforts: [], retryLabel: 'Retry', reload() {}, select
   })))
   const trigger = host.querySelector('button')
   expect(trigger.textContent).toBe('la/auto/gpt-6.1-terra · High')
   await act(async () => trigger.click())
-  const providers = [...document.querySelectorAll('[aria-label=Providers] button')]
-  expect(providers.map(button => button.textContent)).toEqual(['ChatGPT', 'DeepSeek', 'Enterprise models'])
-  expect(document.querySelector('[role=group][aria-label=ChatGPT] button').getAttribute('aria-pressed')).toBe('true')
-  await act(async () => providers.find(button => button.textContent === 'Enterprise models').click())
-  expect(document.querySelector('[role=group][aria-label="Enterprise models"] button').textContent).toBe('openrouter/vendor/model')
-  await act(async () => providers.find(button => button.textContent === 'DeepSeek').click())
-  const deepseek = document.querySelector('[role=group][aria-label=DeepSeek] button')
-  expect(deepseek.textContent).toBe('deepseek/v3')
+  const providers = [...document.querySelectorAll('[role=tablist][aria-label=Providers] button')]
+  expect(providers.map(button => button.getAttribute('aria-label'))).toEqual(['ChatGPT', 'DeepSeek', 'Enterprise models'])
+  const chatGptMark = providers.find(button => button.getAttribute('aria-label') === 'ChatGPT')
+  const chatGptModel = document.querySelector('[role=radio][aria-label="ChatGPT la/auto/gpt-6.1-terra"]')
+  expect(chatGptModel.getAttribute('aria-checked')).toBe('true')
+  expect(chatGptMark.querySelector('img').getAttribute('src')).toBe('/desktop-workspace/composer-panel/models/openai.svg')
+  expect(chatGptModel.parentElement.querySelector('img').getAttribute('src')).toBe('/desktop-workspace/composer-panel/models/openai.svg')
+  await act(async () => providers.find(button => button.getAttribute('aria-label') === 'Enterprise models').click())
+  expect(document.querySelector('[role=radio][aria-label="Enterprise models openrouter/vendor/model"]')).not.toBeNull()
+  const deepseekMark = providers.find(button => button.getAttribute('aria-label') === 'DeepSeek')
+  expect(deepseekMark.querySelector('img').getAttribute('src')).toContain('/deepseek.svg')
+  await act(async () => deepseekMark.click())
+  const deepseek = document.querySelector('[role=radio][aria-label="DeepSeek deepseek/v3"]')
   await act(async () => deepseek.click())
   expect(select).toHaveBeenCalledExactlyOnceWith({ provider: provider.id, model: 'deepseek-route', reasoningEffort: undefined })
 })
