@@ -207,16 +207,23 @@ it('reserves the toolbar end for the native right sidebar button only while it i
   }
 })
 
-it('keeps one toolbar and one right-side portal when the native plugin replaces its template', async () => {
+it('keeps the toolbar and its controls as full-width plugin pages take over navigation', async () => {
   const Chrome = createWorkspaceChrome(React, vi.fn())
   const expandBotSidebar = vi.fn()
+  const navigate = vi.fn()
   const render = (path, native) => act(async () => root.render(React.createElement(Chrome, { path, native, expandBotSidebar,
-    navigation: { navigate: vi.fn() }, theme, t: key => key })))
-  await render('/multi-agent-chat', false)
+    navigation: { navigate }, theme, t: key => key })))
+  const hostNavigation = () => container.querySelector('.dshWorkspaceDirectory, .dshWorkspaceRail, [data-workspace-account-slot]')
+  await render('/', false)
+  expect(hostNavigation()).not.toBeNull()
   const portal = container.querySelector('[data-workspace-right-sidebar-slot]')
+  await render('/panel/extension.board', true)
+  expect(document.body.dataset.dshWorkspaceNative).toBe('panel')
+  expect(hostNavigation()).toBeNull()
   await render('/multi-agent-chat', true)
   expect(document.body.dataset.dshWorkspaceNative).toBe('agents')
   expect(expandBotSidebar).toHaveBeenCalledOnce()
+  expect(hostNavigation()).toBeNull()
   expect(container.querySelectorAll('.dshWorkspaceToolbar')).toHaveLength(1)
   expect(container.querySelector('[data-workspace-right-sidebar-slot]')).toBe(portal)
   const botPanel = document.body.appendChild(document.createElement('aside'))
@@ -225,13 +232,19 @@ it('keeps one toolbar and one right-side portal when the native plugin replaces 
     botPanel.appendChild(document.createElement('button')).focus()
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backslash', metaKey: true, cancelable: true })))
     expect(document.activeElement).toBe(container.querySelector('[data-workspace-sidebar-toggle]'))
+    expect(document.body.dataset.dshWorkspaceDensity).toBe('compact')
+    expect(hostNavigation()).toBeNull()
   } finally {
     botPanel.remove()
   }
   await render('/ai-image-generation', true)
   expect(document.body.dataset.dshWorkspaceNative).toBe('image')
+  container.querySelector('.dshWorkspaceToolbar [aria-label="home"]').click()
+  expect(navigate).toHaveBeenCalledExactlyOnceWith('/')
   await render('/', false)
   expect(document.body.hasAttribute('data-dsh-workspace-native')).toBe(false)
+  expect(container.querySelector('.dshWorkspaceRail').hasAttribute('inert')).toBe(false)
+  expect(container.querySelector('[data-workspace-account-slot=compact]')).not.toBeNull()
 })
 
 it('merges the authorized enterprise entries after the new workbench entries without groups', () => {

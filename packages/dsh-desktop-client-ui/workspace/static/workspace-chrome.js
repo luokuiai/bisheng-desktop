@@ -169,12 +169,11 @@ export function createWorkspaceChrome(React) {
     const navRef = React.useRef(null)
     const railRef = React.useRef(null)
     const moving = React.useRef(null)
-    // Native panels replace the page body entirely, so their routes keep the
-    // shared directory instead of falling back to a page-owned sidebar.
     const scene = native ? 'workspace' : workspaceScene(path)
-    const surface = native ? nativeSurfaces.get(path) : undefined
+    const surface = native ? nativeSurfaces.get(path) ?? 'panel' : undefined
+    const showHostNavigation = !native && scene !== 'chat'
     const sessionToolbar = scene === 'chat' && state.mode === 'work' && state.nativeWork && !state.panelOpen
-    const accountPlacement = scene === 'chat' ? undefined : compact ? 'compact' : scene === 'workspace' ? 'expanded' : undefined
+    const accountPlacement = !showHostNavigation ? undefined : compact ? 'compact' : scene === 'workspace' ? 'expanded' : undefined
     const toggle = () => {
       const active = document.activeElement
       const inPageSidebar = active?.closest('[data-titlebar-sidebar]') ||
@@ -270,8 +269,8 @@ export function createWorkspaceChrome(React) {
             tool('settings', t('settings'), () => navigation.host.openCapability('settings')),
             tool(dark ? 'sun' : 'moon', t(dark ? 'light' : 'dark'), () => theme.set(dark ? 'light' : 'dark')),
             h('span', { 'data-workspace-right-sidebar-slot': '' })))),
-      scene !== 'chat' && h(DirectoryNav, { compact: true, destinations, activeId, t, navigate, openRemote, navRef: railRef, inactive: !compact }),
-      scene === 'workspace' && h(DirectoryNav, { destinations, activeId, t, navigate, openRemote, navRef, inactive: compact }),
+      showHostNavigation && h(DirectoryNav, { compact: true, destinations, activeId, t, navigate, openRemote, navRef: railRef, inactive: !compact }),
+      showHostNavigation && scene === 'workspace' && h(DirectoryNav, { destinations, activeId, t, navigate, openRemote, navRef, inactive: compact }),
       accountPlacement && h('div', { className: 'dshWorkspaceAccount', 'data-workspace-account-slot': accountPlacement }))
   }
 }
