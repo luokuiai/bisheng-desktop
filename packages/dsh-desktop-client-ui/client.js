@@ -1454,7 +1454,7 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
       const hostedSeat = React.useRef(null)
       const [animateWork, setAnimateWork] = React.useState(false)
       const surfaceOpen = settingsOpen || state.approvalsOpen || state.accountDialogOpen
-      const hostedApp = mode === 'chat' && !surfaceOpen ? state.hostedApp : undefined
+      const hostedApp = mode === 'chat' ? state.hostedApp : undefined
       const hostedAppSlug = hostedApp?.slug
       React.useEffect(() => {
         const bridge = window.dshEnterpriseChat
@@ -1523,7 +1523,8 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
           const baseX = chrome && chrome.bottom > rect.y && chrome.left < rect.right
             ? Math.max(contentLeft, chrome.right) : contentLeft
           const y = rect.y
-          const remote = surfaceOpen && state.settingsProtocolVersion === 1 && settingsSurface
+          const modalPresent = surfaceOpen || Boolean(document.querySelector('[data-dsh-settings-overlay], .dshApprovalsDialog, .dshAccountDialog'))
+          const remote = modalPresent && state.settingsProtocolVersion === 1 && settingsSurface
           const safeModePageOpen = document.documentElement.hasAttribute('data-dsh-safe-mode-page')
           const hostOverlayOpen = overlays.isModalOpen(remote?.element) || appRoot?.inert || document.documentElement.hasAttribute('data-dsh-about-open')
           const workspaceCard = inChatWorkspace && nativeChat && !remote
@@ -1534,8 +1535,9 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
           const radius = (workspaceCard || !workspaceDockOpen) && cardStyle
             ? Math.max(0, Math.round((Number.parseFloat(cardStyle.borderTopLeftRadius) || 0) - (Number.parseFloat(cardStyle.borderTopWidth) || 0)))
             : 0
-          const chatVisible = nativeChat && !surfaceOpen && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
-          const remotePageVisible = mode === 'chat' && Boolean(state.remotePageId) && !surfaceOpen && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
+          const chatVisible = nativeChat && !modalPresent && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
+          const remotePage = mode === 'chat' && Boolean(state.remotePageId)
+          const remotePageVisible = remotePage && !modalPresent && !safeModePageOpen && !hostOverlayOpen && botSidebarMode !== 'drawer'
           const settingsVisible = remote && !hostOverlayOpen && state.connected && remote.bounds.width > 0 && remote.bounds.height > 0
           const wideSidebar = chatVisible && document.querySelector('[data-dsh-sidebar-root][data-dsh-sidebar-wide="true"]')?.getBoundingClientRect()
           const overlayBounds = settingsVisible ? remote.bounds
@@ -1551,6 +1553,7 @@ if (revealWorkSession) ctx.uiWorkspace.openSession = revealWorkSession
           if (hostedRect && hostedOffsetTarget) hostedOffsetTarget.style.setProperty('--dsh-hosted-start-offset', `${visibleLeft - rect.x}px`)
           void bridge.present({
             visible: remote ? settingsVisible && remoteBounds.width > 0 : remotePageVisible || chatVisible,
+            ...(modalPresent && !safeModePageOpen && (nativeChat || remotePage) ? { backdrop: true } : {}),
             ...(remote ? { settings: remote.section } : {}),
             ...(palette ? { palette } : {}),
             ...(workspaceCard ? { workspaceCard } : {}),

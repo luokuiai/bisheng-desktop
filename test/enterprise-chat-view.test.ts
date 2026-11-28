@@ -20,11 +20,14 @@ vi.mock('electron', async () => {
       webContents: any
       setBounds = vi.fn()
       setVisible = vi.fn()
+      getBounds = () => this.setBounds.mock.lastCall?.[0]
+      getVisible = () => this.setVisible.mock.lastCall?.[0]
       setBackgroundColor = vi.fn()
       setBorderRadius = vi.fn()
       constructor(public options: any) {
         let url = ''
         this.webContents = Object.assign(new EventEmitter(), { id: fake.views.length + 100, session: options.webPreferences.session, isDestroyed: () => false, setWindowOpenHandler: vi.fn(), focus: vi.fn(), send: vi.fn(), mainFrame: {}, getURL: () => url, getZoomFactor: () => 1, close: vi.fn(() => { if (fake.emitCloseAsGone) { const contents = this.webContents; setTimeout(() => contents.emit('render-process-gone'), 0) } }), executeJavaScript: vi.fn(async () => {}), insertCSS: vi.fn(async () => 'key'), loadURL: vi.fn(async (next: string) => {
+          this.webContents.emit('did-start-navigation', {}, next, false, true)
           if (fake.hangLoads) return await new Promise<void>(() => {})
           if (fake.loadFailures > 0) { fake.loadFailures -= 1; throw Object.assign(new Error('load failed'), { code: fake.loadErrorCode }) }
           url = fake.loadLanding ?? next
@@ -33,7 +36,7 @@ vi.mock('electron', async () => {
         }), navigateInPage: (next: string) => {
           url = next
           this.webContents.emit('did-navigate-in-page', {}, url, true)
-        } })
+        }, capturePage: vi.fn(async () => ({ isEmpty: () => false, resize: () => ({ toDataURL: () => 'data:image/png;base64,fixture' }) })) })
         fake.views.push(this)
       }
     }
@@ -49,7 +52,7 @@ function fixture() {
   let state = { connected: true, connectionKey: 'tenant-a' }
   let change: (state: any) => void = () => {}
   const enterprise = { snapshot: () => state, subscribe: (listener: typeof change) => { change = listener; return vi.fn() }, webSession: vi.fn(async () => ({ base: 'https://enterprise.example', cookie: 'test-cookie', cookieName: 'bs_credits_3007', connectionKey: 'tenant-a', expiresAt: Date.now() + 300_000 })) }
-  const owner: any = Object.assign(new EventEmitter(), { isDestroyed: () => false, getContentSize: () => [1100, 800], contentView: { addChildView: vi.fn(), removeChildView: vi.fn() }, webContents: Object.assign(new EventEmitter(), { send: vi.fn(), focus: vi.fn(), getZoomFactor: () => 1 }) })
+  const owner: any = Object.assign(new EventEmitter(), { isDestroyed: () => false, getContentSize: () => [1100, 800], contentView: { addChildView: vi.fn(), removeChildView: vi.fn() }, webContents: Object.assign(new EventEmitter(), { mainFrame: {}, send: vi.fn(), focus: vi.fn(), getZoomFactor: () => 1, getURL: () => 'http://localhost:12345/', executeJavaScriptInIsolatedWorld: vi.fn(async () => true) }) })
   const host = new EnterpriseChatView(enterprise as any, vi.fn())
   return { host, owner, enterprise, change: (next: typeof state) => { state = next; change(next) } }
 }
@@ -94,10 +97,16 @@ describe('enterprise hosted app popup', () => {
       expect(hosted.setBounds).toHaveBeenLastCalledWith(hostedAppBounds)
       expect(hosted.setVisible).toHaveBeenLastCalledWith(true)
       expect(chat.setVisible).toHaveBeenLastCalledWith(false)
+      f.host.present(f.owner, { ...presentation, visible: false, backdrop: true })
+      await flush()
+      expect(hosted.webContents.capturePage).toHaveBeenCalledOnce()
+      expect(chat.webContents.capturePage).not.toHaveBeenCalled()
+      expect(hosted.setVisible).toHaveBeenLastCalledWith(false)
       f.host.present(f.owner, { ...presentation, visible: false })
       expect(hosted.setVisible).toHaveBeenLastCalledWith(false)
       f.host.present(f.owner, { ...presentation, hostedAppBounds })
       expect(hosted.setVisible).toHaveBeenLastCalledWith(true)
+      expect(hosted.webContents.loadURL).toHaveBeenCalledOnce()
 
       f.host.closeHostedApp()
       await flush()
@@ -617,21 +626,22 @@ it('delivers the host palette to module pages, backs the view with it, and rejec
     }
     f.host.present(f.owner, { ...presentation, palette })
     await flush()
-    const view = fake.views[0], wc = view.webContents
+    const view = fake.views[0]
     // Chat routes keep their own deployed theme, so their backing is unchanged.
     expect(view.setBackgroundColor).toHaveBeenLastCalledWith('#141416')
     f.host.present(f.owner, { ...presentation, palette, settings: 'desktop-usage' })
     await flush()
+    const settings = fake.views[1], wc = settings.webContents
     expect(wc.executeJavaScript).toHaveBeenCalledWith(expect.stringContaining('--bg-page:44 44 46'))
     expect(wc.executeJavaScript).toHaveBeenCalledWith(expect.stringContaining('--text-1:249 250 251'))
     // The module page paints the host surface, so the view backs it with the same color.
-    expect(view.setBackgroundColor).toHaveBeenLastCalledWith('#2c2c2e')
+    expect(settings.setBackgroundColor).toHaveBeenLastCalledWith('#2c2c2e')
     // Approvals open in a Modal on the same layer-2 surface; its pages take the same backing.
     for (const section of ['my-tasks', 'my-requests', 'notifications'] as const) {
       f.host.present(f.owner, { ...presentation, palette, settings: section })
       await flush()
       expect(wc.loadURL).toHaveBeenLastCalledWith(`https://enterprise.example/workspace/settings/${section}?dshSettings=1&embed=dsh&dshTheme=dark`)
-      expect(view.setBackgroundColor).toHaveBeenLastCalledWith('#2c2c2e')
+      expect(settings.setBackgroundColor).toHaveBeenLastCalledWith('#2c2c2e')
     }
     for (const invalid of [{ ...palette, surface: [44, 44] }, { ...palette, surface: [44, 44, 256] }, { ...palette, raised: ['53', 54, 56] }, { ...palette, strong: undefined }, { ...palette, composer: [1, 2] }, { ...palette, composer: [0, 0, 256] }, { ...palette, composer: ['40', 41, 45] }, 'dark']) {
       expect(() => f.host.present(f.owner, { ...presentation, palette: invalid })).toThrow('Invalid Chat palette.')
@@ -696,15 +706,20 @@ it('retries a stalled first document load and exposes Reconnect only after the a
   } finally { host.dispose(); f.host.dispose(); vi.useRealTimers() }
 })
 
-it('opens content-only settings, waits for the current main frame and restores the previous page', async () => {
+it('opens content-only settings in the same session without navigating the previous page', async () => {
   const f = fixture()
   try {
     f.host.present(f.owner, presentation)
     await flush()
     await f.host.open('new')
-    const view = fake.views[0], wc = view.webContents
-    f.host.present(f.owner, { ...presentation, settings: 'desktop-usage' })
+    const background = fake.views[0]
+    f.host.present(f.owner, { ...presentation, backdrop: true, settings: 'desktop-usage' })
     await flush()
+    const view = fake.views[1], wc = view.webContents
+    expect(wc.session).toBe(background.webContents.session)
+    expect(background.webContents.capturePage).toHaveBeenCalledOnce()
+    expect(background.setVisible).toHaveBeenLastCalledWith(false)
+    expect(f.host.snapshot().conversationId).toBe('new')
     expect(wc.loadURL).toHaveBeenLastCalledWith('https://enterprise.example/workspace/settings/desktop-usage?dshSettings=1&embed=dsh&dshTheme=dark')
     expect(view.setVisible).toHaveBeenLastCalledWith(false)
     const report = (frame: unknown, section: string, path = '/workspace/settings/desktop-usage') => wc.emit('ipc-message', { senderFrame: frame }, 'enterprise-chat:settings-ready', { section, path })
@@ -719,12 +734,73 @@ it('opens content-only settings, waits for the current main frame and restores t
     expect(f.owner.webContents.send).toHaveBeenLastCalledWith('enterprise-chat:close-settings')
     f.host.present(f.owner, { ...presentation, visible: false })
     await flush()
-    expect(wc.loadURL).toHaveBeenLastCalledWith('https://enterprise.example/workspace/c/new?embed=dsh&dshTheme=dark')
     f.host.present(f.owner, presentation)
-    expect(view.setVisible).toHaveBeenLastCalledWith(true)
-    expect(fake.views).toHaveLength(1)
+    expect(background.setVisible).toHaveBeenLastCalledWith(true)
+    expect(background.webContents.loadURL).toHaveBeenCalledTimes(2)
+    expect(background.webContents.getURL()).toContain('/workspace/c/new')
+    expect(background.webContents.close).not.toHaveBeenCalled()
+    expect(wc.close).toHaveBeenCalledOnce()
     expect(f.host.snapshot().settingsSection).toBeUndefined()
   } finally { f.host.dispose() }
+})
+
+it.each(['/workspace/c/new', '/workspace/knowledge', '/workspace/apps'])('keeps %s mounted across a local settings dialog', async path => {
+  const f = fixture()
+  try {
+    f.host.present(f.owner, presentation)
+    await flush()
+    const background = fake.views[0]
+    await background.webContents.loadURL(`https://enterprise.example${path}`)
+    const paint = f.owner.webContents.executeJavaScriptInIsolatedWorld
+    let finishPaint: (result: boolean) => void = () => {}
+    paint.mockImplementationOnce(() => new Promise<boolean>(resolve => { finishPaint = resolve }))
+    const covered = { ...presentation, visible: false, backdrop: true }
+    f.host.present(f.owner, covered)
+    f.host.present(f.owner, covered)
+    await flush()
+    expect(background.setVisible).toHaveBeenLastCalledWith(true)
+    expect(background.webContents.capturePage).toHaveBeenCalledOnce()
+    finishPaint(true)
+    await flush()
+    expect(background.setVisible).toHaveBeenLastCalledWith(false)
+    f.host.present(f.owner, presentation)
+    expect(background.setVisible).toHaveBeenLastCalledWith(true)
+    expect(paint).toHaveBeenCalledTimes(2)
+    expect(fake.views).toHaveLength(1)
+    expect(background.webContents.loadURL).toHaveBeenCalledTimes(2)
+    expect(background.webContents.getURL()).toBe(`https://enterprise.example${path}`)
+  } finally { f.host.dispose() }
+})
+
+it.each(['close', 'logout', 'timeout'])('discards a delayed settings backdrop on %s', async action => {
+  vi.useFakeTimers()
+  const f = fixture()
+  try {
+    f.host.present(f.owner, presentation)
+    await flush()
+    const background = fake.views[0]
+    const capture = background.webContents.capturePage
+    const image = await capture()
+    let finishCapture: (value: typeof image) => void = () => {}
+    capture.mockReturnValueOnce(new Promise(resolve => { finishCapture = resolve }))
+    f.host.present(f.owner, { ...presentation, visible: false, backdrop: true })
+    if (action === 'close') f.host.present(f.owner, presentation)
+    else if (action === 'logout') f.change({ connected: false, connectionKey: 'tenant-a' })
+    else {
+      await elapse(300)
+      expect(background.setVisible).toHaveBeenLastCalledWith(false)
+    }
+    finishCapture(image)
+    await flush()
+    expect(f.owner.webContents.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalled()
+    if (action !== 'logout') {
+      f.host.present(f.owner, presentation)
+      expect(background.setVisible).toHaveBeenLastCalledWith(true)
+      expect(background.webContents.loadURL).toHaveBeenCalledOnce()
+    } else {
+      expect(background.webContents.close).toHaveBeenCalledOnce()
+    }
+  } finally { f.host.dispose(); vi.useRealTimers() }
 })
 
 it('restricts settings navigation and rejects stale readiness after an identity change', async () => {
@@ -735,7 +811,7 @@ it('restricts settings navigation and rejects stale readiness after an identity 
   try {
     f.host.present(f.owner, { ...presentation, settings: 'desktop-usage' })
     await flush()
-    const wc = fake.views[0].webContents
+    const wc = fake.views[1].webContents
     expect(wc.loadURL).toHaveBeenLastCalledWith(expect.stringContaining('/workspace/settings/desktop-usage?dshSettings=1'))
     f.change({ connected: false, connectionKey: 'tenant-a' })
     wc.emit('ipc-message', { senderFrame: wc.mainFrame }, 'enterprise-chat:settings-ready', { section: 'desktop-usage', path: '/workspace/settings/desktop-usage' })
@@ -744,53 +820,46 @@ it('restricts settings navigation and rejects stale readiness after an identity 
   } finally { f.host.dispose() }
 })
 
-it('loads approvals directly once when the first SPA navigation is accepted without a ready report', async () => {
+it('loads approvals directly and requires a ready report before showing it', async () => {
   vi.useFakeTimers()
   const f = fixture()
   try {
     f.host.present(f.owner, presentation)
     await flush()
-    const view = fake.views[0], contents = view.webContents
     const approvalsPath = '/workspace/settings/my-tasks'
     const approvalsURL = `https://enterprise.example${approvalsPath}?dshSettings=1&embed=dsh&dshTheme=dark`
-    contents.executeJavaScript.mockImplementation(async (script: string) => {
-      if (script.includes('dsh:navigate')) {
-        expect(script).toContain('/settings/my-tasks?dshSettings=1')
-        contents.navigateInPage(approvalsURL)
-        return true
-      }
-    })
     f.host.present(f.owner, { ...presentation, settings: 'my-tasks' })
     await flush()
+    const view = fake.views[1], contents = view.webContents
     expect(contents.loadURL).toHaveBeenCalledTimes(1)
     expect(view.setVisible).toHaveBeenLastCalledWith(false)
-    await elapse(3_000)
-    expect(contents.loadURL).toHaveBeenCalledTimes(2)
     expect(contents.loadURL).toHaveBeenLastCalledWith(approvalsURL)
+    expect(fake.views[0].webContents.loadURL).toHaveBeenCalledOnce()
     expect(f.host.snapshot().settingsReady).toBe(false)
     contents.emit('ipc-message', { senderFrame: contents.mainFrame }, 'enterprise-chat:settings-ready', { section: 'my-tasks', path: approvalsPath })
     expect(f.host.snapshot()).toMatchObject({ settingsSection: 'my-tasks', settingsReady: true })
     expect(view.setVisible).toHaveBeenLastCalledWith(true)
     await elapse(45_000)
-    expect(contents.loadURL).toHaveBeenCalledTimes(2)
+    expect(contents.loadURL).toHaveBeenCalledOnce()
     expect(f.host.snapshot().settingsFailure).toBeUndefined()
   } finally { f.host.dispose(); vi.useRealTimers() }
 })
 
-it('cancels pending SPA recovery when switching sections and honors the current ready report', async () => {
+it('ignores an old section report and honors the current ready report', async () => {
   vi.useFakeTimers()
   const f = fixture()
   try {
     f.host.present(f.owner, presentation)
     await flush()
-    const contents = fake.views[0].webContents
-    contents.executeJavaScript.mockImplementation(async (script: string) => script.includes('/settings/my-tasks?') ? true : undefined)
     f.host.present(f.owner, { ...presentation, settings: 'my-tasks' })
     await flush()
+    const contents = fake.views[1].webContents
     f.host.present(f.owner, { ...presentation, settings: 'my-requests' })
     await flush()
+    contents.emit('ipc-message', { senderFrame: contents.mainFrame }, 'enterprise-chat:settings-ready', { section: 'my-tasks', path: '/workspace/settings/my-tasks' })
+    expect(f.host.snapshot().settingsReady).toBe(false)
     contents.emit('ipc-message', { senderFrame: contents.mainFrame }, 'enterprise-chat:settings-ready', { section: 'my-requests', path: '/workspace/settings/my-requests' })
-    await elapse(3_000)
+    await elapse(45_000)
     expect(contents.loadURL).toHaveBeenCalledTimes(2)
     expect(f.host.snapshot()).toMatchObject({ settingsSection: 'my-requests', settingsReady: true })
   } finally { f.host.dispose(); vi.useRealTimers() }
@@ -801,7 +870,7 @@ it('hides settings when the ready document navigates away and requires a new rep
   try {
     f.host.present(f.owner, { ...presentation, settings: 'desktop-usage' })
     await flush()
-    const view = fake.views[0], wc = view.webContents
+    const view = fake.views[1], wc = view.webContents
     wc.focus = vi.fn()
     const ready = () => wc.emit('ipc-message', { senderFrame: wc.mainFrame }, 'enterprise-chat:settings-ready', { section: 'desktop-usage', path: '/workspace/settings/desktop-usage' })
     expect(f.host.snapshot().settingsProtocolVersion).toBe(1)
@@ -830,16 +899,21 @@ it('leaves failed remote settings without blocking the original conversation', a
     await flush()
     await f.host.open('new')
     const view = fake.views[0]
-    view.webContents.loadURL.mockRejectedValueOnce(Object.assign(new Error('Settings unavailable'), { code: 'ERR_CONNECTION_RESET' }))
+    fake.loadFailures = 1
     f.host.present(f.owner, { ...presentation, settings: 'desktop-usage' })
     await flush()
     expect(f.host.snapshot().settingsFailure).toBe('load')
+    expect(f.host.snapshot().conversationId).toBe('new')
     expect(view.setVisible).toHaveBeenLastCalledWith(false)
+    f.host.retry()
+    await flush()
+    expect(fake.views[1].webContents.loadURL).toHaveBeenCalledTimes(2)
     f.host.present(f.owner, presentation)
     await flush()
     expect(f.host.snapshot().phase).toBe('ready')
     expect(f.host.snapshot().settingsSection).toBeUndefined()
     expect(view.setVisible).toHaveBeenLastCalledWith(true)
+    expect(view.webContents.loadURL).toHaveBeenCalledTimes(2)
   } finally { f.host.dispose() }
 })
 
@@ -955,7 +1029,7 @@ it('retains host-owned settings bounds when an embedded settings page reports a 
     const region = { x: 380, y: 100, width: 600, height: 600 }
     f.host.present(f.owner, { ...presentation, bounds: region, settings: 'desktop-usage' })
     await flush()
-    const view = fake.views[0], wc = view.webContents
+    const view = fake.views[1], wc = view.webContents
     wc.emit('ipc-message', { senderFrame: wc.mainFrame }, 'enterprise-chat:modal', { open: true, path: '/workspace/settings/desktop-usage' })
     expect(view.setBounds).toHaveBeenLastCalledWith(region)
     expect(view.setBackgroundColor).toHaveBeenLastCalledWith('#141416')

@@ -7,6 +7,7 @@ export interface EnterpriseViewBounds {
 
 export interface EnterpriseChatPresentation {
   visible: boolean
+  backdrop?: boolean
   bounds: EnterpriseViewBounds
   /** Left portion covered by the host sidebar, in CSS pixels. */
   coveredLeft?: number
@@ -111,6 +112,7 @@ export function parseChatPresentation(value: unknown): EnterpriseChatPresentatio
     throw new Error('Invalid Chat locale.')
   }
   const settings = input.settings === undefined ? undefined : parseEnterpriseSettingsSection(input.settings)
+  if (input.backdrop !== undefined && typeof input.backdrop !== 'boolean') throw new Error('Invalid Chat backdrop.')
   const palette = parseEnterprisePalette(input.palette)
   const workspaceCard = input.workspaceCard
   if (workspaceCard !== undefined && typeof workspaceCard !== 'boolean') throw new Error('Invalid Chat workspace card.')
@@ -129,6 +131,7 @@ export function parseChatPresentation(value: unknown): EnterpriseChatPresentatio
     theme: input.theme as 'light' | 'dark',
     locale: input.locale,
     settings,
+    ...(input.backdrop === true ? { backdrop: true } : {}),
     ...(radius === undefined ? {} : { radius }),
     ...(workspaceCard === true ? { workspaceCard } : {}),
     ...(palette ? { palette } : {}),

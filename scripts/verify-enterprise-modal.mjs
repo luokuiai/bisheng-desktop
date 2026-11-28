@@ -9,7 +9,8 @@ import { build } from 'esbuild'
 // Native view/IPC regression with local semantic portal fixtures and an isolated profile.
 // Run on Windows for platform acceptance; other hosts report their actual platform.
 const root = resolve(import.meta.dirname, '..')
-const output = resolve(process.argv[2] || 'outputs/enterprise-modal')
+const output = resolve(process.argv.slice(2).find(argument => !argument.startsWith('--')) || 'outputs/enterprise-modal')
+const settingsOnly = process.argv.includes('--settings-only')
 const temporary = await mkdtemp(join(tmpdir(), 'dsh-modal-'))
 await mkdir(output, { recursive: true })
 const html = `<!doctype html><html><head><style>
@@ -29,6 +30,14 @@ document.body.append(portal);portal.querySelector('.close').onclick=()=>portal.r
 portal.querySelector('.mask').onclick=()=>{window.maskClicks++;portal.remove()};portal.querySelector('.close').focus()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelector('.portal:last-child')?.remove()});
 </script></body></html>`
+const hostHTML = `<body style="margin:0;background:#f6f7f8;font:15px sans-serif">
+<aside style="width:280px;padding:40px 20px">Conversation list<button onclick="window.sidebarClicks++">New conversation</button></aside>
+<div id="settings" role="dialog" aria-modal="true" hidden style="position:fixed;inset:0;z-index:1000;background:#0006">
+<button id="settings-close" style="position:absolute;top:160px;left:480px;background:white" onclick="window.settingsClicks++">Close</button>
+</div><script>window.sidebarClicks=0;window.settingsClicks=0</script>`
+const settingsHTML = `<body>Enterprise settings<script>
+window.dshChatPresentation.reportSettings(location.pathname.split('/').at(-1))
+</script></body>`
 try {
   await build({ entryPoints: [join(root, 'src/preload/enterprise-chat.ts')], outfile: join(temporary, 'preload/enterprise-chat.cjs'), bundle: true, platform: 'node', format: 'cjs', external: ['electron'] })
   await build({ stdin: { contents: `
@@ -39,18 +48,21 @@ try {
     import { EnterpriseChatView } from './src/main/enterprise/chat-view'
     app.setPath('userData', ${JSON.stringify(join(temporary, 'profile'))})
     const pause = () => new Promise(r => setTimeout(r, 30))
-    async function until(check) { for(let i=0;i<150;i++){if(await check())return;await pause()}throw new Error('Presentation timed out') }
+    async function until(check) { for(let i=0;i<150;i++){if(await check())return;await pause()}throw new Error('Presentation timed out: '+check) }
     app.whenReady().then(async()=>{
-      const server=createServer((_req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(${JSON.stringify(html)})})
+      const server=createServer((req,res)=>{
+        res.writeHead(200,{'Content-Type':'text/html'})
+        res.end(req.url.startsWith('/workspace/settings/') ? ${JSON.stringify(settingsHTML)} : ${JSON.stringify(html)})
+      })
       await new Promise(r=>server.listen(0,'127.0.0.1',r))
       const base='http://127.0.0.1:'+server.address().port
-      const window=new BrowserWindow({width:1084,height:998,show:true,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}})
-      await window.loadURL('data:text/html,'+encodeURIComponent('<body style="margin:0;background:#f6f7f8;font:15px sans-serif"><aside style="width:280px;padding:40px 20px">Conversation list<button onclick="window.sidebarClicks++">New conversation</button></aside><script>window.sidebarClicks=0</script>'))
+      const window=new BrowserWindow({width:1084,height:998,show:true,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}})
+      await window.loadURL('data:text/html,'+encodeURIComponent(${JSON.stringify(hostHTML)}))
       const enterprise={snapshot:()=>({connected:true,connectionKey:'fixture'}),subscribe:()=>()=>{},webSession:async()=>({base,cookieName:'fixture',cookie:'fixture',expiresAt:Date.now()+300000})}
       const host=new EnterpriseChatView(enterprise,line=>{if(line.includes('failed'))console.error(line)})
       const results=[]
       try {
-        for(const size of [900,1084])for(const zoom of [0.8,1,1.25])for(const theme of ['light','dark']){
+        for(const size of ${JSON.stringify(settingsOnly ? [] : [900, 1084])})for(const zoom of [0.8,1,1.25])for(const theme of ['light','dark']){
           window.setSize(size,998)
           window.webContents.setZoomFactor(zoom)
           const [width,height]=window.getContentSize()
@@ -103,6 +115,55 @@ try {
           await until(()=>view.getBounds().x===280)
           assert.deepEqual(view.getBounds(),region)
           results.push({size,zoom,theme,geometry});console.log('PASS native portal width='+size+' zoom='+zoom+' theme='+theme)
+        }
+        window.webContents.setZoomFactor(1)
+        const region={x:280,y:40,width:680,height:720}
+        const presentation={visible:true,theme:'light',bounds:region}
+        host.present(window,presentation)
+        await until(()=>host.snapshot().phase==='ready')
+        const view=window.contentView.children[0]
+        const contents=view.webContents
+        contents.setZoomFactor(1)
+        const setDialog=async open=>window.webContents.executeJavaScript('document.querySelector("#settings").hidden='+!open)
+        for(const path of ['/workspace/c/new','/workspace/knowledge','/workspace/apps']){
+          await contents.loadURL(base+path)
+          host.present(window,presentation)
+          await contents.executeJavaScript(\`(() => {
+            document.body.insertAdjacentHTML('beforeend','<div style="height:2000px"></div><input id="draft">')
+            document.querySelector('#draft').value='retained draft'
+            window.scrollTo(0,123)
+            const patch=document.createElement('div')
+            patch.style.cssText='position:fixed;left:20px;top:20px;width:60px;height:60px;background:rgb(250,0,0)'
+            document.body.append(patch)
+          })()\`)
+          await pause()
+          let navigations=0
+          const countNavigation=()=>navigations++
+          contents.on('did-start-navigation',countNavigation)
+          await setDialog(true)
+          host.present(window,{...presentation,visible:false,backdrop:true})
+          await until(()=>!view.getVisible())
+          const pixel=await window.webContents.capturePage({x:region.x+40,y:region.y+40,width:1,height:1})
+          const [blue,green,red]=pixel.toBitmap()
+          assert.ok(red>100&&red<200&&green<20&&blue<20, 'Expected the enterprise page beneath the dimmed host settings mask')
+          const modalButton=await window.webContents.executeJavaScript('document.elementFromPoint(490,168).id')
+          assert.equal(modalButton,'settings-close')
+          const settingsBounds={x:510,y:260,width:380,height:420}
+          host.present(window,{...presentation,bounds:settingsBounds,backdrop:true,settings:'my-tasks'})
+          await until(()=>host.snapshot().settingsReady)
+          const settings=window.contentView.children[1]
+          assert.equal(settings.getVisible(),true)
+          assert.deepEqual(settings.getBounds(),settingsBounds)
+          assert.equal(settings.webContents.session,contents.session)
+          await setDialog(false)
+          host.present(window,presentation)
+          assert.equal(view.getVisible(),true)
+          assert.equal(window.contentView.children.length,1)
+          assert.equal(contents.getURL(),base+path)
+          assert.deepEqual(await contents.executeJavaScript('[document.querySelector("#draft").value,window.scrollY]'),['retained draft',123])
+          assert.equal(navigations,0)
+          contents.off('did-start-navigation',countNavigation)
+          console.log('PASS desktop settings preserves '+path)
         }
         await writeFile(${JSON.stringify(join(output, 'native-results.json'))},JSON.stringify({platform:process.platform,electron:process.versions.electron,fixture:'local semantic body portals',results},null,2))
       }finally{host.dispose();window.destroy();server.close()}

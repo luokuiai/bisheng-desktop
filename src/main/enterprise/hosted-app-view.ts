@@ -54,6 +54,11 @@ export class HostedAppView {
     return this.active && { slug: this.active.target.slug, phase: this.active.phase }
   }
 
+  visibleView(): WebContentsView | undefined {
+    const view = this.active?.view
+    if (view?.getVisible()) return view
+  }
+
   open(owner: BrowserWindow, target: HostedApplication): void {
     if (this.active?.owner === owner && this.active.target.origin === target.origin && this.active.target.path === target.path && this.active.phase !== 'error') return
     this.close()
