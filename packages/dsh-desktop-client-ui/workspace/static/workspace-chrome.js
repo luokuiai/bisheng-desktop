@@ -170,8 +170,8 @@ export function createWorkspaceChrome(React) {
     const railRef = React.useRef(null)
     const moving = React.useRef(null)
     const scene = native ? 'workspace' : workspaceScene(path)
-    const surface = native ? nativeSurfaces.get(path) ?? 'panel' : undefined
-    const showHostNavigation = !native && scene !== 'chat'
+    const surface = native ? nativeSurfaces.get(path) : undefined
+    const showHostNavigation = scene !== 'chat'
     const sessionToolbar = scene === 'chat' && state.mode === 'work' && state.nativeWork && !state.panelOpen
     const accountPlacement = !showHostNavigation ? undefined : compact ? 'compact' : scene === 'workspace' ? 'expanded' : undefined
     const toggle = () => {

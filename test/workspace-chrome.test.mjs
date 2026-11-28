@@ -207,23 +207,23 @@ it('reserves the toolbar end for the native right sidebar button only while it i
   }
 })
 
-it('keeps the toolbar and its controls as full-width plugin pages take over navigation', async () => {
+it('keeps the toolbar and leaves navigation available to native panels', async () => {
   const Chrome = createWorkspaceChrome(React, vi.fn())
   const expandBotSidebar = vi.fn()
   const navigate = vi.fn()
   const render = (path, native) => act(async () => root.render(React.createElement(Chrome, { path, native, expandBotSidebar,
     navigation: { navigate }, theme, t: key => key })))
-  const hostNavigation = () => container.querySelector('.dshWorkspaceDirectory, .dshWorkspaceRail, [data-workspace-account-slot]')
   await render('/', false)
-  expect(hostNavigation()).not.toBeNull()
+  const directory = container.querySelector('.dshWorkspaceDirectory')
+  expect(directory).not.toBeNull()
   const portal = container.querySelector('[data-workspace-right-sidebar-slot]')
   await render('/panel/extension.board', true)
-  expect(document.body.dataset.dshWorkspaceNative).toBe('panel')
-  expect(hostNavigation()).toBeNull()
+  expect(document.body.hasAttribute('data-dsh-workspace-native')).toBe(false)
+  expect(container.querySelector('.dshWorkspaceDirectory')).toBe(directory)
   await render('/multi-agent-chat', true)
   expect(document.body.dataset.dshWorkspaceNative).toBe('agents')
   expect(expandBotSidebar).toHaveBeenCalledOnce()
-  expect(hostNavigation()).toBeNull()
+  expect(container.querySelector('.dshWorkspaceDirectory')).toBe(directory)
   expect(container.querySelectorAll('.dshWorkspaceToolbar')).toHaveLength(1)
   expect(container.querySelector('[data-workspace-right-sidebar-slot]')).toBe(portal)
   const botPanel = document.body.appendChild(document.createElement('aside'))
@@ -233,7 +233,7 @@ it('keeps the toolbar and its controls as full-width plugin pages take over navi
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backslash', metaKey: true, cancelable: true })))
     expect(document.activeElement).toBe(container.querySelector('[data-workspace-sidebar-toggle]'))
     expect(document.body.dataset.dshWorkspaceDensity).toBe('compact')
-    expect(hostNavigation()).toBeNull()
+    expect(container.querySelector('.dshWorkspaceRail').hasAttribute('inert')).toBe(false)
   } finally {
     botPanel.remove()
   }

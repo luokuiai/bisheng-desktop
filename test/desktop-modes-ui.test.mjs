@@ -439,6 +439,32 @@ it('routes the plugin entry to the existing plugins main panel', async () => {
   expect(navigation.snapshot().workspaceNative).toBe(false)
 })
 
+it('keeps the workspace sidebar on plugin management and scheduled tasks', async () => {
+  const view = await mount(false, {}, false, undefined, false, { workspaceRoutes: true, renderWorkspace: true, homePage: true })
+  for (const panelId of ['plugins', 'schedules']) {
+    const panel = await view.registerPanelMenu(panelId)
+    await panel.enable()
+  }
+  const directory = container.querySelector('.dshWorkspaceDirectory')
+  const account = container.querySelector('[data-workspace-account-slot=expanded]')
+  expect(directory).not.toBeNull()
+  expect(account).not.toBeNull()
+  for (const [panelId, path] of [['plugins', '/plugins'], ['schedules', '/panel/schedules']]) {
+    const entry = directory.querySelector(`[data-workspace-route="${path}"]`)
+    expect(entry).not.toBeNull()
+    await act(async () => entry.click())
+    expect(view.controller.snapshot()).toMatchObject({ workspacePath: path, workspaceNative: true, activePanelId: panelId })
+    expect(container.querySelector('.dshWorkspaceDirectory')).toBe(directory)
+    expect(container.querySelector('[data-workspace-account-slot=expanded]')).toBe(account)
+    expect(entry.getAttribute('aria-current')).toBe('page')
+    expect(document.body.hasAttribute('data-dsh-workspace-native')).toBe(false)
+  }
+  await act(async () => container.querySelector('[data-workspace-sidebar-toggle]').click())
+  expect(directory.hasAttribute('inert')).toBe(true)
+  expect(container.querySelector('.dshWorkspaceRail [data-workspace-route="/panel/schedules"]').getAttribute('aria-current')).toBe('page')
+  expect(container.querySelector('[data-workspace-account-slot=compact]')).toBe(account)
+})
+
 it('shares live native panel menus, labels, icons and actions between the workspace sidebar and homepage', async () => {
   const moduleName = '@example/board'
   let resolveInventory
@@ -475,8 +501,9 @@ it('shares live native panel menus, labels, icons and actions between the worksp
   expect(card().textContent).toBe('扩展看板跟踪交付进度')
   await act(async () => card().click())
   expect(view.controller.snapshot()).toMatchObject({ workspacePath: route, workspaceNative: true, activePanelId: id })
-  expect(side()).toBeNull()
-  expect(container.querySelector('.dshWorkspaceRail, [data-workspace-account-slot]')).toBeNull()
+  expect(side().getAttribute('aria-current')).toBe('page')
+  expect(container.querySelector('[data-workspace-account-slot=expanded]')).not.toBeNull()
+  expect(document.body.hasAttribute('data-dsh-workspace-native')).toBe(false)
   expect(card()).toBeNull()
   await act(async () => view.controller.navigate('/'))
   await act(async () => side().click())

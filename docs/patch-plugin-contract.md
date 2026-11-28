@@ -489,7 +489,7 @@ AI 对话通过 `sidebar.content.renderSettings` 保留设置组件的挂载，�
 | 任务看板 | `main` 面板 `super-kanban` |
 | 多代理协作 | `sidebar.footer.action` 的 `bot-return` 提供 surface 与切换方法，正文复用 Work 会话 |
 
-工作台挂载时，`body[data-dsh-workspace-scene]` 标记所有由该外壳管理的页面，`data-dsh-workspace-density` 取 `expanded` 或 `compact`。打开实际插件后，`data-dsh-workspace-native` 标记对应业务区，通用面板使用 `panel`。插件占满顶栏下方的窗口区域，工作台卸载自己的目录、快捷栏和账号席位。顶栏按工作台侧栏的标准宽度对齐，插件的正文轨道宽度独立计算。插件继续读取 density 管理自己的侧栏。插件若需在工作台中收起重复的悬浮入口，应使用 scene 判断外壳是否存在。切回原桌面会移除这些标记，插件可恢复原有入口。
+工作台挂载时，`body[data-dsh-workspace-scene]` 标记所有由该外壳管理的页面，`data-dsh-workspace-density` 取 `expanded` 或 `compact`，`data-dsh-workspace-native` 标记有专用工作区集成的业务区。`main` 注册只选择中央内容，插件管理、自动化任务和普通面板保留桌面导航。接管左侧布局的插件在自身界面挂载时声明对应样式，将 `--dsh-workspace-track` 设为 `0px` 并让出桌面目录。顶栏仍按工作台侧栏的标准宽度对齐。插件可读取 density 管理自己的侧栏，或使用 scene 判断外壳是否存在并收起重复的悬浮入口。切回原桌面会移除这些标记，插件可恢复原有入口。
 
 总览式侧栏及收起后的快捷栏在底部提供 `[data-workspace-account-slot]`。工作台挂载、切换或离开该位置时通过 `luokui:workspace-account-slot-ready` 同步席位。`settings.launcher` 的桌面账号贡献项通过 React portal 将唯一触发器放入该位置，继续使用原生设置动作和账号状态。席位卸载后触发器回到原侧栏。
 
